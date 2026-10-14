@@ -91,29 +91,34 @@ export default function ExtratoTable({
     );
   };
 
-  const handleAdicionar = (e: React.FormEvent) => {
+  const handleAdicionar = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorTotal = parseValor(valorTexto);
-    if (!valorTotal || !descricao.trim()) return;
+    if (!valorTotal || !descricao.trim()) {
+      alert("Informe uma descrição e um valor válido.");
+      return;
+    }
 
-    const qtd = responsaveisSelecionados.length;
-    const valorIndividual = valorTotal / qtd;
-
-    responsaveisSelecionados.forEach((resp) => {
-      onAdd({
-        mes,
-        pagamento: pagamento || "Geral",
-        categoria: categoria || "Outros",
-        valor: valorIndividual,
-        descricao: qtd > 1 ? `${descricao} (1/${qtd})` : descricao,
-        responsavel: resp,
-      });
-    });
-
-    setValorTexto("");
-    setDescricao("");
-    setResponsaveisSelecionados([meuNome || "Usuário"]);
-    setMenuResponsavelAberto(false);
+    const responsaveis = responsaveisSelecionados.length ? responsaveisSelecionados : [meuNome || "Usuário"];
+    const valorIndividual = valorTotal / responsaveis.length;
+    try {
+      for (const resp of responsaveis) {
+        await onAdd({
+          mes,
+          pagamento: pagamento || "Geral",
+          categoria: categoria || "Outros",
+          valor: valorIndividual,
+          descricao: responsaveis.length > 1 ? `${descricao} (1/${responsaveis.length})` : descricao,
+          responsavel: resp,
+        });
+      }
+      setValorTexto("");
+      setDescricao("");
+      setResponsaveisSelecionados([meuNome || "Usuário"]);
+      setMenuResponsavelAberto(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Não foi possível salvar o lançamento.");
+    }
   };
 
   return (

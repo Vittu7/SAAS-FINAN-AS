@@ -24,7 +24,7 @@ export type Cartao = {
   parcelaAtual: number;
   parcelaTotal: number;
   categoria: string;
-  valor: number; // valor da parcela
+  valor: number;
   responsavel: Responsavel;
 };
 

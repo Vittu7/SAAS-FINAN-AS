@@ -88,41 +88,38 @@ export default function ContasFixasTable({
     );
   };
 
-  const handleAdicionar = (e: React.FormEvent) => {
+  const handleAdicionar = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorTotal = parseValor(valorTexto);
-
     if (!nome.trim()) {
       alert("Por favor, insira o nome da conta.");
       return;
     }
-
-    if (isNaN(valorTotal) || valorTotal <= 0) {
+    if (valorTotal <= 0) {
       alert("Por favor, insira um valor válido (ex: 50,00).");
       return;
     }
 
-    const qtd = responsaveisSelecionados.length;
-    const valorIndividual = valorTotal / (qtd > 0 ? qtd : 1);
-
-    responsaveisSelecionados.forEach((resp) => {
-      onAdd({
-        mes,
-        nome: qtd > 1 ? `${nome} (1/${qtd})` : nome,
-        valor: valorIndividual,
-        vencimento,
-        categoria: categoria || "Outros",
-        pago: false,
-        responsavel: resp,
-      });
-    });
-
-    setNome("");
-    setValorTexto("");
-    setVencimento("");
-    setCategoria("");
-    setResponsaveisSelecionados([meuNome || "Usuário"]);
-    setMenuResponsavelAberto(false);
+    const responsaveis = responsaveisSelecionados.length ? responsaveisSelecionados : [meuNome || "Usuário"];
+    const valorIndividual = valorTotal / responsaveis.length;
+    try {
+      for (const resp of responsaveis) {
+        await onAdd({
+          mes,
+          nome: responsaveis.length > 1 ? `${nome} (1/${responsaveis.length})` : nome,
+          valor: valorIndividual, vencimento, categoria: categoria || "Outros",
+          pago: false, responsavel: resp,
+        });
+      }
+      setNome("");
+      setValorTexto("");
+      setVencimento("");
+      setCategoria("");
+      setResponsaveisSelecionados([meuNome || "Usuário"]);
+      setMenuResponsavelAberto(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Não foi possível salvar a conta fixa.");
+    }
   };
 
   return (

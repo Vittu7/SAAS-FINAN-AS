@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,17 +15,15 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                let t = localStorage.getItem('theme');
-                if (!t) t = 'dark';
-                document.documentElement.classList.toggle('dark', t === 'dark');
-              } catch (e) {}
-            `,
-          }}
-        />
+        <Script id="theme-script" strategy="beforeInteractive">
+          {`
+            try {
+              let t = localStorage.getItem('theme');
+              if (!t) t = 'dark';
+              document.documentElement.classList.toggle('dark', t === 'dark');
+            } catch (e) {}
+          `}
+        </Script>
       </head>
       {/* Aqui aplicamos as cores corretas: cinza muito escuro no modo escuro, e cinza claro no modo claro */}
       <body className="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-50 antialiased transition-colors duration-200">

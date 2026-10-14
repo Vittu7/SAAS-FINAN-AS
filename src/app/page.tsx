@@ -57,13 +57,14 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, [router]);
 
-  const { estado } = loja;
-  const resumo = useMemo(() => resumoDoMes(estado, mes), [estado, mes]);
-  const extrato = useMemo(() => estado.extrato.filter((i) => i.mes === mes), [estado.extrato, mes]);
-  const cartao = useMemo(() => estado.cartao.filter((i) => i.mes === mes), [estado.cartao, mes]);
-  const contas = useMemo(() => estado.contas.filter((i) => i.mes === mes), [estado.contas, mes]);
+  // CORREÇÃO: Acessando diretamente 'loja' em vez de 'loja.estado'
+  const resumo = useMemo(() => resumoDoMes(loja, mes), [loja, mes]);
+  const extrato = useMemo(() => loja.extrato.filter((i) => i.mes === mes), [loja.extrato, mes]);
+  const cartao = useMemo(() => loja.cartao.filter((i) => i.mes === mes), [loja.cartao, mes]);
+  const contas = useMemo(() => loja.contas.filter((i) => i.mes === mes), [loja.contas, mes]);
 
-  if (verificandoAuth || !loja.pronto || !mes) {
+  // CORREÇÃO: A loja usa 'carregando', não 'pronto'
+  if (verificandoAuth || loja.carregando || !mes) {
     return <main className="grid min-h-screen place-items-center text-sm text-muted">Carregando painel...</main>;
   }
 
@@ -110,7 +111,8 @@ export default function Home() {
           </div>
         </header>
 
-        <SummaryCards resumo={resumo} config={estado.config} onConfig={loja.atualizarConfig} />
+        {/* CORREÇÃO: loja.config em vez de estado.config */}
+        <SummaryCards resumo={resumo} config={loja.config} onConfig={loja.atualizarConfig} />
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-4">
@@ -155,7 +157,8 @@ export default function Home() {
                   onAdd={loja.adicionarConta}
                   onRemove={(id) => loja.remover("contas", id)}
                   onTogglePago={loja.alternarPago}
-                  onCopiarMesAnterior={() => loja.copiarContasDoMesAnterior(mes)}
+                  // CORREÇÃO: Passando o mês anterior e o novo mês para copiar
+                  onCopiarMesAnterior={() => loja.copiarContasDoMesAnterior(addMeses(mes, -1), mes)}
                 />
               )}
             </div>

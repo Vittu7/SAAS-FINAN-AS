@@ -1,15 +1,45 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
 import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 
-interface Opcao {
-  id: string;
+type Membro = { id: string; nome: string };
+type Opcao = { id: string; nome: string; cor?: string };
+
+type ContaForm = {
+  mes: string;
   nome: string;
-  cor: string;
-}
+  valor: number;
+  vencimento: number | null;
+  categoria: string;
+  pago: boolean;
+  responsavel: string;
+  responsavelNome: string;
+};
+
+type Conta = {
+  id: string;
+  mes: string;
+  nome: string;
+  valor: number;
+  pago: boolean;
+  categoria?: string;
+  vencimento?: number | null;
+  responsavel?: string;
+  responsavel_id?: string;
+  responsavelNome?: string;
+};
+
+type Props = {
+  mes: string;
+  itens: Conta[];
+  onAdd: (item: ContaForm) => void | Promise<void>;
+  onRemove: (id: string) => void | Promise<void>;
+  onTogglePago: (id: string) => void | Promise<void>;
+  onCopiarMesAnterior: () => void | Promise<void>;
+};
 
 export default function ContasFixasTable({
   mes,
@@ -18,247 +48,321 @@ export default function ContasFixasTable({
   onRemove,
   onTogglePago,
   onCopiarMesAnterior,
-}: {
-  mes: string;
-  itens: any[];
-  onAdd: (item: any) => void;
-  onRemove: (id: string) => void;
-  onTogglePago: (id: string) => void;
-  onCopiarMesAnterior: () => void;
-}) {
+}: Props) {
   const [nome, setNome] = useState("");
-  const [valorTexto, setValorTexto] = useState("");
+  const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState("");
   const [categoria, setCategoria] = useState("");
+  const [membros, setMembros] = useState<Membro[]>([]);
+  const [responsaveis, setResponsaveis] = useState<string[]>([]);
+  const [categorias, setCategorias] = useState<Opcao[]>([]);
+  const [perfilId, setPerfilId] = useState("");
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [modal, setModal] = useState<
+    "pagamento" | "categoria" | "cartao" | null
+  >(null);
+  const [salvando, setSalvando] = useState(false);
 
-  const [membros, setMembros] = useState<string[]>([]);
-  const [meuNome, setMeuNome] = useState("");
-  const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
-  const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
+  const carregarDados = useCallback(async () => {
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) {
+      console.error("Erro ao identificar usuário:", authError?.message);
+      return;
+    }
 
-  const [opcoesCategoria, setOpcoesCategoria] = useState<Opcao[]>([]);
-  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | "cartao" | null>(null);
-
-  const carregarDadosIniciais = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: perfil } = await supabase
+    const { data: perfil, error } = await supabase
       .from("perfis")
-      .select("grupo_id, nome_usuario")
-      .eq("user_id", user.id)
+      .select("id, grupo_id, nome_usuario")
+      .eq("user_id", auth.user.id)
       .maybeSingle();
 
-    if (perfil) {
-      const nomeReal = perfil.nome_usuario || "Usuário";
-      setMeuNome(nomeReal);
-      setResponsaveisSelecionados([nomeReal]);
+    if (error || !perfil) {
+      console.error("Erro ao carregar perfil:", error?.message);
+      return;
+    }
 
-      if (perfil.grupo_id) {
-        const [resMembros, resCat] = await Promise.all([
-          supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id),
-          supabase.from("opcoes_categoria").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
-        ]);
+    const id = String(perfil.id);
+    setPerfilId(id);
 
-        if (resMembros.data) {
-          const nomes = resMembros.data.map((m) => m.nome_usuario).filter(Boolean);
-          setMembros(nomes.length > 0 ? nomes : [nomeReal]);
-        }
+    let listaMembros: Membro[] = [
+      { id, nome: perfil.nome_usuario || "Usuário" },
+    ];
 
-        if (resCat.data) setOpcoesCategoria(resCat.data);
+    let consultaCategorias = supabase
+      .from("opcoes_categoria")
+      .select("*")
+      .order("nome");
+
+    if (perfil.grupo_id) {
+      const [resMembros, resCategorias] = await Promise.all([
+        supabase
+          .from("perfis")
+          .select("id, nome_usuario")
+          .eq("grupo_id", perfil.grupo_id)
+          .order("nome_usuario"),
+        supabase
+          .from("opcoes_categoria")
+          .select("*")
+          .eq("grupo_id", perfil.grupo_id)
+          .order("nome"),
+      ]);
+
+      if (resMembros.error) {
+        console.error("Erro ao carregar membros:", resMembros.error.message);
+      } else if (resMembros.data) {
+        listaMembros = resMembros.data.map((m) => ({
+          id: String(m.id),
+          nome: m.nome_usuario || "Usuário",
+        }));
+      }
+
+      if (resCategorias.error) {
+        console.error("Erro ao carregar categorias:", resCategorias.error.message);
+      } else {
+        setCategorias((resCategorias.data || []) as Opcao[]);
+      }
+    } else {
+      const { data, error: categoriaError } = await consultaCategorias;
+      if (categoriaError) {
+        console.error("Erro ao carregar categorias:", categoriaError.message);
+      } else {
+        setCategorias((data || []) as Opcao[]);
       }
     }
+
+    if (!listaMembros.some((m) => m.id === id)) {
+      listaMembros.unshift({
+        id,
+        nome: perfil.nome_usuario || "Usuário",
+      });
+    }
+
+    setMembros(listaMembros);
+    setResponsaveis((anteriores) =>
+      anteriores.length ? anteriores.filter((r) =>
+        listaMembros.some((m) => m.id === r)
+      ) : [id]
+    );
   }, []);
 
   useEffect(() => {
-    carregarDadosIniciais();
-  }, [carregarDadosIniciais]);
+    void carregarDados();
+  }, [carregarDados]);
 
-  const alternarResponsavel = (n: string) => {
-    setResponsaveisSelecionados((prev) =>
-      prev.includes(n)
-        ? prev.length > 1 ? prev.filter((item) => item !== n) : prev
-        : [...prev, n]
-    );
+  const nomeResponsavel = (id: string) =>
+    membros.find((m) => m.id === id)?.nome || "Membro";
+
+  const alternarResponsavel = (id: string) => {
+    setResponsaveis((atuais) => {
+      if (atuais.includes(id)) {
+        return atuais.length > 1 ? atuais.filter((r) => r !== id) : atuais;
+      }
+      return [...atuais, id];
+    });
   };
 
   const selecionarTodos = () => {
-    setResponsaveisSelecionados(
-      responsaveisSelecionados.length === membros.length ? [meuNome || "Usuário"] : [...membros]
+    setResponsaveis(
+      responsaveis.length === membros.length
+        ? [perfilId]
+        : membros.map((m) => m.id)
     );
   };
 
-  const handleAdicionar = async (e: React.FormEvent) => {
+  const adicionar = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const valorTotal = parseValor(valorTexto);
+    if (salvando) return;
+
     if (!nome.trim()) {
-      alert("Por favor, insira o nome da conta.");
-      return;
-    }
-    if (valorTotal <= 0) {
-      alert("Por favor, insira um valor válido (ex: 50,00).");
+      alert("Informe o nome da conta.");
       return;
     }
 
-    const responsaveis = responsaveisSelecionados.length ? responsaveisSelecionados : [meuNome || "Usuário"];
-    const valorIndividual = valorTotal / responsaveis.length;
+    const valorTotal = parseValor(valor);
+    if (!Number.isFinite(valorTotal) || valorTotal <= 0) {
+      alert("Informe um valor válido.");
+      return;
+    }
+
+    const dia = vencimento.trim() ? Number(vencimento) : null;
+    if (dia !== null && (!Number.isInteger(dia) || dia < 1 || dia > 31)) {
+      alert("O vencimento deve ser um dia entre 1 e 31.");
+      return;
+    }
+
+    const ids = responsaveis.length ? responsaveis : [perfilId];
+    if (!ids[0]) {
+      alert("Não foi possível identificar o responsável. Recarregue a página.");
+      return;
+    }
+
+    setSalvando(true);
+
     try {
-      for (const resp of responsaveis) {
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
         await onAdd({
           mes,
-          nome: responsaveis.length > 1 ? `${nome} (1/${responsaveis.length})` : nome,
-          valor: valorIndividual, vencimento, categoria: categoria || "Outros",
-          pago: false, responsavel: resp,
+          nome: ids.length > 1
+            ? nome.trim() + " (" + (i + 1) + "/" + ids.length + ")"
+            : nome.trim(),
+          valor: valorTotal / ids.length,
+          vencimento: dia,
+          categoria: categoria || "Outros",
+          pago: false,
+          responsavel: id,
+          responsavelNome: nomeResponsavel(id),
         });
       }
+
       setNome("");
-      setValorTexto("");
+      setValor("");
       setVencimento("");
       setCategoria("");
-      setResponsaveisSelecionados([meuNome || "Usuário"]);
-      setMenuResponsavelAberto(false);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Não foi possível salvar a conta fixa.");
+      setResponsaveis([perfilId]);
+      setMenuAberto(false);
+    } catch (erro) {
+      console.error("Erro ao salvar conta:", erro);
+      alert("Não foi possível salvar. Confira o console e o Supabase.");
+    } finally {
+      setSalvando(false);
     }
   };
 
+  const classeInput =
+    "w-full rounded-xl border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
+
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-sm font-semibold text-muted">Contas Recorrentes do Mês</h3>
+    <div className="space-y-4 rounded-2xl border border-line bg-surface p-4 shadow-lg md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-muted">
+          Contas Recorrentes do Mês
+        </h3>
         <button
           type="button"
-          onClick={onCopiarMesAnterior}
-          className="text-xs bg-surface border border-line hover:bg-background px-3 py-1.5 rounded-xl transition text-ink"
+          onClick={() => void onCopiarMesAnterior()}
+          className="rounded-xl border border-line px-3 py-2 text-xs text-ink hover:bg-background"
         >
-          📋 Copiar Contas do Mês Anterior
+          📋 Copiar mês anterior
         </button>
       </div>
 
-      <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
-        
-        {/* Nome da Conta */}
+      <form
+        onSubmit={adicionar}
+        className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-12"
+      >
         <div className="lg:col-span-3">
-          <label className="text-xs font-medium text-muted block mb-1">Nome da Conta</label>
+          <label className="mb-1 block text-xs text-muted">Nome da conta</label>
           <input
-            type="text"
-            placeholder="Ex: Energia, Internet"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            placeholder="Ex.: Energia, Internet"
+            className={classeInput}
           />
         </div>
 
-        {/* Categoria */}
         <div className="lg:col-span-3">
-          <div className="flex justify-between items-center mb-1">
-            <label className="text-xs font-medium text-muted">Categoria</label>
+          <div className="mb-1 flex justify-between">
+            <label className="text-xs text-muted">Categoria</label>
             <button
               type="button"
-              onClick={() => setModalOpcaoAberto("categoria")}
-              className="text-[10px] text-accent hover:underline font-medium"
+              onClick={() => setModal("categoria")}
+              className="text-xs text-accent hover:underline"
             >
-              ⚙️ Editar
+              Editar
             </button>
           </div>
           <select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className={classeInput}
           >
-            <option value="" className="bg-surface text-ink">Selecione...</option>
-            {opcoesCategoria.map((c) => (
-              <option key={c.id} value={c.nome} className="bg-surface text-ink">
-                {c.nome}
-              </option>
+            <option value="">Selecione...</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.nome}>{c.nome}</option>
             ))}
+            {!categorias.some((c) => c.nome === "Outros") && (
+              <option value="Outros">Outros</option>
+            )}
           </select>
         </div>
 
-        {/* Valor */}
         <div className="lg:col-span-2">
-          <label className="text-xs font-medium text-muted block mb-1">Valor (R$)</label>
+          <label className="mb-1 block text-xs text-muted">Valor (R$)</label>
           <input
-            type="text"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
             placeholder="0,00"
-            value={valorTexto}
-            onChange={(e) => setValorTexto(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className={classeInput}
           />
         </div>
 
-        {/* Vencimento */}
         <div className="lg:col-span-1">
-          <label className="text-xs font-medium text-muted block mb-1">Venc.</label>
+          <label className="mb-1 block text-xs text-muted">Venc.</label>
           <input
-            type="text"
-            placeholder="Dia"
+            type="number"
+            min="1"
+            max="31"
             value={vencimento}
             onChange={(e) => setVencimento(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-2 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent"
+            placeholder="Dia"
+            className={classeInput}
           />
         </div>
 
-        {/* Responsável */}
-        <div className="lg:col-span-1 relative">
-          <label className="text-xs font-medium text-muted block mb-1">Resp.</label>
+        <div className="relative lg:col-span-1">
+          <label className="mb-1 block text-xs text-muted">Resp.</label>
           <button
             type="button"
-            onClick={() => setMenuResponsavelAberto(!menuResponsavelAberto)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-2 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none focus:ring-2 focus:ring-accent"
+            onClick={() => setMenuAberto((aberto) => !aberto)}
+            className={classeInput + " flex items-center justify-between gap-1"}
           >
             <span className="truncate">
-              {responsaveisSelecionados.length === 1
-                ? responsaveisSelecionados[0]
-                : `${responsaveisSelecionados.length}`}
+              {responsaveis.length === 1
+                ? nomeResponsavel(responsaveis[0])
+                : responsaveis.length + " selecionados"}
             </span>
-            <span className="text-xs text-muted">▾</span>
+            <span>▾</span>
           </button>
 
-          {menuResponsavelAberto && (
-            <div className="absolute z-30 top-full mt-1 right-0 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl space-y-1">
+          {menuAberto && (
+            <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl">
               {membros.length > 1 && (
                 <button
                   type="button"
                   onClick={selecionarTodos}
-                  className="w-full text-left text-xs px-2 py-1.5 font-bold text-accent border-b border-line mb-1 hover:bg-background/50 rounded"
+                  className="mb-2 w-full border-b border-line px-2 py-2 text-left text-xs font-bold text-accent"
                 >
-                  {responsaveisSelecionados.length === membros.length ? "Desmarcar Todos" : "👥 Marcar Todos"}
+                  {responsaveis.length === membros.length
+                    ? "Desmarcar todos"
+                    : "Marcar todos"}
                 </button>
               )}
-
-              <div className="max-h-36 overflow-y-auto space-y-1">
-                {membros.map((m) => (
-                  <label
-                    key={m}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none text-ink"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={responsaveisSelecionados.includes(m)}
-                      onChange={() => alternarResponsavel(m)}
-                      className="rounded border-line text-accent focus:ring-accent"
-                    />
-                    <span>{m}</span>
-                  </label>
-                ))}
-              </div>
+              {membros.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 p-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={responsaveis.includes(m.id)}
+                    onChange={() => alternarResponsavel(m.id)}
+                  />
+                  {m.nome}
+                </label>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Botão Adicionar */}
         <div className="lg:col-span-2">
           <button
             type="submit"
-            className="w-full bg-accent text-on-accent h-[38px] rounded-xl font-medium text-sm hover:opacity-90 transition flex items-center justify-center shadow-sm"
+            disabled={salvando}
+            className="h-[38px] w-full rounded-xl bg-accent text-sm font-medium text-on-accent disabled:opacity-60"
           >
-            Adicionar
+            {salvando ? "Salvando..." : "Adicionar"}
           </button>
         </div>
       </form>
 
-      {/* Tabela */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
@@ -273,46 +377,67 @@ export default function ContasFixasTable({
             </tr>
           </thead>
           <tbody>
-            {itens.map((item) => (
-              <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
-                <td className="py-3">
-                  <button
-                    type="button"
-                    onClick={() => onTogglePago(item.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                      item.pago
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                    }`}
-                  >
-                    {item.pago ? "✓ Pago" : "Pendente"}
-                  </button>
-                </td>
-                <td className="py-3 font-medium">{item.nome}</td>
-                <td className="py-3 text-muted">{item.categoria || "-"}</td>
-                <td className="py-3 text-xs text-muted">{item.vencimento ? `Dia ${item.vencimento}` : "-"}</td>
-                <td className="py-3">
-                  <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
-                    {item.responsavel || "Membro"}
-                  </span>
-                </td>
-                <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
-                <td className="py-3 text-center">
-                  <button type="button" onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
-                    Remover
-                  </button>
+            {itens.map((item) => {
+              const responsavelId =
+                item.responsavel_id || item.responsavel || "";
+              const responsavel =
+                item.responsavelNome || nomeResponsavel(responsavelId);
+
+              return (
+                <tr key={item.id} className="border-b border-line/40">
+                  <td className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => void onTogglePago(item.id)}
+                      className={
+                        "rounded-lg border px-2.5 py-1 text-xs font-semibold " +
+                        (item.pago
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                          : "border-amber-500/20 bg-amber-500/10 text-amber-400")
+                      }
+                    >
+                      {item.pago ? "✓ Pago" : "Pendente"}
+                    </button>
+                  </td>
+                  <td className="py-3 font-medium">{item.nome}</td>
+                  <td className="py-3 text-muted">{item.categoria || "Outros"}</td>
+                  <td className="py-3 text-xs text-muted">
+                    {item.vencimento ? "Dia " + item.vencimento : "-"}
+                  </td>
+                  <td className="py-3">
+                    <span className="rounded bg-accent/10 px-2 py-1 text-xs font-semibold text-accent">
+                      {responsavel}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
+                  <td className="py-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => void onRemove(item.id)}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >
+                      Remover
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {itens.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-6 text-center text-sm text-muted">
+                  Nenhuma conta fixa cadastrada para este mês.
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
 
-      {modalOpcaoAberto && (
+      {modal && (
         <GerenciarOpcoesModal
-          tipo={modalOpcaoAberto}
-          onClose={() => setModalOpcaoAberto(null)}
-          onAtualizar={carregarDadosIniciais}
+          tipo={modal}
+          onClose={() => setModal(null)}
+          onAtualizar={carregarDados}
         />
       )}
     </div>

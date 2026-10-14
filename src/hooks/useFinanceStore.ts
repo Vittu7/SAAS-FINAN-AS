@@ -1,173 +1,327 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { addMeses } from "@/lib/finance";
-import type { Cartao, Config, ContaFixa, Estado, Extrato, Tabela } from "@/lib/types";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-const VAZIO: Estado = {
+type Registro = Record<string, any>;
+
+type FinanceState = {
+  extrato: Registro[];
+  cartao: Registro[];
+  contas: Registro[];
+  membros: Registro[];
+  config: Registro;
+  carregando: boolean;
+};
+
+const estadoInicial: FinanceState = {
   extrato: [],
   cartao: [],
   contas: [],
-  config: { salario: 0, investido: 0, reservaAtual: 0, reservaMeta: 0 },
+  membros: [],
+  config: {},
+  carregando: true,
 };
 
-function verificarErro(operacao: string, error: { message: string } | null) {
-  if (error) {
-    console.error(`Falha ao ${operacao}:`, error);
-    throw new Error(`Não foi possível ${operacao}: ${error.message}`);
-  }
-}
-
 export function useFinanceStore() {
-  const [estado, setEstado] = useState<Estado>(VAZIO);
-  const [pronto, setPronto] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [grupoId, setGrupoId] = useState<string | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+  const [dados, setDados] = useState<FinanceState>(estadoInicial);
+  const [usuarioId, setUsuarioId] = useState<string | null>(null);
+  const [perfil, setPerfil] = useState<Registro | null>(null);
 
   const carregarDados = useCallback(async () => {
-    setErro(null);
+    setDados((atual) => ({ ...atual, carregando: true }));
+
     try {
-      const { data: { user }, error: erroAuth } = await supabase.auth.getUser();
-      verificarErro("validar a sessão", erroAuth);
+      const {
+        data: { user },
+        error: erroAuth,
+      } = await supabase.auth.getUser();
+
+      if (erroAuth) throw erroAuth;
+
       if (!user) {
-        setUserId(null);
-        setGrupoId(null);
-        setEstado(VAZIO);
-        setPronto(true);
+        setUsuarioId(null);
+        setPerfil(null);
+        setDados(estadoInicial);
         return;
       }
-      setUserId(user.id);
 
-      const { data: perfil, error: erroPerfil } = await supabase
+      setUsuarioId(user.id);
+
+      const { data: perfilData, error: erroPerfil } = await supabase
         .from("perfis")
-        .select("id, grupo_id, salario, investido, reserva_atual, reserva_meta")
-        .eq("id", user.id)
+        .select("*")
+        .eq("user_id", user.id)
         .maybeSingle();
-      verificarErro("carregar o perfil financeiro", erroPerfil);
 
-      const gId = perfil?.grupo_id || null;
-      setGrupoId(gId);
-      const filtro = gId
-        ? `usuario_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}`
-        : `usuario_id.eq.${user.id},responsavel_id.eq.${user.id}`;
+      if (erroPerfil) throw erroPerfil;
 
-      const [resExtrato, resCartao, resContas] = await Promise.all([
-        supabase.from("extrato").select("*").or(filtro),
-        supabase.from("cartao").select("*").or(filtro),
-        supabase.from("contas").select("*").or(filtro),
-      ]);
-      verificarErro("carregar os lançamentos", resExtrato.error);
-      verificarErro("carregar os cartões", resCartao.error);
-      verificarErro("carregar as contas fixas", resContas.error);
+      if (!perfilData) {
+        setPerfil(null);
+        setDados({ ...estadoInicial, carregando: false });
+        return;
+      }
 
-      setEstado({
-        extrato: resExtrato.data || [],
-        cartao: resCartao.data || [],
-        contas: resContas.data || [],
+      // Validação de segurança: se houver grupo_id, verificamos se o grupo realmente existe na tabela grupos
+      let grupoIdValido = perfilData.grupo_id ?? null;
+      if (grupoIdValido) {
+        const { data: grupoExiste } = await supabase
+          .from("grupos")
+          .select("id")
+          .eq("id", grupoIdValido)
+          .maybeSingle();
+        
+        if (!grupoExiste) {
+          grupoIdValido = null; // Anula o grupo se ele não existir na base de dados
+        }
+      }
+
+      // Atualiza o perfil localmente com o grupo validado
+      const perfilTratado = { ...perfilData, grupo_id: grupoIdValido };
+      setPerfil(perfilTratado);
+
+      const filtro = grupoIdValido
+        ? "usuario_id.eq." + user.id +
+          ",responsavel_id.eq." + perfilData.id +
+          ",grupo_id.eq." + grupoIdValido
+        : "usuario_id.eq." + user.id;
+
+      const [extratoRes, cartaoRes, contasRes, membrosRes] =
+        await Promise.all([
+          supabase.from("extrato").select("*").or(filtro),
+          supabase.from("cartao").select("*").or(filtro),
+          supabase
+            .from("contas_fixas")
+            .select("*")
+            .eq("owner_id", user.id)
+            .order("mes", { ascending: true }),
+          grupoIdValido
+            ? supabase
+                .from("perfis")
+                .select("*")
+                .eq("grupo_id", grupoIdValido)
+            : supabase.from("perfis").select("*").eq("id", perfilData.id),
+        ]);
+
+      if (extratoRes.error) throw extratoRes.error;
+      if (cartaoRes.error) throw cartaoRes.error;
+      if (contasRes.error) throw contasRes.error;
+      if (membrosRes.error) throw membrosRes.error;
+
+      setDados({
+        extrato: extratoRes.data ?? [],
+        cartao: cartaoRes.data ?? [],
+        contas: (contasRes.data ?? []).map((item) => ({
+          ...item,
+          responsavel: item.responsavel_id,
+          responsavelNome: item.responsavel_id,
+          formaPagamento: item.forma_pagamento,
+        })),
+        membros: membrosRes.data ?? [],
         config: {
-          salario: perfil?.salario ?? 0,
-          investido: perfil?.investido ?? 0,
-          reservaAtual: perfil?.reserva_atual ?? 0,
-          reservaMeta: perfil?.reserva_meta ?? 0,
+          salario: perfilTratado.salario ?? 0,
+          investido: perfilTratado.investido ?? 0,
+          reserva_atual: perfilTratado.reserva_atual ?? 0,
+          reserva_meta: perfilTratado.reserva_meta ?? 0,
+          ...perfilTratado,
         },
+        carregando: false,
       });
-    } catch (e) {
-      const mensagem = e instanceof Error ? e.message : "Erro desconhecido ao carregar os dados.";
-      setErro(mensagem);
-      console.error(mensagem);
-    } finally {
-      setPronto(true);
+    } catch (erro) {
+      console.error("Erro ao carregar dados financeiros:", erro);
+      setDados((atual) => ({ ...atual, carregando: false }));
     }
   }, []);
 
-  useEffect(() => { void carregarDados(); }, [carregarDados]);
+  useEffect(() => {
+    void carregarDados();
+  }, [carregarDados]);
 
-  const adicionarExtrato = async (i: Omit<Extrato, "id">) => {
-    if (!userId) throw new Error("Sua sessão expirou. Entre novamente na sua conta.");
-    const { data, error } = await supabase.from("extrato")
-      .insert([{ ...i, usuario_id: userId, grupo_id: grupoId }]).select().single();
-    verificarErro("salvar o lançamento", error);
-    if (!data) throw new Error("O banco não retornou o lançamento salvo.");
-    setEstado((e) => ({ ...e, extrato: [...e.extrato, data] }));
+  const inserir = useCallback(
+    async (tabela: string, item: Registro) => {
+      if (!usuarioId) {
+        throw new Error("Faça login antes de salvar.");
+      }
+
+      const registro = {
+        ...item,
+        usuario_id: usuarioId,
+        ...(perfil?.grupo_id
+          ? { grupo_id: perfil.grupo_id }
+          : {}),
+      };
+
+      const { error } = await supabase
+        .from(tabela)
+        .insert(registro);
+
+      if (error) throw error;
+
+      await carregarDados();
+    },
+    [usuarioId, perfil, carregarDados],
+  );
+
+  const adicionarExtrato = useCallback(
+    (item: Registro) => inserir("extrato", item),
+    [inserir],
+  );
+
+  const adicionarCartao = useCallback(
+    (item: Registro) => inserir("cartao", item),
+    [inserir],
+  );
+
+  const adicionarConta = useCallback(
+    async (item: Registro) => {
+      if (!usuarioId) {
+        throw new Error("Faça login antes de salvar.");
+      }
+
+      // Força a utilização do grupo apenas se ele estiver validado no perfil
+      const grupoIdValido = perfil?.grupo_id ? perfil.grupo_id : null;
+
+      const registro = {
+        owner_id: usuarioId,
+        grupo_id: grupoIdValido,
+        responsavel_id: item.responsavel_id ?? item.responsavel ?? null,
+        mes: item.mes,
+        nome: item.nome,
+        pago: item.pago ?? false,
+        valor: Number(item.valor) || 0,
+        forma_pagamento:
+          item.forma_pagamento ?? item.formaPagamento ?? null,
+      };
+
+      const { error } = await supabase
+        .from("contas_fixas")
+        .insert(registro);
+
+      if (error) {
+        const erroSerializado = JSON.stringify(error, Object.getOwnPropertyNames(error));
+        console.error("ERRO SERIALIZADO EXATO:", erroSerializado);
+        throw new Error(erroSerializado);
+      }
+
+      await carregarDados();
+    },
+    [usuarioId, perfil, carregarDados],
+  );
+
+  const remover = useCallback(
+    async (tabela: string, id: string) => {
+      const tabelaReal =
+        tabela === "contas" ? "contas_fixas" : tabela;
+
+      const colunaId = "id";
+
+      const { error } = await supabase
+        .from(tabelaReal)
+        .delete()
+        .eq(colunaId, id);
+
+      if (error) throw error;
+
+      await carregarDados();
+    },
+    [carregarDados],
+  );
+
+  const alternarPago = useCallback(
+    async (id: string, pago: boolean) => {
+      const { error } = await supabase
+        .from("contas_fixas")
+        .update({ pago })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await carregarDados();
+    },
+    [carregarDados],
+  );
+
+  const atualizarConfig = useCallback(
+    async (config: Registro) => {
+      if (!perfil?.id) {
+        throw new Error("Perfil não encontrado.");
+      }
+
+      const camposPermitidos = [
+        "salario",
+        "investido",
+        "reserva_atual",
+        "reserva_meta",
+      ];
+
+      const atualizacao: Registro = {};
+
+      for (const campo of camposPermitidos) {
+        if (config[campo] !== undefined) {
+          atualizacao[campo] = config[campo];
+        }
+      }
+
+      const { error } = await supabase
+        .from("perfis")
+        .update(atualizacao)
+        .eq("id", perfil.id);
+
+      if (error) throw error;
+
+      await carregarDados();
+    },
+    [perfil, carregarDados],
+  );
+
+  const copiarContasDoMesAnterior = useCallback(
+    async (mesAnterior: string, novoMes: string) => {
+      if (!usuarioId) {
+        throw new Error("Faça login antes de continuar.");
+      }
+
+      const { data, error } = await supabase
+        .from("contas_fixas")
+        .select(
+          "nome, valor, forma_pagamento, responsavel_id",
+        )
+        .eq("owner_id", usuarioId)
+        .eq("mes", mesAnterior);
+
+      if (error) throw error;
+
+      if (!data?.length) return;
+
+      const novasContas = data.map((item) => ({
+        ...item,
+        owner_id: usuarioId,
+        grupo_id: perfil?.grupo_id ? perfil.grupo_id : null,
+        mes: novoMes,
+        pago: false,
+      }));
+
+      const { error: erroInsercao } = await supabase
+        .from("contas_fixas")
+        .insert(novasContas);
+
+      if (erroInsercao) throw erroInsercao;
+
+      await carregarDados();
+    },
+    [usuarioId, perfil, carregarDados],
+  );
+
+  return {
+    ...dados,
+    usuarioId,
+    perfil,
+    carregarDados,
+    adicionarExtrato,
+    adicionarCartao,
+    adicionarConta,
+    remover,
+    alternarPago,
+    atualizarConfig,
+    copiarContasDoMesAnterior,
   };
-
-  const adicionarCartao = async (i: Omit<Cartao, "id">, gerarSeguintes: boolean) => {
-    if (!userId) throw new Error("Sua sessão expirou. Entre novamente na sua conta.");
-    const restantes = gerarSeguintes ? Math.max(0, i.parcelaTotal - i.parcelaAtual) : 0;
-    const novos = Array.from({ length: restantes + 1 }, (_, k) => ({
-      ...i, usuario_id: userId, grupo_id: grupoId, mes: addMeses(i.mes, k), parcelaAtual: i.parcelaAtual + k,
-    }));
-    const { data, error } = await supabase.from("cartao").insert(novos).select();
-    verificarErro("salvar as parcelas do cartão", error);
-    if (!data || data.length !== novos.length) throw new Error("O banco não confirmou todas as parcelas.");
-    setEstado((e) => ({ ...e, cartao: [...e.cartao, ...data] }));
-  };
-
-  const adicionarConta = async (i: Omit<ContaFixa, "id">) => {
-    if (!userId) throw new Error("Sua sessão expirou. Entre novamente na sua conta.");
-    const { data, error } = await supabase.from("contas")
-      .insert([{ ...i, usuario_id: userId, grupo_id: grupoId }]).select().single();
-    verificarErro("salvar a conta fixa", error);
-    if (!data) throw new Error("O banco não retornou a conta salva.");
-    setEstado((e) => ({ ...e, contas: [...e.contas, data] }));
-  };
-
-  const remover = async (tabela: Tabela, id: string) => {
-    if (!userId) throw new Error("Sua sessão expirou. Entre novamente na sua conta.");
-    const { data, error } = await supabase.from(tabela).delete().eq("id", id).select("id").maybeSingle();
-    verificarErro("excluir o registro", error);
-    if (!data) throw new Error("Nenhum registro foi excluído. Verifique as permissões de acesso.");
-    setEstado((e) => ({ ...e, [tabela]: (e[tabela] as { id: string }[]).filter((x) => x.id !== id) }) as Estado);
-  };
-
-  const alternarPago = async (id: string) => {
-    const contaAtual = estado.contas.find((c) => c.id === id);
-    if (!contaAtual) throw new Error("A conta não foi encontrada.");
-    const novoStatus = !contaAtual.pago;
-    const { data, error } = await supabase.from("contas").update({ pago: novoStatus }).eq("id", id).select("id").maybeSingle();
-    verificarErro("atualizar o status da conta", error);
-    if (!data) throw new Error("O banco não confirmou a alteração do status.");
-    setEstado((e) => ({ ...e, contas: e.contas.map((c) => c.id === id ? { ...c, pago: novoStatus } : c) }));
-  };
-
-  const copiarContasDoMesAnterior = async (mes: string) => {
-    if (!userId) throw new Error("Sua sessão expirou. Entre novamente na sua conta.");
-    const anterior = addMeses(mes, -1);
-    const jaTem = new Set(estado.contas.filter((c) => c.mes === mes).map((c) => c.nome.toLowerCase()));
-    const novas = estado.contas.filter((c) => c.mes === anterior && !jaTem.has(c.nome.toLowerCase())).map(({ id, ...resto }) => ({
-      ...resto, usuario_id: userId, grupo_id: grupoId, mes, pago: false,
-    }));
-    if (!novas.length) return;
-    const { data, error } = await supabase.from("contas").insert(novas).select();
-    verificarErro("copiar as contas do mês anterior", error);
-    if (!data || data.length !== novas.length) throw new Error("O banco não confirmou todas as contas copiadas.");
-    setEstado((e) => ({ ...e, contas: [...e.contas, ...data] }));
-  };
-
-  const atualizarConfig = async (patch: Partial<Config>) => {
-    if (!userId) throw new Error("Sua sessão expirou. Entre novamente na sua conta.");
-    const patchSupabase: Record<string, number> = {};
-    if (patch.salario !== undefined) patchSupabase.salario = patch.salario;
-    if (patch.investido !== undefined) patchSupabase.investido = patch.investido;
-    if (patch.reservaAtual !== undefined) patchSupabase.reserva_atual = patch.reservaAtual;
-    if (patch.reservaMeta !== undefined) patchSupabase.reserva_meta = patch.reservaMeta;
-
-    // UPDATE sem linha correspondente pode não gerar erro; upsert cria/atualiza o perfil do usuário.
-    const { data, error } = await supabase.from("perfis")
-      .upsert({ id: userId, user_id: userId, ...patchSupabase }, { onConflict: "id" })
-      .select("id, salario, investido, reserva_atual, reserva_meta")
-      .single();
-    verificarErro("salvar salário e investimentos", error);
-    if (!data) throw new Error("O banco não confirmou a gravação das configurações financeiras.");
-    setEstado((e) => ({ ...e, config: {
-      salario: data.salario ?? e.config.salario,
-      investido: data.investido ?? e.config.investido,
-      reservaAtual: data.reserva_atual ?? e.config.reservaAtual,
-      reservaMeta: data.reserva_meta ?? e.config.reservaMeta,
-    } }));
-  };
-
-  return { estado, pronto, erro, adicionarExtrato, adicionarCartao, adicionarConta, remover, alternarPago, copiarContasDoMesAnterior, atualizarConfig, carregarDados };
 }

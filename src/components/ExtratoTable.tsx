@@ -32,10 +32,10 @@ export default function ExtratoTable({
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
 
-  // Opções personalizadas
+  // Opções personalizadas unificadas
   const [opcoesPagamento, setOpcoesPagamento] = useState<Opcao[]>([]);
   const [opcoesCategoria, setOpcoesCategoria] = useState<Opcao[]>([]);
-  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
+  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | "cartao" | null>(null);
 
   const carregarDadosIniciais = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -118,9 +118,10 @@ export default function ExtratoTable({
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
-      <form onSubmit={handleAdicionar} className="grid gap-3 sm:grid-cols-2 md:grid-cols-6 items-end">
-        {/* Pagamento com seletor e botão de gerenciar */}
-        <div>
+      <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
+        
+        {/* Pagamento */}
+        <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
             <label className="text-xs font-medium text-muted">Pagamento</label>
             <button
@@ -134,18 +135,19 @@ export default function ExtratoTable({
           <select
             value={pagamento}
             onChange={(e) => setPagamento(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           >
+            <option value="" className="bg-surface text-ink">Selecione...</option>
             {opcoesPagamento.map((p) => (
-              <option key={p.id} value={p.nome}>
+              <option key={p.id} value={p.nome} className="bg-surface text-ink">
                 {p.nome}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Categoria com seletor e botão de gerenciar */}
-        <div>
+        {/* Categoria */}
+        <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
             <label className="text-xs font-medium text-muted">Categoria</label>
             <button
@@ -159,57 +161,59 @@ export default function ExtratoTable({
           <select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           >
-            <option value="">Selecione...</option>
+            <option value="" className="bg-surface text-ink">Selecione...</option>
             {opcoesCategoria.map((c) => (
-              <option key={c.id} value={c.nome}>
+              <option key={c.id} value={c.nome} className="bg-surface text-ink">
                 {c.nome}
               </option>
             ))}
           </select>
         </div>
 
-        <div>
+        {/* Valor Total */}
+        <div className="lg:col-span-2">
           <label className="text-xs font-medium text-muted block mb-1">Valor Total (R$)</label>
           <input
             type="text"
             placeholder="0,00"
             value={valorTexto}
             onChange={(e) => setValorTexto(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
 
-        <div>
+        {/* Descrição */}
+        <div className="lg:col-span-3">
           <label className="text-xs font-medium text-muted block mb-1">Descrição</label>
           <input
             type="text"
             placeholder="Descrição..."
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
 
-        {/* SELETOR MÚLTIPLO DE RESPONSÁVEIS */}
-        <div className="relative">
-          <label className="text-xs font-medium text-muted block mb-1">Responsável(is)</label>
+        {/* Responsável */}
+        <div className="lg:col-span-1 relative">
+          <label className="text-xs font-medium text-muted block mb-1">Resp.</label>
           <button
             type="button"
             onClick={() => setMenuResponsavelAberto(!menuResponsavelAberto)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-2 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none focus:ring-2 focus:ring-accent"
           >
-            <span>
+            <span className="truncate">
               {responsaveisSelecionados.length === 1
                 ? responsaveisSelecionados[0]
-                : `${responsaveisSelecionados.length} selecionados`}
+                : `${responsaveisSelecionados.length}`}
             </span>
             <span className="text-xs text-muted">▾</span>
           </button>
 
           {menuResponsavelAberto && (
-            <div className="absolute z-30 top-full mt-1 left-0 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl space-y-1">
+            <div className="absolute z-30 top-full mt-1 right-0 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl space-y-1">
               {membros.length > 1 && (
                 <button
                   type="button"
@@ -224,7 +228,7 @@ export default function ExtratoTable({
                 {membros.map((nome) => (
                   <label
                     key={nome}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none text-ink"
                   >
                     <input
                       type="checkbox"
@@ -240,15 +244,18 @@ export default function ExtratoTable({
           )}
         </div>
 
-        <button
-          type="submit"
-          className="w-full bg-accent text-on-accent h-9 rounded-xl font-medium text-sm hover:opacity-90 transition"
-        >
-          Adicionar
-        </button>
+        {/* Botão Adicionar */}
+        <div className="lg:col-span-2">
+          <button
+            type="submit"
+            className="w-full bg-accent text-on-accent h-[38px] rounded-xl font-medium text-sm hover:opacity-90 transition flex items-center justify-center shadow-sm"
+          >
+            Adicionar
+          </button>
+        </div>
       </form>
 
-      {/* TABELA DE EXIBIÇÃO */}
+      {/* Tabela */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
@@ -284,7 +291,6 @@ export default function ExtratoTable({
         </table>
       </div>
 
-      {/* MODAL DE GERENCIAMENTO DE OPÇÕES (PAGAMENTO / CATEGORIA) */}
       {modalOpcaoAberto && (
         <GerenciarOpcoesModal
           tipo={modalOpcaoAberto}

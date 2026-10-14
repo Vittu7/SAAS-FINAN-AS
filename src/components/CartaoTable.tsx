@@ -99,36 +99,35 @@ export default function CartaoTable({
     );
   };
 
-  const handleAdicionar = (e: React.FormEvent) => {
+  const handleAdicionar = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorTotal = parseValor(valorTexto);
-    if (!valorTotal || !descricao.trim()) return;
-
-    const qtd = responsaveisSelecionados.length;
-    const valorIndividual = valorTotal / qtd;
-
-    responsaveisSelecionados.forEach((resp) => {
-      onAdd(
-        {
-          mes,
-          cartao: cartao || "Cartão",
-          categoria: categoria || "Outros",
+    if (!valorTotal || !descricao.trim()) {
+      alert("Informe uma descrição e um valor válido.");
+      return;
+    }
+    const atual = Math.max(1, Number(parcelaAtual) || 1);
+    const total = Math.max(atual, Number(parcelaTotal) || 1);
+    const responsaveis = responsaveisSelecionados.length ? responsaveisSelecionados : [meuNome || "Usuário"];
+    const valorIndividual = valorTotal / responsaveis.length;
+    try {
+      for (const resp of responsaveis) {
+        await onAdd({
+          mes, cartao: cartao || "Cartão", categoria: categoria || "Outros",
           valor: valorIndividual,
-          descricao: qtd > 1 ? `${descricao} (1/${qtd})` : descricao,
-          parcelaAtual: Number(parcelaAtual) || 1,
-          parcelaTotal: Number(parcelaTotal) || 1,
-          responsavel: resp,
-        },
-        gerarSeguintes
-      );
-    });
-
-    setValorTexto("");
-    setDescricao("");
-    setParcelaAtual(1);
-    setParcelaTotal(1);
-    setResponsaveisSelecionados([meuNome || "Usuário"]);
-    setMenuResponsavelAberto(false);
+          descricao: responsaveis.length > 1 ? `${descricao} (1/${responsaveis.length})` : descricao,
+          parcelaAtual: atual, parcelaTotal: total, responsavel: resp,
+        }, gerarSeguintes);
+      }
+      setValorTexto("");
+      setDescricao("");
+      setParcelaAtual(1);
+      setParcelaTotal(1);
+      setResponsaveisSelecionados([meuNome || "Usuário"]);
+      setMenuResponsavelAberto(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Não foi possível salvar a compra no cartão.");
+    }
   };
 
   return (

@@ -126,7 +126,13 @@ export function ValorEditavel({
       placeholder="0,00"
       value={txt}
       onChange={(e) => setTxt(e.target.value)}
-      onBlur={() => onChange(parseValor(txt))}
+      onBlur={async () => {
+        try {
+          await onChange(parseValor(txt));
+        } catch (error) {
+          alert(error instanceof Error ? error.message : `Não foi possível salvar ${rotulo.toLowerCase()}.`);
+        }
+      }}
       onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
       className="w-28 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-right text-sm tabular-nums outline-none hover:border-line focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent"
     />

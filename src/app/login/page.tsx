@@ -64,8 +64,17 @@ export default function LoginPage() {
     <main className="grid min-h-screen place-items-center bg-surface px-4 py-8">
       <div className="w-full max-w-md space-y-6 rounded-2xl border border-line bg-background p-8 shadow-lg">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Home Cash</h1>
-          <p className="text-sm text-muted">
+<div className="flex flex-col items-center gap-1">
+  <img 
+    src="/logo.png" 
+    alt="HomeCash Logo" 
+    className="h-40 w-auto" 
+  />
+
+  <h1 className="text-4xl font-bold tracking-tight">
+    <span className="text-white">Home</span><span className="text-accent">Cash</span>
+  </h1>
+</div>          <p className="text-sm text-muted">
             Aceda ao seu painel financeiro na nuvem
           </p>
         </div>

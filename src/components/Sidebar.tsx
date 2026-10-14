@@ -41,16 +41,21 @@ export default function Sidebar({
         expandido ? "w-64" : "w-20"
       }`}
     >
-      {/* Topo: Logo & Botão para Recolher */}
+      {/* Topo: Logo PNG & Botão para Recolher */}
       <div>
         <div className="flex h-16 items-center justify-between px-4 border-b border-line">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent text-xl font-bold shadow-md">
-              💎
+            {/* Imagem PNG no lugar do emoji de diamante */}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+              <img 
+                src="/logo.png" 
+                alt="HomeCash Logo" 
+                className="h-8 w-auto object-contain" 
+              />
             </div>
             {expandido && (
               <span className="font-bold text-lg whitespace-nowrap text-ink">
-                Home<span className="text-accent">Cash</span>
+                <span className="text-white">Home</span><span className="text-accent">Cash</span>
               </span>
             )}
           </div>

@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
+import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
+
+interface Opcao {
+  id: string;
+  nome: string;
+  cor: string;
+}
 
 export default function CartaoTable({
   mes,
@@ -15,7 +22,7 @@ export default function CartaoTable({
   onAdd: (item: any, gerarSeguintes: boolean) => void;
   onRemove: (id: string) => void;
 }) {
-  const [cartao, setCartao] = useState("Cartão de Crédito");
+  const [cartao, setCartao] = useState("");
   const [categoria, setCategoria] = useState("");
   const [valorTexto, setValorTexto] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -28,11 +35,12 @@ export default function CartaoTable({
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
 
-  useEffect(() => {
-    carregarMembrosDoGrupo();
-  }, []);
+  // Opções compartilhadas do Supabase
+  const [opcoesCartao, setOpcoesCartao] = useState<Opcao[]>([]);
+  const [opcoesCategoria, setOpcoesCategoria] = useState<Opcao[]>([]);
+  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | "cartao" | null>(null);
 
-  const carregarMembrosDoGrupo = async () => {
+  const carregarDadosIniciais = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -48,32 +56,47 @@ export default function CartaoTable({
       setResponsaveisSelecionados([nomeReal]);
 
       if (perfil.grupo_id) {
-        const { data: lista } = await supabase
-          .from("perfis")
-          .select("nome_usuario")
-          .eq("grupo_id", perfil.grupo_id);
+        const [resMembros, resCartoes, resCat] = await Promise.all([
+          supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id),
+          supabase.from("opcoes_cartao").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
+          supabase.from("opcoes_categoria").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
+        ]);
 
-        if (lista && lista.length > 0) {
-          const nomes = lista.map((m) => m.nome_usuario).filter(Boolean);
-          setMembros(nomes);
-        } else {
-          setMembros([nomeReal]);
+        if (resMembros.data) {
+          const nomes = resMembros.data.map((m) => m.nome_usuario).filter(Boolean);
+          setMembros(nomes.length > 0 ? nomes : [nomeReal]);
         }
-      } else {
-        setMembros([nomeReal]);
+
+        if (resCartoes.data) {
+          setOpcoesCartao(resCartoes.data);
+          if (resCartoes.data.length > 0 && !cartao) {
+            setCartao(resCartoes.data[0].nome);
+          }
+        }
+
+        if (resCat.data) {
+          setOpcoesCategoria(resCat.data);
+        }
       }
     }
-  };
+  }, [cartao]);
+
+  useEffect(() => {
+    carregarDadosIniciais();
+  }, [carregarDadosIniciais]);
 
   const alternarResponsavel = (nome: string) => {
-    setResponsaveisSelecionados((prev) => {
-      if (prev.includes(nome)) {
-        if (prev.length === 1) return prev;
-        return prev.filter((item) => item !== nome);
-      } else {
-        return [...prev, nome];
-      }
-    });
+    setResponsaveisSelecionados((prev) =>
+      prev.includes(nome)
+        ? prev.length > 1 ? prev.filter((item) => item !== nome) : prev
+        : [...prev, nome]
+    );
+  };
+
+  const selecionarTodos = () => {
+    setResponsaveisSelecionados(
+      responsaveisSelecionados.length === membros.length ? [meuNome || "Usuário"] : [...membros]
+    );
   };
 
   const handleAdicionar = (e: React.FormEvent) => {
@@ -88,106 +111,164 @@ export default function CartaoTable({
       onAdd(
         {
           mes,
-          cartao,
-          categoria,
+          cartao: cartao || "Cartão",
+          categoria: categoria || "Outros",
           valor: valorIndividual,
           descricao: qtd > 1 ? `${descricao} (1/${qtd})` : descricao,
-          parcelaAtual: Number(parcelaAtual),
-          parcelaTotal: Number(parcelaTotal),
+          parcelaAtual: Number(parcelaAtual) || 1,
+          parcelaTotal: Number(parcelaTotal) || 1,
           responsavel: resp,
         },
         gerarSeguintes
       );
     });
 
-    setCategoria("");
     setValorTexto("");
     setDescricao("");
+    setParcelaAtual(1);
+    setParcelaTotal(1);
     setResponsaveisSelecionados([meuNome || "Usuário"]);
     setMenuResponsavelAberto(false);
   };
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
-      <form onSubmit={handleAdicionar} className="grid gap-3 sm:grid-cols-2 md:grid-cols-6 items-end">
-        <div>
-          <label className="text-xs font-medium text-muted block mb-1">Cartão</label>
-          <input
-            type="text"
+      {/* Formulário otimizado com grid responsivo de 12 colunas para ajuste perfeito em telas menores e com zoom */}
+      <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
+        
+        {/* SELETOR DE CARTÃO (Ocupa 2 colunas em telas grandes) */}
+        <div className="lg:col-span-2">
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-xs font-medium text-muted">Cartão</label>
+            <button
+              type="button"
+              onClick={() => setModalOpcaoAberto("cartao")}
+              className="text-[10px] text-accent hover:underline font-medium"
+            >
+              ⚙️ Editar
+            </button>
+          </div>
+          <select
             value={cartao}
             onChange={(e) => setCartao(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
-          />
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+          >
+            <option value="" className="bg-surface text-ink">Selecione...</option>
+            {opcoesCartao.map((c) => (
+              <option key={c.id} value={c.nome} className="bg-surface text-ink">
+                {c.nome}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div>
-          <label className="text-xs font-medium text-muted block mb-1">Valor da Parcela (R$)</label>
+        {/* CATEGORIA (Ocupa 2 colunas) */}
+        <div className="lg:col-span-2">
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-xs font-medium text-muted">Categoria</label>
+            <button
+              type="button"
+              onClick={() => setModalOpcaoAberto("categoria")}
+              className="text-[10px] text-accent hover:underline font-medium"
+            >
+              ⚙️ Editar
+            </button>
+          </div>
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+          >
+            <option value="" className="bg-surface text-ink">Selecione...</option>
+            {opcoesCategoria.map((c) => (
+              <option key={c.id} value={c.nome} className="bg-surface text-ink">
+                {c.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* VALOR DA PARCELA (Ocupa 2 colunas) */}
+        <div className="lg:col-span-2">
+          <label className="text-xs font-medium text-muted block mb-1">Valor Parcela (R$)</label>
           <input
             type="text"
             placeholder="0,00"
             value={valorTexto}
             onChange={(e) => setValorTexto(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
 
-        <div>
+        {/* DESCRIÇÃO (Ocupa 2 colunas) */}
+        <div className="lg:col-span-2">
           <label className="text-xs font-medium text-muted block mb-1">Descrição</label>
           <input
             type="text"
             placeholder="Descrição..."
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
 
-        <div className="flex gap-2">
+        {/* PARCELAS (Ocupa 1 coluna dividida internamente) */}
+        <div className="lg:col-span-1 flex gap-1">
           <div className="w-1/2">
-            <label className="text-xs font-medium text-muted block mb-1">Parc. Atual</label>
+            <label className="text-xs font-medium text-muted block mb-1">Parc</label>
             <input
               type="number"
               min="1"
               value={parcelaAtual}
               onChange={(e) => setParcelaAtual(Number(e.target.value))}
-              className="w-full rounded-xl border border-line bg-background px-2 py-2 text-sm outline-none"
+              className="w-full rounded-xl border border-line bg-background text-ink px-1 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
           <div className="w-1/2">
-            <label className="text-xs font-medium text-muted block mb-1">Total Parc.</label>
+            <label className="text-xs font-medium text-muted block mb-1">Tot</label>
             <input
               type="number"
               min="1"
               value={parcelaTotal}
               onChange={(e) => setParcelaTotal(Number(e.target.value))}
-              className="w-full rounded-xl border border-line bg-background px-2 py-2 text-sm outline-none"
+              className="w-full rounded-xl border border-line bg-background text-ink px-1 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
         </div>
 
-        {/* SELETOR MULTIPLO DE RESPONSÁVEIS */}
-        <div className="relative">
-          <label className="text-xs font-medium text-muted block mb-1">Responsável(is)</label>
+        {/* RESPONSÁVEL (Ocupa 1 coluna) */}
+        <div className="lg:col-span-1 relative">
+          <label className="text-xs font-medium text-muted block mb-1">Resp.</label>
           <button
             type="button"
             onClick={() => setMenuResponsavelAberto(!menuResponsavelAberto)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none"
+            className="w-full rounded-xl border border-line bg-background text-ink px-2 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none focus:ring-2 focus:ring-accent"
           >
-            <span>
+            <span className="truncate">
               {responsaveisSelecionados.length === 1
                 ? responsaveisSelecionados[0]
-                : `${responsaveisSelecionados.length} selecionados`}
+                : `${responsaveisSelecionados.length}`}
             </span>
             <span className="text-xs text-muted">▾</span>
           </button>
 
           {menuResponsavelAberto && (
-            <div className="absolute z-30 top-full mt-1 left-0 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl space-y-1">
+            <div className="absolute z-30 top-full mt-1 right-0 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl space-y-1">
+              {membros.length > 1 && (
+                <button
+                  type="button"
+                  onClick={selecionarTodos}
+                  className="w-full text-left text-xs px-2 py-1.5 font-bold text-accent border-b border-line mb-1 hover:bg-background/50 rounded"
+                >
+                  {responsaveisSelecionados.length === membros.length ? "Desmarcar Todos" : "👥 Marcar Todos"}
+                </button>
+              )}
+
               <div className="max-h-36 overflow-y-auto space-y-1">
                 {membros.map((nome) => (
                   <label
                     key={nome}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none text-ink"
                   >
                     <input
                       type="checkbox"
@@ -203,12 +284,16 @@ export default function CartaoTable({
           )}
         </div>
 
-        <button
-          type="submit"
-          className="w-full bg-accent text-on-accent h-9 rounded-xl font-medium text-sm hover:opacity-90 transition"
-        >
-          Adicionar
-        </button>
+        {/* BOTÃO ADICIONAR (Ocupa 2 colunas no desktop, alinhado perfeitamente na linha) */}
+        <div className="lg:col-span-2">
+          <button
+            type="submit"
+            className="w-full bg-accent text-on-accent h-[38px] rounded-xl font-medium text-sm hover:opacity-90 transition flex items-center justify-center shadow-sm"
+          >
+            Adicionar
+          </button>
+        </div>
+
       </form>
 
       {/* TABELA DE EXIBIÇÃO */}
@@ -217,6 +302,7 @@ export default function CartaoTable({
           <thead>
             <tr className="border-b border-line text-xs text-muted">
               <th className="py-2">Cartão</th>
+              <th className="py-2">Categoria</th>
               <th className="py-2">Descrição</th>
               <th className="py-2">Parcela</th>
               <th className="py-2">Responsável</th>
@@ -227,13 +313,18 @@ export default function CartaoTable({
           <tbody>
             {itens.map((item) => (
               <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
-                <td className="py-3 font-medium">{item.cartao}</td>
+                <td className="py-3 font-medium">
+                  <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
+                    {item.cartao || "Cartão"}
+                  </span>
+                </td>
+                <td className="py-3 text-muted">{item.categoria || "-"}</td>
                 <td className="py-3">{item.descricao}</td>
                 <td className="py-3 text-xs text-muted">
                   {item.parcelaAtual}/{item.parcelaTotal}
                 </td>
                 <td className="py-3">
-                  <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
+                  <span className="bg-background border border-line font-medium px-2 py-0.5 rounded text-xs text-ink">
                     {item.responsavel || "Membro"}
                   </span>
                 </td>
@@ -248,6 +339,15 @@ export default function CartaoTable({
           </tbody>
         </table>
       </div>
+
+      {/* MODAL DE GERENCIAMENTO DE OPÇÕES */}
+      {modalOpcaoAberto && (
+        <GerenciarOpcoesModal
+          tipo={modalOpcaoAberto}
+          onClose={() => setModalOpcaoAberto(null)}
+          onAtualizar={carregarDadosIniciais}
+        />
+      )}
     </div>
   );
 }

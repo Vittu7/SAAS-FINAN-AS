@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
+import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
+
+interface Opcao {
+  id: string;
+  nome: string;
+  cor: string;
+}
 
 export default function ContasFixasTable({
   mes,
@@ -22,17 +29,20 @@ export default function ContasFixasTable({
   const [nome, setNome] = useState("");
   const [valorTexto, setValorTexto] = useState("");
   const [vencimento, setVencimento] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [pagamento, setPagamento] = useState("Conta Fixa");
 
   const [membros, setMembros] = useState<string[]>([]);
   const [meuNome, setMeuNome] = useState("");
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
 
-  useEffect(() => {
-    carregarMembrosDoGrupo();
-  }, []);
+  // Opções personalizadas
+  const [opcoesPagamento, setOpcoesPagamento] = useState<Opcao[]>([]);
+  const [opcoesCategoria, setOpcoesCategoria] = useState<Opcao[]>([]);
+  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
 
-  const carregarMembrosDoGrupo = async () => {
+  const carregarDadosIniciais = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -48,32 +58,39 @@ export default function ContasFixasTable({
       setResponsaveisSelecionados([nomeReal]);
 
       if (perfil.grupo_id) {
-        const { data: lista } = await supabase
-          .from("perfis")
-          .select("nome_usuario")
-          .eq("grupo_id", perfil.grupo_id);
+        const [resMembros, resPag, resCat] = await Promise.all([
+          supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id),
+          supabase.from("opcoes_pagamento").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
+          supabase.from("opcoes_categoria").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
+        ]);
 
-        if (lista && lista.length > 0) {
-          const nomes = lista.map((m) => m.nome_usuario).filter(Boolean);
-          setMembros(nomes);
-        } else {
-          setMembros([nomeReal]);
+        if (resMembros.data) {
+          const nomes = resMembros.data.map((m) => m.nome_usuario).filter(Boolean);
+          setMembros(nomes.length > 0 ? nomes : [nomeReal]);
         }
-      } else {
-        setMembros([nomeReal]);
+
+        if (resPag.data) setOpcoesPagamento(resPag.data);
+        if (resCat.data) setOpcoesCategoria(resCat.data);
       }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    carregarDadosIniciais();
+  }, [carregarDadosIniciais]);
 
   const alternarResponsavel = (n: string) => {
-    setResponsaveisSelecionados((prev) => {
-      if (prev.includes(n)) {
-        if (prev.length === 1) return prev;
-        return prev.filter((item) => item !== n);
-      } else {
-        return [...prev, n];
-      }
-    });
+    setResponsaveisSelecionados((prev) =>
+      prev.includes(n)
+        ? prev.length > 1 ? prev.filter((item) => item !== n) : prev
+        : [...prev, n]
+    );
+  };
+
+  const selecionarTodos = () => {
+    setResponsaveisSelecionados(
+      responsaveisSelecionados.length === membros.length ? [meuNome || "Usuário"] : [...membros]
+    );
   };
 
   const handleAdicionar = (e: React.FormEvent) => {
@@ -90,6 +107,8 @@ export default function ContasFixasTable({
         nome: qtd > 1 ? `${nome} (1/${qtd})` : nome,
         valor: valorIndividual,
         vencimento,
+        categoria: categoria || "Outros",
+        pagamento: pagamento || "Conta Fixa",
         pago: false,
         responsavel: resp,
       });
@@ -98,6 +117,7 @@ export default function ContasFixasTable({
     setNome("");
     setValorTexto("");
     setVencimento("");
+    setCategoria("");
     setResponsaveisSelecionados([meuNome || "Usuário"]);
     setMenuResponsavelAberto(false);
   };
@@ -107,14 +127,15 @@ export default function ContasFixasTable({
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-semibold text-muted">Contas Recorrentes do Mês</h3>
         <button
+          type="button"
           onClick={onCopiarMesAnterior}
-          className="text-xs bg-surface border border-line hover:bg-background px-3 py-1.5 rounded-xl transition"
+          className="text-xs bg-surface border border-line hover:bg-background px-3 py-1.5 rounded-xl transition text-ink"
         >
           📋 Copiar Contas do Mês Anterior
         </button>
       </div>
 
-      <form onSubmit={handleAdicionar} className="grid gap-3 sm:grid-cols-2 md:grid-cols-5 items-end">
+      <form onSubmit={handleAdicionar} className="grid gap-3 sm:grid-cols-2 md:grid-cols-6 items-end">
         <div>
           <label className="text-xs font-medium text-muted block mb-1">Nome da Conta</label>
           <input
@@ -122,8 +143,34 @@ export default function ContasFixasTable({
             placeholder="Ex: Energia, Internet"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
+        </div>
+
+        {/* Categoria padronizada */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-xs font-medium text-muted">Categoria</label>
+            <button
+              type="button"
+              onClick={() => setModalOpcaoAberto("categoria")}
+              className="text-[10px] text-accent hover:underline font-medium"
+            >
+              ⚙️ Editar
+            </button>
+          </div>
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+          >
+            <option value="" className="bg-surface text-ink">Selecione...</option>
+            {opcoesCategoria.map((c) => (
+              <option key={c.id} value={c.nome} className="bg-surface text-ink">
+                {c.nome}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
@@ -133,7 +180,7 @@ export default function ContasFixasTable({
             placeholder="0,00"
             value={valorTexto}
             onChange={(e) => setValorTexto(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
 
@@ -144,17 +191,17 @@ export default function ContasFixasTable({
             placeholder="Dia (ex: 10)"
             value={vencimento}
             onChange={(e) => setVencimento(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
 
-        {/* SELETOR MULTIPLO DE RESPONSÁVEIS */}
+        {/* SELETOR MÚLTIPLO DE RESPONSÁVEIS */}
         <div className="relative">
           <label className="text-xs font-medium text-muted block mb-1">Responsável(is)</label>
           <button
             type="button"
             onClick={() => setMenuResponsavelAberto(!menuResponsavelAberto)}
-            className="w-full rounded-xl border border-line bg-background px-3 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none"
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none focus:ring-2 focus:ring-accent"
           >
             <span>
               {responsaveisSelecionados.length === 1
@@ -166,11 +213,21 @@ export default function ContasFixasTable({
 
           {menuResponsavelAberto && (
             <div className="absolute z-30 top-full mt-1 left-0 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl space-y-1">
+              {membros.length > 1 && (
+                <button
+                  type="button"
+                  onClick={selecionarTodos}
+                  className="w-full text-left text-xs px-2 py-1.5 font-bold text-accent border-b border-line mb-1 hover:bg-background/50 rounded"
+                >
+                  {responsaveisSelecionados.length === membros.length ? "Desmarcar Todos" : "👥 Marcar Todos"}
+                </button>
+              )}
+
               <div className="max-h-36 overflow-y-auto space-y-1">
                 {membros.map((m) => (
                   <label
                     key={m}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none text-ink"
                   >
                     <input
                       type="checkbox"
@@ -201,6 +258,7 @@ export default function ContasFixasTable({
             <tr className="border-b border-line text-xs text-muted">
               <th className="py-2">Status</th>
               <th className="py-2">Conta</th>
+              <th className="py-2">Categoria</th>
               <th className="py-2">Vencimento</th>
               <th className="py-2">Responsável</th>
               <th className="py-2 text-right">Valor</th>
@@ -223,6 +281,7 @@ export default function ContasFixasTable({
                   </button>
                 </td>
                 <td className="py-3 font-medium">{item.nome}</td>
+                <td className="py-3 text-muted">{item.categoria || "-"}</td>
                 <td className="py-3 text-xs text-muted">{item.vencimento ? `Dia ${item.vencimento}` : "-"}</td>
                 <td className="py-3">
                   <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
@@ -240,6 +299,14 @@ export default function ContasFixasTable({
           </tbody>
         </table>
       </div>
+
+      {modalOpcaoAberto && (
+        <GerenciarOpcoesModal
+          tipo={modalOpcaoAberto}
+          onClose={() => setModalOpcaoAberto(null)}
+          onAtualizar={carregarDadosIniciais}
+        />
+      )}
     </div>
   );
 }

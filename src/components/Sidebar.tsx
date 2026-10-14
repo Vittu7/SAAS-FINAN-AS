@@ -45,14 +45,16 @@ export default function Sidebar({
       <div>
         <div className="flex h-16 items-center justify-between px-4 border-b border-line">
           <div className="flex items-center gap-3 overflow-hidden">
-            {/* Imagem PNG no lugar do emoji de diamante */}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+            
+            {/* Logo PNG com tamanho maior (h-12) */}
+            <div className="flex items-center justify-center shrink-0">
               <img 
                 src="/logo.png" 
                 alt="HomeCash Logo" 
-                className="h-8 w-auto object-contain" 
+                className="h-12 w-auto object-contain" 
               />
             </div>
+
             {expandido && (
               <span className="font-bold text-lg whitespace-nowrap text-ink">
                 <span className="text-white">Home</span><span className="text-accent">Cash</span>

@@ -91,10 +91,19 @@ export default function ContasFixasTable({
   const handleAdicionar = (e: React.FormEvent) => {
     e.preventDefault();
     const valorTotal = parseValor(valorTexto);
-    if (!valorTotal || !nome.trim()) return;
+
+    if (!nome.trim()) {
+      alert("Por favor, insira o nome da conta.");
+      return;
+    }
+
+    if (isNaN(valorTotal) || valorTotal <= 0) {
+      alert("Por favor, insira um valor válido (ex: 50,00).");
+      return;
+    }
 
     const qtd = responsaveisSelecionados.length;
-    const valorIndividual = valorTotal / qtd;
+    const valorIndividual = valorTotal / (qtd > 0 ? qtd : 1);
 
     responsaveisSelecionados.forEach((resp) => {
       onAdd({
@@ -171,144 +180,4 @@ export default function ContasFixasTable({
 
         {/* Valor */}
         <div className="lg:col-span-2">
-          <label className="text-xs font-medium text-muted block mb-1">Valor (R$)</label>
-          <input
-            type="text"
-            placeholder="0,00"
-            value={valorTexto}
-            onChange={(e) => setValorTexto(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
-          />
-        </div>
-
-        {/* Vencimento */}
-        <div className="lg:col-span-1">
-          <label className="text-xs font-medium text-muted block mb-1">Venc.</label>
-          <input
-            type="text"
-            placeholder="Dia"
-            value={vencimento}
-            onChange={(e) => setVencimento(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-2 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent"
-          />
-        </div>
-
-        {/* Responsável */}
-        <div className="lg:col-span-1 relative">
-          <label className="text-xs font-medium text-muted block mb-1">Resp.</label>
-          <button
-            type="button"
-            onClick={() => setMenuResponsavelAberto(!menuResponsavelAberto)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-2 py-2 text-xs font-medium text-left truncate flex items-center justify-between outline-none focus:ring-2 focus:ring-accent"
-          >
-            <span className="truncate">
-              {responsaveisSelecionados.length === 1
-                ? responsaveisSelecionados[0]
-                : `${responsaveisSelecionados.length}`}
-            </span>
-            <span className="text-xs text-muted">▾</span>
-          </button>
-
-          {menuResponsavelAberto && (
-            <div className="absolute z-30 top-full mt-1 right-0 w-56 rounded-xl border border-line bg-surface p-2 shadow-2xl space-y-1">
-              {membros.length > 1 && (
-                <button
-                  type="button"
-                  onClick={selecionarTodos}
-                  className="w-full text-left text-xs px-2 py-1.5 font-bold text-accent border-b border-line mb-1 hover:bg-background/50 rounded"
-                >
-                  {responsaveisSelecionados.length === membros.length ? "Desmarcar Todos" : "👥 Marcar Todos"}
-                </button>
-              )}
-
-              <div className="max-h-36 overflow-y-auto space-y-1">
-                {membros.map((m) => (
-                  <label
-                    key={m}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-background cursor-pointer select-none text-ink"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={responsaveisSelecionados.includes(m)}
-                      onChange={() => alternarResponsavel(m)}
-                      className="rounded border-line text-accent focus:ring-accent"
-                    />
-                    <span>{m}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Botão Adicionar */}
-        <div className="lg:col-span-2">
-          <button
-            type="submit"
-            className="w-full bg-accent text-on-accent h-[38px] rounded-xl font-medium text-sm hover:opacity-90 transition flex items-center justify-center shadow-sm"
-          >
-            Adicionar
-          </button>
-        </div>
-      </form>
-
-      {/* Tabela */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs text-muted">
-              <th className="py-2">Status</th>
-              <th className="py-2">Conta</th>
-              <th className="py-2">Categoria</th>
-              <th className="py-2">Vencimento</th>
-              <th className="py-2">Responsável</th>
-              <th className="py-2 text-right">Valor</th>
-              <th className="py-2 text-center">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itens.map((item) => (
-              <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
-                <td className="py-3">
-                  <button
-                    type="button"
-                    onClick={() => onTogglePago(item.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                      item.pago
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                    }`}
-                  >
-                    {item.pago ? "✓ Pago" : "Pendente"}
-                  </button>
-                </td>
-                <td className="py-3 font-medium">{item.nome}</td>
-                <td className="py-3 text-muted">{item.categoria || "-"}</td>
-                <td className="py-3 text-xs text-muted">{item.vencimento ? `Dia ${item.vencimento}` : "-"}</td>
-                <td className="py-3">
-                  <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
-                    {item.responsavel || "Membro"}
-                  </span>
-                </td>
-                <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
-                <td className="py-3 text-center">
-                  <button type="button" onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
-                    Remover
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {modalOpcaoAberto && (
-        <GerenciarOpcoesModal
-          tipo={modalOpcaoAberto}
-          onClose={() => setModalOpcaoAberto(null)}
-          onAtualizar={carregarDadosIniciais}
-        />
-      )}
-    </div>
-  );
-}
+          <label className="text-xs font-medium text-muted block mb-1">Valor (R

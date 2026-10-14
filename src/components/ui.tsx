@@ -2,18 +2,32 @@
 
 import { useEffect, useState } from "react";
 import { parseValor } from "@/lib/finance";
-import { COR_RESPONSAVEL, RESPONSAVEIS, type Responsavel } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 
 export const campo =
-  "h-9 w-full rounded-lg border border-line bg-bg px-2.5 text-sm text-ink outline-none placeholder:text-muted/70 focus-visible:ring-2 focus-visible:ring-accent";
+  "h-9 w-full rounded-lg border border-line bg-background px-2.5 text-sm text-ink outline-none placeholder:text-muted/70 focus-visible:ring-2 focus-visible:ring-accent";
 
 export const botaoPrimario =
   "h-9 rounded-lg bg-accent px-3 text-sm font-semibold text-on-accent transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
-export function BadgeResponsavel({ r }: { r: Responsavel }) {
+export function BadgeResponsavel({ r }: { r: string }) {
+  const [cor, setCor] = useState("#10b981");
+
+  useEffect(() => {
+    async function buscarCor() {
+      const { data } = await supabase
+        .from("perfis")
+        .select("cor")
+        .eq("nome_usuario", r)
+        .maybeSingle();
+      if (data?.cor) setCor(data.cor);
+    }
+    buscarCor();
+  }, [r]);
+
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
-      <span className="size-2.5 rounded-full" style={{ backgroundColor: COR_RESPONSAVEL[r] }} aria-hidden />
+      <span className="size-2.5 rounded-full" style={{ backgroundColor: cor }} aria-hidden />
       {r}
     </span>
   );
@@ -24,21 +38,52 @@ export function SelectResponsavel({
   onChange,
   form,
 }: {
-  value: Responsavel;
-  onChange: (r: Responsavel) => void;
+  value: string;
+  onChange: (r: string) => void;
   form?: string;
 }) {
+  const [membros, setMembros] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function carregarMembros() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: perfil } = await supabase
+        .from("perfis")
+        .select("grupo_id, nome_usuario")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (perfil?.grupo_id) {
+        const { data } = await supabase
+          .from("perfis")
+          .select("nome_usuario")
+          .eq("grupo_id", perfil.grupo_id);
+
+        if (data && data.length > 0) {
+          setMembros(data.map((m) => m.nome_usuario).filter(Boolean));
+          return;
+        }
+      }
+      if (perfil?.nome_usuario) {
+        setMembros([perfil.nome_usuario]);
+      }
+    }
+    carregarMembros();
+  }, []);
+
   return (
     <select
       form={form}
       aria-label="Responsável"
       className={campo}
       value={value}
-      onChange={(e) => onChange(e.target.value as Responsavel)}
+      onChange={(e) => onChange(e.target.value)}
     >
-      {RESPONSAVEIS.map((r) => (
-        <option key={r} value={r}>
-          {r}
+      {membros.map((m) => (
+        <option key={m} value={m} className="bg-surface text-ink">
+          {m}
         </option>
       ))}
     </select>

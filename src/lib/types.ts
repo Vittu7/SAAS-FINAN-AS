@@ -1,32 +1,5 @@
-export const RESPONSAVEIS = ["EU", "PAI", "MÃE", "GISA"] as const;
-export type Responsavel = (typeof RESPONSAVEIS)[number];
 export type Responsavel = string;
 
-/** Cor de cada responsável (usada no gráfico, na legenda e nos selos). */
-export const COR_RESPONSAVEL: Record<Responsavel, string> = {
-  EU: "#10b981",
-  PAI: "#6366f1",
-  "MÃE": "#f59e0b",
-  GISA: "#ec4899",
-};
-
-export const CATEGORIAS = [
-  "Alimentação",
-  "Moradia",
-  "Transporte",
-  "Saúde",
-  "Educação",
-  "Lazer",
-  "Assinaturas",
-  "Compras",
-  "Outros",
-];
-
-export const BANCOS = ["Nubank", "Itaú", "Bradesco", "Caixa", "Banco do Brasil", "Inter", "Dinheiro", "Pix"];
-export const CARTOES = ["Nubank", "Itaú", "Bradesco", "Inter", "C6", "Mercado Pago"];
-export const FORMAS_PAGAMENTO = ["Boleto", "Pix", "Débito automático", "Cartão de crédito", "Dinheiro"];
-
-/** `mes` sempre no formato "AAAA-MM" (ex.: "2026-10"). */
 export type Extrato = {
   id: string;
   mes: string;

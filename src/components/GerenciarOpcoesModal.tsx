@@ -10,22 +10,35 @@ interface Opcao {
 }
 
 export default function GerenciarOpcoesModal({
-  tipo, // "pagamento" | "categoria"
+  tipo,
   onClose,
   onAtualizar,
 }: {
-  tipo: "pagamento" | "categoria";
+  tipo: "pagamento" | "categoria" | "cartao";
   onClose: () => void;
   onAtualizar: () => void;
 }) {
   const [opcoes, setOpcoes] = useState<Opcao[]>([]);
   const [novoNome, setNovoNome] = useState("");
-  const [novaCor, setNovaCor] = useState(tipo === "pagamento" ? "#10B981" : "#6366F1");
+  const [novaCor, setNovaCor] = useState(
+    tipo === "pagamento" ? "#10B981" : tipo === "cartao" ? "#3B82F6" : "#6366F1"
+  );
   const [grupoId, setGrupoId] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  const tabela = tipo === "pagamento" ? "opcoes_pagamento" : "opcoes_categoria";
-  const titulo = tipo === "pagamento" ? "Formas de Pagamento" : "Categorias de Gastos";
+  const tabela =
+    tipo === "pagamento"
+      ? "opcoes_pagamento"
+      : tipo === "categoria"
+      ? "opcoes_categoria"
+      : "opcoes_cartao";
+
+  const titulo =
+    tipo === "pagamento"
+      ? "Formas de Pagamento"
+      : tipo === "categoria"
+      ? "Categorias de Gastos"
+      : "Cartões";
 
   useEffect(() => {
     carregarOpcoes();
@@ -107,7 +120,7 @@ export default function GerenciarOpcoesModal({
           <input
             type="text"
             required
-            placeholder={`Nova ${tipo === "pagamento" ? "Forma de Pagamento" : "Categoria"}...`}
+            placeholder={`Novo(a) ${tipo === "pagamento" ? "Forma de Pagamento" : tipo === "categoria" ? "Categoria" : "Cartão"}...`}
             value={novoNome}
             onChange={(e) => setNovoNome(e.target.value)}
             className="flex-1 bg-background border border-line rounded-lg px-3 py-1.5 text-sm outline-none"
@@ -150,6 +163,7 @@ export default function GerenciarOpcoesModal({
               </div>
 
               <button
+                type="button"
                 onClick={() => removerOpcao(item.id)}
                 className="text-xs text-red-400 hover:underline ml-2"
               >

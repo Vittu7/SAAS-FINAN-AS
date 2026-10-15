@@ -30,22 +30,24 @@ export default function GerenciarOpcoesModal({
     tipo === "pagamento"
       ? "opcoes_pagamento"
       : tipo === "categoria"
-      ? "opcoes_categoria"
-      : "opcoes_cartao";
+        ? "opcoes_categoria"
+        : "opcoes_cartao";
 
   const titulo =
     tipo === "pagamento"
       ? "Formas de Pagamento"
       : tipo === "categoria"
-      ? "Categorias de Gastos"
-      : "Cartões";
+        ? "Categorias de Gastos"
+        : "Cartões";
 
   useEffect(() => {
     carregarOpcoes();
   }, []);
 
   const carregarOpcoes = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data: perfil } = await supabase
@@ -56,12 +58,17 @@ export default function GerenciarOpcoesModal({
 
     if (perfil?.grupo_id) {
       setGrupoId(perfil.grupo_id);
-      const { data } = await supabase
+
+      const { data, error } = await supabase
         .from(tabela)
         .select("*")
         .eq("grupo_id", perfil.grupo_id)
         .order("nome", { ascending: true });
 
+      if (error) {
+        console.error("Erro ao carregar opções:", error);
+        return;
+      }
       if (data) setOpcoes(data);
     }
   };
@@ -75,7 +82,10 @@ export default function GerenciarOpcoesModal({
       .from(tabela)
       .insert([{ nome: novoNome.trim(), cor: novaCor, grupo_id: grupoId }]);
 
-    if (!error) {
+    if (error) {
+      console.error("Erro ao adicionar opção:", error);
+      alert(`Erro ao adicionar: ${error.message}`);
+    } else {
       setNovoNome("");
       await carregarOpcoes();
       onAtualizar();
@@ -84,14 +94,22 @@ export default function GerenciarOpcoesModal({
   };
 
   const atualizarOpcao = async (id: string, patch: Partial<Opcao>) => {
-    await supabase.from(tabela).update(patch).eq("id", id);
+    const { error } = await supabase.from(tabela).update(patch).eq("id", id);
+    if (error) {
+      console.error("Erro ao atualizar opção:", error);
+      alert(`Erro ao atualizar: ${error.message}`);
+    }
     await carregarOpcoes();
     onAtualizar();
   };
 
   const removerOpcao = async (id: string) => {
     if (!confirm("Deseja remover esta opção?")) return;
-    await supabase.from(tabela).delete().eq("id", id);
+    const { error } = await supabase.from(tabela).delete().eq("id", id);
+    if (error) {
+      console.error("Erro ao remover opção:", error);
+      alert(`Erro ao remover: ${error.message}`);
+    }
     await carregarOpcoes();
     onAtualizar();
   };
@@ -106,7 +124,10 @@ export default function GerenciarOpcoesModal({
         <h3 className="text-xl font-bold">Gerenciar {titulo}</h3>
 
         {/* Formulário para Adicionar */}
-        <form onSubmit={adicionarOpcao} className="flex gap-2 items-center bg-surface p-3 rounded-xl border border-line">
+        <form
+          onSubmit={adicionarOpcao}
+          className="flex gap-2 items-center bg-surface p-3 rounded-xl border border-line"
+        >
           <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full border border-line">
             <input
               type="color"
@@ -138,7 +159,10 @@ export default function GerenciarOpcoesModal({
         {/* Lista de Opções Existentes */}
         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
           {opcoes.map((item) => (
-            <div key={item.id} className="flex items-center justify-between p-2.5 bg-surface rounded-xl border border-line">
+            <div
+              key={item.id}
+              className="flex items-center justify-between p-2.5 bg-surface rounded-xl border border-line"
+            >
               <div className="flex items-center gap-3 flex-1">
                 {/* Seletor de cor circular interativo */}
                 <div
@@ -156,7 +180,9 @@ export default function GerenciarOpcoesModal({
                 <input
                   type="text"
                   value={item.nome}
-                  onChange={(e) => setOpcoes(opcoes.map(o => o.id === item.id ? { ...o, nome: e.target.value } : o))}
+                  onChange={(e) =>
+                    setOpcoes(opcoes.map((o) => (o.id === item.id ? { ...o, nome: e.target.value } : o)))
+                  }
                   onBlur={(e) => atualizarOpcao(item.id, { nome: e.target.value })}
                   className="bg-transparent font-medium text-sm text-ink outline-none border-b border-transparent focus:border-accent w-full"
                 />

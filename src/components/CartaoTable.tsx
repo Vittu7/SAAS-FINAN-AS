@@ -22,6 +22,7 @@ export default function CartaoTable({
   onAdd: (item: any, gerarSeguintes: boolean) => void;
   onRemove: (id: string) => void;
 }) {
+  // "cartao" guarda a forma de pagamento escolhida (nome do campo no banco continua "cartao")
   const [cartao, setCartao] = useState("");
   const [categoria, setCategoria] = useState("");
   const [valorTexto, setValorTexto] = useState("");
@@ -35,13 +36,15 @@ export default function CartaoTable({
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
 
-  // Opções compartilhadas do Supabase
-  const [opcoesCartao, setOpcoesCartao] = useState<Opcao[]>([]);
+  // Opções compartilhadas do Supabase (mesma lista de formas de pagamento do Extrato)
+  const [opcoesPagamento, setOpcoesPagamento] = useState<Opcao[]>([]);
   const [opcoesCategoria, setOpcoesCategoria] = useState<Opcao[]>([]);
-  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | "cartao" | null>(null);
+  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
 
   const carregarDadosIniciais = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data: perfil } = await supabase
@@ -56,9 +59,9 @@ export default function CartaoTable({
       setResponsaveisSelecionados([nomeReal]);
 
       if (perfil.grupo_id) {
-        const [resMembros, resCartoes, resCat] = await Promise.all([
+        const [resMembros, resPagamento, resCat] = await Promise.all([
           supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id),
-          supabase.from("opcoes_cartao").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
+          supabase.from("opcoes_pagamento").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
           supabase.from("opcoes_categoria").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
         ]);
 
@@ -67,10 +70,10 @@ export default function CartaoTable({
           setMembros(nomes.length > 0 ? nomes : [nomeReal]);
         }
 
-        if (resCartoes.data) {
-          setOpcoesCartao(resCartoes.data);
-          if (resCartoes.data.length > 0 && !cartao) {
-            setCartao(resCartoes.data[0].nome);
+        if (resPagamento.data) {
+          setOpcoesPagamento(resPagamento.data);
+          if (resPagamento.data.length > 0 && !cartao) {
+            setCartao(resPagamento.data[0].nome);
           }
         }
 
@@ -88,7 +91,9 @@ export default function CartaoTable({
   const alternarResponsavel = (nome: string) => {
     setResponsaveisSelecionados((prev) =>
       prev.includes(nome)
-        ? prev.length > 1 ? prev.filter((item) => item !== nome) : prev
+        ? prev.length > 1
+          ? prev.filter((item) => item !== nome)
+          : prev
         : [...prev, nome]
     );
   };
@@ -111,7 +116,7 @@ export default function CartaoTable({
       onAdd(
         {
           mes,
-          cartao: cartao || "Cartão",
+          cartao: cartao || "Forma de Pagamento",
           categoria: categoria || "Outros",
           valor: valorIndividual,
           descricao: qtd > 1 ? `${descricao} (1/${qtd})` : descricao,
@@ -135,14 +140,13 @@ export default function CartaoTable({
     <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
       {/* Formulário otimizado com grid responsivo de 12 colunas para ajuste perfeito em telas menores e com zoom */}
       <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
-        
-        {/* SELETOR DE CARTÃO (Ocupa 2 colunas em telas grandes) */}
+        {/* SELETOR DE FORMA DE PAGAMENTO (Ocupa 2 colunas em telas grandes) */}
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
-            <label className="text-xs font-medium text-muted">Cartão</label>
+            <label className="text-xs font-medium text-muted">Forma de Pagamento</label>
             <button
               type="button"
-              onClick={() => setModalOpcaoAberto("cartao")}
+              onClick={() => setModalOpcaoAberto("pagamento")}
               className="text-[10px] text-accent hover:underline font-medium"
             >
               ⚙️ Editar
@@ -153,8 +157,10 @@ export default function CartaoTable({
             onChange={(e) => setCartao(e.target.value)}
             className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           >
-            <option value="" className="bg-surface text-ink">Selecione...</option>
-            {opcoesCartao.map((c) => (
+            <option value="" className="bg-surface text-ink">
+              Selecione...
+            </option>
+            {opcoesPagamento.map((c) => (
               <option key={c.id} value={c.nome} className="bg-surface text-ink">
                 {c.nome}
               </option>
@@ -179,7 +185,9 @@ export default function CartaoTable({
             onChange={(e) => setCategoria(e.target.value)}
             className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           >
-            <option value="" className="bg-surface text-ink">Selecione...</option>
+            <option value="" className="bg-surface text-ink">
+              Selecione...
+            </option>
             {opcoesCategoria.map((c) => (
               <option key={c.id} value={c.nome} className="bg-surface text-ink">
                 {c.nome}
@@ -293,7 +301,6 @@ export default function CartaoTable({
             Adicionar
           </button>
         </div>
-
       </form>
 
       {/* TABELA DE EXIBIÇÃO */}
@@ -301,7 +308,7 @@ export default function CartaoTable({
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-muted">
-              <th className="py-2">Cartão</th>
+              <th className="py-2">Forma de Pagamento</th>
               <th className="py-2">Categoria</th>
               <th className="py-2">Descrição</th>
               <th className="py-2">Parcela</th>
@@ -315,7 +322,7 @@ export default function CartaoTable({
               <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
                 <td className="py-3 font-medium">
                   <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
-                    {item.cartao || "Cartão"}
+                    {item.cartao || "Forma de Pagamento"}
                   </span>
                 </td>
                 <td className="py-3 text-muted">{item.categoria || "-"}</td>

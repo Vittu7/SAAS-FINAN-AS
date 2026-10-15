@@ -38,13 +38,13 @@ export function useFinanceStore() {
 
     // Regra de visibilidade: traz lançamentos criados pelo usuário, onde ele é responsável ou do seu grupo
     const filtro = gId
-      ? `usuario_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}`
-      : `usuario_id.eq.${user.id},responsavel_id.eq.${user.id}`;
+      ? `owner_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}`
+      : `owner_id.eq.${user.id},responsavel_id.eq.${user.id}`;
 
     const [resExtrato, resCartao, resContas] = await Promise.all([
       supabase.from("extrato").select("*").or(filtro),
       supabase.from("cartao").select("*").or(filtro),
-      supabase.from("contas").select("*").or(filtro),
+      supabase.from("contas_fixas").select("*").or(filtro),
     ]);
 
     setEstado({
@@ -66,47 +66,80 @@ export function useFinanceStore() {
     carregarDados();
   }, [carregarDados]);
 
-  const adicionarExtrato = async (i: Omit<Extrato, "id">) => {
+  const adicionarExtrato = async (i: Omit<Extrato, "id"> & { responsavel_id?: string }) => {
     if (!userId) return;
-    const itemNovo = {
-      ...i,
+
+    const payload = {
+      owner_id: userId,
       usuario_id: userId,
       grupo_id: grupoId,
+      responsavel_id: i.responsavel_id || userId,
+      mes: i.mes,
+      pagamento: (i as any).pagamento || (i as any).forma_pagamento || "Outros",
+      categoria: i.categoria,
+      valor: i.valor,
+      descricao: i.descricao,
+      privado: (i as any).privado ?? false,
     };
 
-    const { data, error } = await supabase.from("extrato").insert([itemNovo]).select().single();
-    if (!error && data) {
+    const { data, error } = await supabase.from("extrato").insert([payload]).select().single();
+    if (error) {
+      console.error("Erro ao adicionar no extrato:", error);
+      alert("Erro ao salvar extrato: " + error.message);
+    } else if (data) {
       setEstado((e) => ({ ...e, extrato: [...e.extrato, data] }));
     }
   };
 
-  const adicionarCartao = async (i: Omit<Cartao, "id">, gerarSeguintes: boolean) => {
+  const adicionarCartao = async (i: Omit<Cartao, "id"> & { responsavel_id?: string }, gerarSeguintes: boolean) => {
     if (!userId) return;
+
     const restantes = gerarSeguintes ? Math.max(0, i.parcelaTotal - i.parcelaAtual) : 0;
     const novos = Array.from({ length: restantes + 1 }, (_, k) => ({
-      ...i,
+      owner_id: userId,
       usuario_id: userId,
       grupo_id: grupoId,
+      responsavel_id: i.responsavel_id || userId,
       mes: addMeses(i.mes, k),
-      parcelaAtual: i.parcelaAtual + k,
+      nome: i.descricao,
+      cartao: i.cartao,
+      parcela_atual: i.parcelaAtual + k,
+      parcela_total: i.parcelaTotal,
+      categoria: i.categoria,
+      valor: i.valor,
+      privado: (i as any).privado ?? false,
     }));
 
     const { data, error } = await supabase.from("cartao").insert(novos).select();
-    if (!error && data) {
+    if (error) {
+      console.error("Erro ao adicionar cartão:", error);
+      alert("Erro ao salvar cartão: " + error.message);
+    } else if (data) {
       setEstado((e) => ({ ...e, cartao: [...e.cartao, ...data] }));
     }
   };
 
-  const adicionarConta = async (i: Omit<ContaFixa, "id">) => {
+  const adicionarConta = async (i: Omit<ContaFixa, "id"> & { responsavel_id?: string }) => {
     if (!userId) return;
-    const itemNovo = {
-      ...i,
-      usuario_id: userId,
+
+    const payload = {
+      owner_id: userId,
       grupo_id: grupoId,
+      responsavel_id: i.responsavel_id || userId,
+      mes: i.mes,
+      nome: i.nome,
+      pago: i.pago ?? false,
+      valor: i.valor,
+      forma_pagamento: (i as any).forma_pagamento || null,
+      categoria: i.categoria || null,
+      vencimento: (i as any).vencimento ? Number((i as any).vencimento) : null,
     };
 
-    const { data, error } = await supabase.from("contas").insert([itemNovo]).select().single();
-    if (!error && data) {
+    const { data, error } = await supabase.from("contas_fixas").insert([payload]).select().single();
+    if (error) {
+      console.error("Erro ao adicionar conta fixa:", error);
+      alert("Erro ao salvar conta fixa: " + error.message);
+    } else if (data) {
       setEstado((e) => ({ ...e, contas: [...e.contas, data] }));
     }
   };
@@ -125,7 +158,7 @@ export function useFinanceStore() {
     if (!contaAtual) return;
 
     const novoStatus = !contaAtual.pago;
-    const { error } = await supabase.from("contas").update({ pago: novoStatus }).eq("id", id);
+    const { error } = await supabase.from("contas_fixas").update({ pago: novoStatus }).eq("id", id);
 
     if (!error) {
       setEstado((e) => ({
@@ -142,18 +175,26 @@ export function useFinanceStore() {
 
     const novas = estado.contas
       .filter((c) => c.mes === anterior && !jaTem.has(c.nome.toLowerCase()))
-      .map(({ id, ...resto }) => ({
-        ...resto,
-        usuario_id: userId,
+      .map(({ id, created_at, ...resto }: any) => ({
+        owner_id: userId,
         grupo_id: grupoId,
+        responsavel_id: resto.responsavel_id || userId,
         mes,
+        nome: resto.nome,
         pago: false,
+        valor: resto.valor,
+        forma_pagamento: resto.forma_pagamento || null,
+        categoria: resto.categoria || null,
+        vencimento: resto.vencimento ? Number(resto.vencimento) : null,
       }));
 
     if (novas.length === 0) return;
 
-    const { data, error } = await supabase.from("contas").insert(novas).select();
-    if (!error && data) {
+    const { data, error } = await supabase.from("contas_fixas").insert(novas).select();
+    if (error) {
+      console.error("Erro ao copiar contas do mês anterior:", error);
+      alert("Erro ao copiar contas: " + error.message);
+    } else if (data) {
       setEstado((e) => ({ ...e, contas: [...e.contas, ...data] }));
     }
   };

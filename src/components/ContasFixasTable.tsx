@@ -4,12 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
 import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
-
-interface Opcao {
-  id: string;
-  nome: string;
-  cor: string;
-}
+import { useOpcoes } from "@/lib/useOpcoes";
+import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 
 export default function ContasFixasTable({
   mes,
@@ -30,17 +26,21 @@ export default function ContasFixasTable({
   const [valorTexto, setValorTexto] = useState("");
   const [vencimento, setVencimento] = useState("");
   const [categoria, setCategoria] = useState("");
+  const [formaPagamento, setFormaPagamento] = useState("");
 
   const [membros, setMembros] = useState<string[]>([]);
   const [meuNome, setMeuNome] = useState("");
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
 
-  const [opcoesCategoria, setOpcoesCategoria] = useState<Opcao[]>([]);
-  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | "cartao" | null>(null);
+  // Listas compartilhadas (as mesmas do Extrato e das Contas Parceladas), já com as cores
+  const { pagamento, categoria: opcoesCategoria, recarregar, corPagamento, corCategoria } = useOpcoes();
+  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
 
-  const carregarDadosIniciais = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+  const carregarMembros = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data: perfil } = await supabase
@@ -49,35 +49,31 @@ export default function ContasFixasTable({
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (perfil) {
-      const nomeReal = perfil.nome_usuario || "Usuário";
-      setMeuNome(nomeReal);
-      setResponsaveisSelecionados([nomeReal]);
+    if (!perfil) return;
 
-      if (perfil.grupo_id) {
-        const [resMembros, resCat] = await Promise.all([
-          supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id),
-          supabase.from("opcoes_categoria").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
-        ]);
+    const nomeReal = perfil.nome_usuario || "Usuário";
+    setMeuNome(nomeReal);
+    setResponsaveisSelecionados((prev) => (prev.length > 0 ? prev : [nomeReal]));
 
-        if (resMembros.data) {
-          const nomes = resMembros.data.map((m) => m.nome_usuario).filter(Boolean);
-          setMembros(nomes.length > 0 ? nomes : [nomeReal]);
-        }
-
-        if (resCat.data) setOpcoesCategoria(resCat.data);
+    if (perfil.grupo_id) {
+      const { data } = await supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id);
+      if (data) {
+        const nomes = data.map((m) => m.nome_usuario).filter(Boolean);
+        setMembros(nomes.length > 0 ? nomes : [nomeReal]);
       }
     }
   }, []);
 
   useEffect(() => {
-    carregarDadosIniciais();
-  }, [carregarDadosIniciais]);
+    carregarMembros();
+  }, [carregarMembros]);
 
   const alternarResponsavel = (n: string) => {
     setResponsaveisSelecionados((prev) =>
       prev.includes(n)
-        ? prev.length > 1 ? prev.filter((item) => item !== n) : prev
+        ? prev.length > 1
+          ? prev.filter((item) => item !== n)
+          : prev
         : [...prev, n]
     );
   };
@@ -112,6 +108,7 @@ export default function ContasFixasTable({
         valor: valorIndividual,
         vencimento,
         categoria: categoria || "Outros",
+        forma_pagamento: formaPagamento || null,
         pago: false,
         responsavel: resp,
       });
@@ -121,6 +118,7 @@ export default function ContasFixasTable({
     setValorTexto("");
     setVencimento("");
     setCategoria("");
+    setFormaPagamento("");
     setResponsaveisSelecionados([meuNome || "Usuário"]);
     setMenuResponsavelAberto(false);
   };
@@ -139,9 +137,8 @@ export default function ContasFixasTable({
       </div>
 
       <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
-        
         {/* Nome da Conta */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <label className="text-xs font-medium text-muted block mb-1">Nome da Conta</label>
           <input
             type="text"
@@ -152,8 +149,23 @@ export default function ContasFixasTable({
           />
         </div>
 
+        {/* Forma de Pagamento (lista compartilhada com Extrato e Contas Parceladas) */}
+        <div className="lg:col-span-2">
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-xs font-medium text-muted">Forma de Pagamento</label>
+            <button
+              type="button"
+              onClick={() => setModalOpcaoAberto("pagamento")}
+              className="text-[10px] text-accent hover:underline font-medium"
+            >
+              ⚙️ Editar
+            </button>
+          </div>
+          <SeletorOpcao opcoes={pagamento} valor={formaPagamento} onChange={setFormaPagamento} />
+        </div>
+
         {/* Categoria */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
             <label className="text-xs font-medium text-muted">Categoria</label>
             <button
@@ -164,18 +176,7 @@ export default function ContasFixasTable({
               ⚙️ Editar
             </button>
           </div>
-          <select
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
-          >
-            <option value="" className="bg-surface text-ink">Selecione...</option>
-            {opcoesCategoria.map((c) => (
-              <option key={c.id} value={c.nome} className="bg-surface text-ink">
-                {c.nome}
-              </option>
-            ))}
-          </select>
+          <SeletorOpcao opcoes={opcoesCategoria} valor={categoria} onChange={setCategoria} />
         </div>
 
         {/* Valor */}
@@ -268,6 +269,7 @@ export default function ContasFixasTable({
             <tr className="border-b border-line text-xs text-muted">
               <th className="py-2">Status</th>
               <th className="py-2">Conta</th>
+              <th className="py-2">Forma de Pagamento</th>
               <th className="py-2">Categoria</th>
               <th className="py-2">Vencimento</th>
               <th className="py-2">Responsável</th>
@@ -282,22 +284,32 @@ export default function ContasFixasTable({
                   <button
                     type="button"
                     onClick={() => onTogglePago(item.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                      item.pago
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${item.pago
                         ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                         : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                    }`}
+                      }`}
                   >
                     {item.pago ? "✓ Pago" : "Pendente"}
                   </button>
                 </td>
                 <td className="py-3 font-medium">{item.nome}</td>
-                <td className="py-3 text-muted">{item.categoria || "-"}</td>
+                <td className="py-3">
+                  {item.forma_pagamento ? (
+                    <Selo nome={item.forma_pagamento} cor={corPagamento(item.forma_pagamento)} />
+                  ) : (
+                    <span className="text-muted">-</span>
+                  )}
+                </td>
+                <td className="py-3">
+                  {item.categoria ? (
+                    <Selo nome={item.categoria} cor={corCategoria(item.categoria)} />
+                  ) : (
+                    <span className="text-muted">-</span>
+                  )}
+                </td>
                 <td className="py-3 text-xs text-muted">{item.vencimento ? `Dia ${item.vencimento}` : "-"}</td>
                 <td className="py-3">
-                  <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
-                    {item.responsavel || "Membro"}
-                  </span>
+                  <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
                 </td>
                 <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
                 <td className="py-3 text-center">
@@ -315,7 +327,7 @@ export default function ContasFixasTable({
         <GerenciarOpcoesModal
           tipo={modalOpcaoAberto}
           onClose={() => setModalOpcaoAberto(null)}
-          onAtualizar={carregarDadosIniciais}
+          onAtualizar={recarregar}
         />
       )}
     </div>

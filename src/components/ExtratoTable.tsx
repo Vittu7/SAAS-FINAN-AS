@@ -4,12 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
 import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
-
-interface Opcao {
-  id: string;
-  nome: string;
-  cor: string;
-}
+import { useOpcoes } from "@/lib/useOpcoes";
+import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 
 export default function ExtratoTable({
   mes,
@@ -32,13 +28,27 @@ export default function ExtratoTable({
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
 
-  // Opções personalizadas unificadas
-  const [opcoesPagamento, setOpcoesPagamento] = useState<Opcao[]>([]);
-  const [opcoesCategoria, setOpcoesCategoria] = useState<Opcao[]>([]);
-  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | "cartao" | null>(null);
+  // Listas compartilhadas (as mesmas das Contas Parceladas e das Contas Fixas), já com as cores
+  const {
+    pagamento: opcoesPagamento,
+    categoria: opcoesCategoria,
+    recarregar,
+    corPagamento,
+    corCategoria,
+  } = useOpcoes();
+  const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
 
-  const carregarDadosIniciais = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+  // Seleciona a primeira forma de pagamento quando a lista chega
+  useEffect(() => {
+    if (!pagamento && opcoesPagamento.length > 0) {
+      setPagamento(opcoesPagamento[0].nome);
+    }
+  }, [opcoesPagamento, pagamento]);
+
+  const carregarMembros = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data: perfil } = await supabase
@@ -47,40 +57,31 @@ export default function ExtratoTable({
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (perfil) {
-      const nomeReal = perfil.nome_usuario || "Usuário";
-      setMeuNome(nomeReal);
-      setResponsaveisSelecionados([nomeReal]);
+    if (!perfil) return;
 
-      if (perfil.grupo_id) {
-        const [resMembros, resPag, resCat] = await Promise.all([
-          supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id),
-          supabase.from("opcoes_pagamento").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
-          supabase.from("opcoes_categoria").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
-        ]);
+    const nomeReal = perfil.nome_usuario || "Usuário";
+    setMeuNome(nomeReal);
+    setResponsaveisSelecionados((prev) => (prev.length > 0 ? prev : [nomeReal]));
 
-        if (resMembros.data) {
-          const nomes = resMembros.data.map((m) => m.nome_usuario).filter(Boolean);
-          setMembros(nomes.length > 0 ? nomes : [nomeReal]);
-        }
-
-        if (resPag.data) {
-          setOpcoesPagamento(resPag.data);
-          if (resPag.data.length > 0 && !pagamento) setPagamento(resPag.data[0].nome);
-        }
-        if (resCat.data) setOpcoesCategoria(resCat.data);
+    if (perfil.grupo_id) {
+      const { data } = await supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id);
+      if (data) {
+        const nomes = data.map((m) => m.nome_usuario).filter(Boolean);
+        setMembros(nomes.length > 0 ? nomes : [nomeReal]);
       }
     }
-  }, [pagamento]);
+  }, []);
 
   useEffect(() => {
-    carregarDadosIniciais();
-  }, [carregarDadosIniciais]);
+    carregarMembros();
+  }, [carregarMembros]);
 
   const alternarResponsavel = (nome: string) => {
     setResponsaveisSelecionados((prev) =>
       prev.includes(nome)
-        ? prev.length > 1 ? prev.filter((item) => item !== nome) : prev
+        ? prev.length > 1
+          ? prev.filter((item) => item !== nome)
+          : prev
         : [...prev, nome]
     );
   };
@@ -119,11 +120,10 @@ export default function ExtratoTable({
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
       <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
-        
-        {/* Pagamento */}
+        {/* Forma de Pagamento */}
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
-            <label className="text-xs font-medium text-muted">Pagamento</label>
+            <label className="text-xs font-medium text-muted">Forma de Pagamento</label>
             <button
               type="button"
               onClick={() => setModalOpcaoAberto("pagamento")}
@@ -132,18 +132,7 @@ export default function ExtratoTable({
               ⚙️ Editar
             </button>
           </div>
-          <select
-            value={pagamento}
-            onChange={(e) => setPagamento(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
-          >
-            <option value="" className="bg-surface text-ink">Selecione...</option>
-            {opcoesPagamento.map((p) => (
-              <option key={p.id} value={p.nome} className="bg-surface text-ink">
-                {p.nome}
-              </option>
-            ))}
-          </select>
+          <SeletorOpcao opcoes={opcoesPagamento} valor={pagamento} onChange={setPagamento} />
         </div>
 
         {/* Categoria */}
@@ -158,18 +147,7 @@ export default function ExtratoTable({
               ⚙️ Editar
             </button>
           </div>
-          <select
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
-            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
-          >
-            <option value="" className="bg-surface text-ink">Selecione...</option>
-            {opcoesCategoria.map((c) => (
-              <option key={c.id} value={c.nome} className="bg-surface text-ink">
-                {c.nome}
-              </option>
-            ))}
-          </select>
+          <SeletorOpcao opcoes={opcoesCategoria} valor={categoria} onChange={setCategoria} />
         </div>
 
         {/* Valor Total */}
@@ -260,7 +238,7 @@ export default function ExtratoTable({
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-muted">
-              <th className="py-2">Pagamento</th>
+              <th className="py-2">Forma de Pagamento</th>
               <th className="py-2">Categoria</th>
               <th className="py-2">Descrição</th>
               <th className="py-2">Responsável</th>
@@ -271,13 +249,23 @@ export default function ExtratoTable({
           <tbody>
             {itens.map((item) => (
               <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
-                <td className="py-3 font-medium">{item.pagamento}</td>
-                <td className="py-3 text-muted">{item.categoria || "-"}</td>
+                <td className="py-3 font-medium">
+                  {item.pagamento ? (
+                    <Selo nome={item.pagamento} cor={corPagamento(item.pagamento)} />
+                  ) : (
+                    <span className="text-muted">-</span>
+                  )}
+                </td>
+                <td className="py-3">
+                  {item.categoria ? (
+                    <Selo nome={item.categoria} cor={corCategoria(item.categoria)} />
+                  ) : (
+                    <span className="text-muted">-</span>
+                  )}
+                </td>
                 <td className="py-3">{item.descricao}</td>
                 <td className="py-3">
-                  <span className="bg-accent/10 text-accent font-semibold px-2 py-0.5 rounded text-xs">
-                    {item.responsavel || "Membro"}
-                  </span>
+                  <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
                 </td>
                 <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
                 <td className="py-3 text-center">
@@ -295,7 +283,7 @@ export default function ExtratoTable({
         <GerenciarOpcoesModal
           tipo={modalOpcaoAberto}
           onClose={() => setModalOpcaoAberto(null)}
-          onAtualizar={carregarDadosIniciais}
+          onAtualizar={recarregar}
         />
       )}
     </div>

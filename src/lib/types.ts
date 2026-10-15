@@ -20,6 +20,8 @@ export type Cartao = {
   id: string;
   mes: string;
   nome: string;
+  /** Nome/descrição exibido no formulário de cartão parcelado. No banco, é salvo na coluna nome. */
+  descricao?: string;
   cartao: string;
   parcelaAtual: number;
   parcelaTotal: number;
@@ -36,6 +38,8 @@ export type ContaFixa = {
   valor: number;
   responsavel: Responsavel;
   formaPagamento: string;
+  /** Categoria da conta fixa, armazenada na coluna categoria do Supabase. */
+  categoria?: string;
 };
 
 export type Config = {

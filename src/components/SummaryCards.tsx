@@ -29,7 +29,7 @@ export default function SummaryCards({ resumo, config, onConfig }: Props) {
       </div>
 
       {/* Gasto no mês */}
-      <div className="order-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+      <div className="order-3 rounded-2xl border border-line bg-surface p-4 sm:p-5">
         <p className="text-sm text-muted">Gasto no mês</p>
         <p className="mt-2 text-2xl font-semibold tabular-nums">{brl(resumo.totalGasto)}</p>
         <dl className="mt-3 space-y-0.5 text-xs text-muted">
@@ -61,7 +61,7 @@ export default function SummaryCards({ resumo, config, onConfig }: Props) {
       </div>
 
       {/* Investimentos / Reserva */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
+      <div className="order-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
         <p className="mb-3 text-sm text-muted">Investimentos e reserva</p>
 
         <AportesInvestimento saldoAnterior={config.investido} />

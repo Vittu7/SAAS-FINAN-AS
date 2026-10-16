@@ -59,11 +59,18 @@ export function useFinanceStore() {
     }
     setUserId(user.id);
 
-    // Busca o perfil do usuário ativo e o ID do seu grupo
+    // Busca o perfil do usuário ativo e o ID do seu grupo (sem dados financeiros)
     const { data: perfil } = await supabase
       .from("perfis")
-      .select("id, grupo_id, salario, investido, reserva_atual, reserva_meta")
-      .eq("id", user.id)
+      .select("id, grupo_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    // Salário, investimento e reserva ficam na tabela privada "configuracoes" (só o dono lê)
+    const { data: cfg } = await supabase
+      .from("configuracoes")
+      .select("salario, investido, reserva_atual, reserva_meta")
+      .eq("user_id", user.id)
       .maybeSingle();
 
     const gId = perfil?.grupo_id || null;
@@ -72,7 +79,11 @@ export function useFinanceStore() {
     // Membros do grupo (inclui convidados): serve para mostrar o nome e a cor do responsável
     let listaMembros: Membro[] = [];
     if (gId) {
-      const { data: perfisGrupo } = await supabase.from("perfis").select("*").eq("grupo_id", gId);
+      // Só colunas não sensíveis: nunca buscar salário/investimento de outros membros
+      const { data: perfisGrupo } = await supabase
+        .from("perfis")
+        .select("id, nome_usuario, eh_convidado, cor")
+        .eq("grupo_id", gId);
       listaMembros = (perfisGrupo || []).map((p: any) => ({
         id: p.id,
         nome: p.nome_usuario || "Membro",
@@ -98,10 +109,10 @@ export function useFinanceStore() {
       cartao: (resCartao.data || []).map((r: any) => enriquecer(r, listaMembros)),
       contas: (resContas.data || []).map((r: any) => enriquecer(r, listaMembros)),
       config: {
-        salario: perfil?.salario || 0,
-        investido: perfil?.investido || 0,
-        reservaAtual: perfil?.reserva_atual || 0,
-        reservaMeta: perfil?.reserva_meta || 0,
+        salario: cfg?.salario || 0,
+        investido: cfg?.investido || 0,
+        reservaAtual: cfg?.reserva_atual || 0,
+        reservaMeta: cfg?.reserva_meta || 0,
       },
     });
 
@@ -311,11 +322,36 @@ export function useFinanceStore() {
     if (patch.reservaAtual !== undefined) patchSupabase.reserva_atual = patch.reservaAtual;
     if (patch.reservaMeta !== undefined) patchSupabase.reserva_meta = patch.reservaMeta;
 
-    const { error } = await supabase.from("perfis").update(patchSupabase).eq("id", userId);
+    const { data: existente, error: erroBusca } = await supabase
+      .from("configuracoes")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    if (!error) {
-      setEstado((e) => ({ ...e, config: { ...e.config, ...patch } }));
+    if (erroBusca) {
+      console.error("Erro ao ler configurações:", erroBusca);
+      alert("Erro ao salvar configurações: " + erroBusca.message);
+      return;
     }
+
+    const { error } = existente
+      ? await supabase.from("configuracoes").update(patchSupabase).eq("user_id", userId)
+      : await supabase.from("configuracoes").insert({
+        user_id: userId,
+        salario: 0,
+        investido: 0,
+        reserva_atual: 0,
+        reserva_meta: 0,
+        ...patchSupabase,
+      });
+
+    if (error) {
+      console.error("Erro ao salvar configurações:", error);
+      alert("Erro ao salvar configurações: " + error.message);
+      return;
+    }
+
+    setEstado((e) => ({ ...e, config: { ...e.config, ...patch } }));
   };
 
   return {

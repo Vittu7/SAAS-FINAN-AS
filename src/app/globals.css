@@ -1,30 +1,61 @@
 @import "tailwindcss";
 
-/* Tema escuro controlado pela classe "dark" no <html> */
+/* Tema escuro controlado pela classe "dark"; os tokens mantêm componentes consistentes. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --bg: #f3f5f7;
+  color-scheme: light;
+  --bg: #f8fafc;
   --surface: #ffffff;
-  --line: #e1e6eb;
-  --ink: #0f1720;
-  --muted: #5c6b7a;
-  --accent: #0b8577;
+  --line: #e7ebf0;
+  --ink: #172033;
+  --muted: #5f6b7a;
+  --accent: #0f9f91;
   --on-accent: #ffffff;
-  /* quanto escurecer o texto das etiquetas coloridas (cores vivas ficam ilegíveis em fundo claro) */
   --selo-escurecer: 45%;
 }
 
-.dark {
-  --bg: #0b111a;
-  --surface: #121a26;
-  --line: #223044;
-  --ink: #e8eef5;
-  --muted: #8a9bb0;
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101722;
+  --surface: #182230;
+  --line: #29384a;
+  --ink: #edf2f7;
+  --muted: #9aaabd;
   --accent: #2dd4bf;
   --on-accent: #06201c;
   --selo-escurecer: 0%;
 }
+
+:root[data-theme="system"] { color-scheme: light; }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    color-scheme: dark;
+    --bg: #101722;
+    --surface: #182230;
+    --line: #29384a;
+    --ink: #edf2f7;
+    --muted: #9aaabd;
+    --accent: #2dd4bf;
+    --on-accent: #06201c;
+    --selo-escurecer: 0%;
+  }
+}
+
+:root[data-accent="purple"] { --accent: #7c3aed; --on-accent: #ffffff; }
+:root[data-accent="blue"] { --accent: #2563eb; --on-accent: #ffffff; }
+:root[data-accent="pink"] { --accent: #db2777; --on-accent: #ffffff; }
+:root[data-accent="orange"] { --accent: #ea580c; --on-accent: #ffffff; }
+:root[data-accent="graphite"] { --accent: #475569; --on-accent: #ffffff; }
+:root.dark[data-accent="purple"] { --accent: #a78bfa; --on-accent: #20113d; }
+:root.dark[data-accent="blue"] { --accent: #60a5fa; --on-accent: #102343; }
+:root.dark[data-accent="pink"] { --accent: #f472b6; --on-accent: #3c1027; }
+:root.dark[data-accent="orange"] { --accent: #fb923c; --on-accent: #3b1c07; }
+:root.dark[data-accent="graphite"] { --accent: #cbd5e1; --on-accent: #1e293b; }
+
+html, body { min-height: 100%; }
+body { background-color: var(--bg); color: var(--ink); }
 
 @theme inline {
   --color-bg: var(--bg);

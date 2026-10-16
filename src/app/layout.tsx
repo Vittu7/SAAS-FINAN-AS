@@ -1,9 +1,31 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "HomeCash",
   description: "O seu painel financeiro na nuvem",
+  applicationName: "HomeCash",
+  appleWebApp: {
+    capable: true,
+    title: "HomeCash",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#101722" },
+  ],
 };
 
 export default function RootLayout({
@@ -18,9 +40,13 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                let t = localStorage.getItem('theme');
-                if (!t) t = 'dark';
-                document.documentElement.classList.toggle('dark', t === 'dark');
+                const root = document.documentElement;
+                const t = localStorage.getItem('homecash-theme') || localStorage.getItem('tema') || 'system';
+                const a = localStorage.getItem('homecash-accent') || 'teal';
+                const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                root.dataset.theme = t;
+                root.dataset.accent = a;
+                root.classList.toggle('dark', t === 'dark' || (t === 'system' && systemDark));
               } catch (e) {}
             `,
           }}

@@ -116,7 +116,7 @@ export default function ResponsavelPanel({ resumo }: { resumo: any }) {
   let acumulado = 0;
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-6 shadow-lg space-y-4">
+    <div id="graficos" className="rounded-2xl border border-line bg-surface p-5 shadow-sm space-y-4 md:p-6">
       <div>
         <h3 className="text-lg font-bold">Divisão de Gastos</h3>
         <p className="text-xs text-muted">

@@ -117,10 +117,9 @@ export default function Home() {
 
       {/* Conteúdo Principal: a margem esquerda reserva o espaço da Sidebar e o conteúdo fica centralizado */}
       <main
-        className={`min-w-0 flex-1 transition-all duration-300 ${sidebarExpandida ? "pl-20 md:pl-64" : "pl-20"
-          }`}
+        className={`min-w-0 flex-1 transition-all duration-300 ${sidebarExpandida ? "md:pl-64" : "md:pl-20"}`}
       >
-        <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 md:p-8">
+        <div className="mx-auto w-full max-w-[1400px] space-y-4 p-3 pb-24 sm:space-y-6 sm:p-4 sm:pb-24 md:p-8">
           <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div>
               <h1 className="text-2xl font-bold">Painel de controle</h1>

@@ -6,17 +6,20 @@ import { brl, parseValor } from "@/lib/finance";
 import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
+import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 
 export default function CartaoTable({
   mes,
   itens,
   onAdd,
   onRemove,
+  onEdit,
 }: {
   mes: string;
   itens: any[];
   onAdd: (item: any, gerarSeguintes: boolean) => void;
   onRemove: (id: string) => void;
+  onEdit?: (id: string, patch: Record<string, any>) => Promise<boolean | void>;
 }) {
   // "cartao" guarda a forma de pagamento escolhida (nome do campo no banco continua "cartao")
   const [cartao, setCartao] = useState("");
@@ -35,6 +38,7 @@ export default function CartaoTable({
   // Listas compartilhadas (as mesmas do Extrato e das Contas Fixas), já com as cores
   const { pagamento, categoria: opcoesCategoria, recarregar, corPagamento, corCategoria } = useOpcoes();
   const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
+  const [editando, setEditando] = useState<any | null>(null);
 
   // Seleciona a primeira forma de pagamento quando a lista chega
   useEffect(() => {
@@ -133,7 +137,7 @@ export default function CartaoTable({
             <button
               type="button"
               onClick={() => setModalOpcaoAberto("pagamento")}
-              className="text-[10px] text-accent hover:underline font-medium"
+              className="shrink-0 whitespace-nowrap text-[10px] text-accent hover:underline font-medium"
             >
               ⚙️ Editar
             </button>
@@ -148,7 +152,7 @@ export default function CartaoTable({
             <button
               type="button"
               onClick={() => setModalOpcaoAberto("categoria")}
-              className="text-[10px] text-accent hover:underline font-medium"
+              className="shrink-0 whitespace-nowrap text-[10px] text-accent hover:underline font-medium"
             >
               ⚙️ Editar
             </button>
@@ -189,7 +193,7 @@ export default function CartaoTable({
               min="1"
               value={parcelaAtual}
               onChange={(e) => setParcelaAtual(Number(e.target.value))}
-              className="w-full rounded-xl border border-line bg-background text-ink px-1 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent"
+              className="w-full rounded-xl border border-line bg-background text-ink px-1 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
           <div className="w-1/2">
@@ -199,7 +203,7 @@ export default function CartaoTable({
               min="1"
               value={parcelaTotal}
               onChange={(e) => setParcelaTotal(Number(e.target.value))}
-              className="w-full rounded-xl border border-line bg-background text-ink px-1 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent"
+              className="w-full rounded-xl border border-line bg-background text-ink px-1 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
         </div>
@@ -295,6 +299,11 @@ export default function CartaoTable({
                 </td>
                 <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
                 <td className="py-3 text-center">
+                  {onEdit && (
+                    <button type="button" onClick={() => setEditando(item)} className="mr-3 text-xs text-accent hover:underline">
+                      Editar
+                    </button>
+                  )}
                   <button onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
                     Remover
                   </button>
@@ -306,6 +315,16 @@ export default function CartaoTable({
       </div>
 
       {/* MODAL DE GERENCIAMENTO DE OPÇÕES */}
+      {editando && onEdit && (
+        <EditarLancamentoModal
+          tipo="cartao"
+          item={editando}
+          membros={membros}
+          onSalvar={(patch) => onEdit(editando.id, patch)}
+          onClose={() => setEditando(null)}
+        />
+      )}
+
       {modalOpcaoAberto && (
         <GerenciarOpcoesModal
           tipo={modalOpcaoAberto}

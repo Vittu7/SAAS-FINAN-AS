@@ -9,7 +9,11 @@ export function Selo({ nome, cor }: { nome: string; cor?: string | null }) {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: `${c}26`, color: c }}
+      style={{
+        backgroundColor: `${c}26`,
+        color: `color-mix(in srgb, ${c}, black var(--selo-escurecer, 0%))`,
+        boxShadow: `inset 0 0 0 1px ${c}40`,
+      }}
     >
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: c }} />
       {nome}

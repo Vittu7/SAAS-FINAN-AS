@@ -35,13 +35,23 @@ export type Resumo = {
   totalGeral: number;
   porResponsavel: Record<string, number>;
   porOrigem: { extrato: number; cartao: number; contas: number };
+  /** Gastos do mês em que o usuário logado é o responsável */
+  meusGastos: number;
+  /** Salário menos os gastos do próprio usuário */
   sobra: number;
 };
 
 const soma = (itens: { valor: number }[]) =>
   (itens || []).reduce((s, i) => s + (i?.valor || 0), 0);
 
-export function resumoDoMes(e: Estado, mes: string): Resumo {
+/** Soma o que o usuário logado (pelo id do perfil) gastou no mês, em todas as origens. */
+export function gastosDoUsuario(e: Estado, mes: string, meuId?: string | null): number {
+  if (!meuId) return 0;
+  const todos: any[] = [...(e?.extrato || []), ...(e?.cartao || []), ...(e?.contas || [])];
+  return soma(todos.filter((i) => i?.mes === mes && i?.responsavel_id === meuId));
+}
+
+export function resumoDoMes(e: Estado, mes: string, meuId?: string | null): Resumo {
   const porResponsavel: Record<string, number> = {};
 
   const extrato = (e?.extrato || []).filter((i) => i.mes === mes);
@@ -57,8 +67,7 @@ export function resumoDoMes(e: Estado, mes: string): Resumo {
   const totalGasto = porOrigem.extrato + porOrigem.cartao + porOrigem.contas;
 
   const salario = e?.config?.salario ?? 0;
-  const primeiroResponsavel = Object.keys(porResponsavel)[0];
-  const gastoPessoal = primeiroResponsavel ? porResponsavel[primeiroResponsavel] : 0;
+  const meusGastos = gastosDoUsuario(e, mes, meuId);
 
   return {
     salario,
@@ -66,6 +75,7 @@ export function resumoDoMes(e: Estado, mes: string): Resumo {
     totalGeral: totalGasto,
     porResponsavel,
     porOrigem,
-    sobra: salario - gastoPessoal,
+    meusGastos,
+    sobra: salario - meusGastos,
   };
 }

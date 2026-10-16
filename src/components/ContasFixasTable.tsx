@@ -6,12 +6,14 @@ import { brl, parseValor } from "@/lib/finance";
 import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
+import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 
 export default function ContasFixasTable({
   mes,
   itens,
   onAdd,
   onRemove,
+  onEdit,
   onTogglePago,
   onCopiarMesAnterior,
 }: {
@@ -19,6 +21,7 @@ export default function ContasFixasTable({
   itens: any[];
   onAdd: (item: any) => void;
   onRemove: (id: string) => void;
+  onEdit?: (id: string, patch: Record<string, any>) => Promise<boolean | void>;
   onTogglePago: (id: string) => void;
   onCopiarMesAnterior: () => void;
 }) {
@@ -36,6 +39,7 @@ export default function ContasFixasTable({
   // Listas compartilhadas (as mesmas do Extrato e das Contas Parceladas), já com as cores
   const { pagamento, categoria: opcoesCategoria, recarregar, corPagamento, corCategoria } = useOpcoes();
   const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
+  const [editando, setEditando] = useState<any | null>(null);
 
   const carregarMembros = useCallback(async () => {
     const {
@@ -156,7 +160,7 @@ export default function ContasFixasTable({
             <button
               type="button"
               onClick={() => setModalOpcaoAberto("pagamento")}
-              className="text-[10px] text-accent hover:underline font-medium"
+              className="shrink-0 whitespace-nowrap text-[10px] text-accent hover:underline font-medium"
             >
               ⚙️ Editar
             </button>
@@ -171,7 +175,7 @@ export default function ContasFixasTable({
             <button
               type="button"
               onClick={() => setModalOpcaoAberto("categoria")}
-              className="text-[10px] text-accent hover:underline font-medium"
+              className="shrink-0 whitespace-nowrap text-[10px] text-accent hover:underline font-medium"
             >
               ⚙️ Editar
             </button>
@@ -313,6 +317,11 @@ export default function ContasFixasTable({
                 </td>
                 <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
                 <td className="py-3 text-center">
+                  {onEdit && (
+                    <button type="button" onClick={() => setEditando(item)} className="mr-3 text-xs text-accent hover:underline">
+                      Editar
+                    </button>
+                  )}
                   <button type="button" onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
                     Remover
                   </button>
@@ -322,6 +331,16 @@ export default function ContasFixasTable({
           </tbody>
         </table>
       </div>
+
+      {editando && onEdit && (
+        <EditarLancamentoModal
+          tipo="contas"
+          item={editando}
+          membros={membros}
+          onSalvar={(patch) => onEdit(editando.id, patch)}
+          onClose={() => setEditando(null)}
+        />
+      )}
 
       {modalOpcaoAberto && (
         <GerenciarOpcoesModal

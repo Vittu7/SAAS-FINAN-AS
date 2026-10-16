@@ -26,8 +26,8 @@ export default function RootLayout({
           }}
         />
       </head>
-      {/* Aqui aplicamos as cores corretas: cinza muito escuro no modo escuro, e cinza claro no modo claro */}
-      <body className="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-50 antialiased transition-colors duration-200">
+      {/* Cores vindas das variáveis do tema (globals.css), iguais em todo o app nos modos claro e escuro */}
+      <body className="bg-bg text-ink antialiased transition-colors duration-200">
         {children}
       </body>
     </html>

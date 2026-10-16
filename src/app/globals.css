@@ -11,6 +11,8 @@
   --muted: #5c6b7a;
   --accent: #0b8577;
   --on-accent: #ffffff;
+  /* quanto escurecer o texto das etiquetas coloridas (cores vivas ficam ilegíveis em fundo claro) */
+  --selo-escurecer: 45%;
 }
 
 .dark {
@@ -21,10 +23,13 @@
   --muted: #8a9bb0;
   --accent: #2dd4bf;
   --on-accent: #06201c;
+  --selo-escurecer: 0%;
 }
 
 @theme inline {
   --color-bg: var(--bg);
+  /* O app usa as classes bg-background / hover:bg-background; sem esta linha elas não geravam cor nenhuma */
+  --color-background: var(--bg);
   --color-surface: var(--surface);
   --color-line: var(--line);
   --color-ink: var(--ink);

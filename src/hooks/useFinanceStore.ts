@@ -357,6 +357,7 @@ export function useFinanceStore() {
   return {
     estado,
     pronto,
+    userId,
     membros,
     adicionarExtrato,
     adicionarCartao,

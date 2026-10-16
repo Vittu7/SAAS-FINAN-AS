@@ -119,11 +119,11 @@ export default function Home() {
       <main
         className={`min-w-0 flex-1 transition-all duration-300 ${sidebarExpandida ? "md:pl-64" : "md:pl-20"}`}
       >
-        <div className="mx-auto w-full max-w-[1400px] space-y-4 p-3 pb-24 sm:space-y-6 sm:p-4 sm:pb-24 md:p-8">
+        <div className="mx-auto w-full max-w-[1400px] space-y-4 p-3 pb-28 sm:space-y-6 sm:p-4 sm:pb-24 md:p-8">
           <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div>
-              <h1 className="text-2xl font-bold">Painel de controle</h1>
-              <p className="text-xs text-muted">Gerencie seus gastos individuais e em grupo.</p>
+              <h1 className="text-xl font-bold sm:text-2xl">Painel de controle</h1>
+              <p className="mt-1 text-xs text-muted sm:text-sm">Gerencie seus gastos individuais e em grupo.</p>
             </div>
 
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">

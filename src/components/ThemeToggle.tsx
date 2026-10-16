@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type Tema = "light" | "dark" | "system";
+type Fundo = "none" | "aurora" | "waves" | "image";
 type Destaque = "teal" | "purple" | "blue" | "pink" | "orange" | "graphite";
 
 const DESTAQUES: { id: Destaque; nome: string; cor: string }[] = [
@@ -34,7 +35,46 @@ function aplicarTema(tema: Tema, destaque: Destaque) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", escuro ? "#101722" : "#f5f7fa");
 }
 
+const FUNDOS: { id: Fundo; nome: string }[] = [
+  { id: "none", nome: "Liso" },
+  { id: "aurora", nome: "Aurora" },
+  { id: "waves", nome: "Ondas" },
+  { id: "image", nome: "Minha imagem" },
+];
+
+function aplicarFundo(fundo: Fundo) {
+  const raiz = document.documentElement;
+  const img = localStorage.getItem("homecash-bg-img");
+  const efetivo = fundo === "image" && !img ? "none" : fundo;
+  raiz.dataset.bg = efetivo;
+  if (efetivo === "image" && img) raiz.style.setProperty("--bg-img", `url("${img}")`);
+  else raiz.style.removeProperty("--bg-img");
+}
+
+// Reduz a imagem para caber no armazenamento do navegador (~1600px, JPEG)
+function lerImagemReduzida(arquivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onerror = reject;
+    leitor.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * escala);
+        canvas.height = Math.round(img.height * escala);
+        canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = String(leitor.result);
+    };
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
 export default function ThemeToggle() {
+  const [fundo, setFundo] = useState<Fundo>("none");
   const [tema, setTema] = useState<Tema>("system");
   const [destaque, setDestaque] = useState<Destaque>("teal");
   const [aberto, setAberto] = useState(false);
@@ -47,6 +87,10 @@ export default function ThemeToggle() {
     setTema(temaInicial);
     setDestaque(destaqueInicial);
     aplicarTema(temaInicial, destaqueInicial);
+    const fundoSalvo = localStorage.getItem("homecash-bg") as Fundo | null;
+    const fundoInicial = fundoSalvo && FUNDOS.some((f) => f.id === fundoSalvo) ? fundoSalvo : "none";
+    setFundo(fundoInicial);
+    aplicarFundo(fundoInicial);
 
   }, []);
 
@@ -70,6 +114,23 @@ export default function ThemeToggle() {
     aplicarTema(tema, novo);
   };
 
+  const mudarFundo = (novo: Fundo) => {
+    setFundo(novo);
+    localStorage.setItem("homecash-bg", novo);
+    aplicarFundo(novo);
+  };
+
+  const escolherImagem = async (arquivo?: File) => {
+    if (!arquivo) return;
+    try {
+      const dados = await lerImagemReduzida(arquivo);
+      localStorage.setItem("homecash-bg-img", dados);
+      mudarFundo("image");
+    } catch {
+      alert("Não foi possível usar esta imagem. Tente outra (JPG ou PNG).");
+    }
+  };
+
   return (
     <div className="relative">
       <button
@@ -84,7 +145,7 @@ export default function ThemeToggle() {
       </button>
 
       {aberto && (
-        <div role="dialog" aria-label="Personalizar aparência" className="absolute right-0 top-12 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-4 shadow-2xl">
+        <div role="dialog" aria-label="Personalizar aparência" className="absolute right-0 top-12 z-50 max-h-[80vh] overflow-y-auto w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-4 shadow-2xl">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h2 className="font-semibold text-ink">Aparência</h2>
@@ -117,6 +178,25 @@ export default function ThemeToggle() {
                 </button>
               ))}
             </div>
+          </fieldset>
+
+          <fieldset className="mt-4">
+            <legend className="mb-2 text-xs font-semibold text-muted">Fundo</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {FUNDOS.map((opcao) =>
+                opcao.id === "image" ? (
+                  <label key={opcao.id} className={`flex cursor-pointer items-center justify-center rounded-lg border px-2 py-2 text-xs transition ${fundo === "image" ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+                    <input type="file" accept="image/*" className="sr-only" onChange={(e) => escolherImagem(e.target.files?.[0])} />
+                    {opcao.nome}
+                  </label>
+                ) : (
+                  <button key={opcao.id} type="button" onClick={() => mudarFundo(opcao.id)} aria-pressed={fundo === opcao.id} className={`rounded-lg border px-2 py-2 text-xs transition ${fundo === opcao.id ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+                    {opcao.nome}
+                  </button>
+                ),
+              )}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted">Aplicado com baixa opacidade para não atrapalhar a leitura.</p>
           </fieldset>
 
           <div className="mt-4 rounded-xl border border-line bg-background p-3">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 
 interface SidebarProps {
   onAbrirGrupo: () => void;
@@ -52,6 +53,17 @@ export default function Sidebar({
 }: SidebarProps) {
   const [expandido, setExpandido] = useState(true);
   const [menuNovoAberto, setMenuNovoAberto] = useState(false);
+  const [cadastro, setCadastro] = useState<"categoria" | "pagamento" | null>(null);
+  const [perfil, setPerfil] = useState<{ nome: string; avatar: string | null; email: string }>({ nome: "", avatar: null, email: "" });
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("perfis").select("nome_usuario, avatar_url").eq("id", user.id).maybeSingle();
+      setPerfil({ nome: data?.nome_usuario || "Você", avatar: data?.avatar_url || null, email: user.email || "" });
+    })();
+  }, []);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -78,15 +90,15 @@ export default function Sidebar({
   };
 
   const classeItem = (ativo: boolean) =>
-    `flex min-h-10 w-full items-center rounded-lg border-l-2 px-3 text-sm transition ${expandido ? "gap-3" : "justify-center"
+    `flex min-h-10 w-full items-center rounded-xl px-3 text-sm transition ${expandido ? "gap-3" : "justify-center"
     } ${ativo
-      ? "border-accent bg-accent/10 font-medium text-accent"
-      : "border-transparent text-muted hover:bg-background hover:text-ink"
+      ? "bg-accent/12 font-semibold text-accent ring-1 ring-accent/20"
+      : "text-muted hover:bg-background hover:text-ink"
     }`;
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 hidden flex-col md:flex border-r border-line bg-surface transition-[width] duration-200 ${expandido ? "w-60" : "w-16"
+      className={`fixed inset-y-0 left-0 z-40 hidden flex-col md:flex border-r border-line bg-surface/80 backdrop-blur-xl transition-[width] duration-200 ${expandido ? "w-60" : "w-16"
         }`}
     >
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -131,8 +143,8 @@ export default function Sidebar({
               onChange={(event) => setMembroSelecionado(event.target.value)}
               className="h-9 w-full rounded-lg border border-line bg-background px-2.5 text-xs text-ink outline-none focus:ring-2 focus:ring-accent"
             >
-              <option value="TODOS">Todo o grupo</option>
               <option value="EU">Somente eu</option>
+              <option value="TODOS">Todo o grupo</option>
               {listaMembros.map((membro) => (
                 <option key={membro} value={membro}>
                   {membro}
@@ -148,7 +160,7 @@ export default function Sidebar({
             onClick={() => setMenuNovoAberto((aberto) => !aberto)}
             aria-expanded={menuNovoAberto}
             title={!expandido ? "Novo lançamento" : undefined}
-            className={`flex h-10 w-full items-center justify-center rounded-lg bg-accent px-3 text-sm font-medium text-on-accent transition hover:opacity-90 ${expandido ? "gap-2" : ""
+            className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:opacity-95 ${expandido ? "gap-2" : ""
               }`}
           >
             <span aria-hidden>＋</span>
@@ -236,10 +248,42 @@ export default function Sidebar({
               {expandido && <span>Investimentos</span>}
             </button>
           </section>
+
+          <section className="space-y-1">
+            {expandido && (
+              <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">
+                Cadastros
+              </h2>
+            )}
+            <button type="button" onClick={() => setCadastro("categoria")} className={classeItem(false)} title={!expandido ? "Categorias" : undefined}>
+              <span className="grid w-5 place-items-center text-base" aria-hidden>◈</span>
+              {expandido && <span>Categorias</span>}
+            </button>
+            <button type="button" onClick={() => setCadastro("pagamento")} className={classeItem(false)} title={!expandido ? "Formas de pagamento e cartões" : undefined}>
+              <span className="grid w-5 place-items-center text-base" aria-hidden>▭</span>
+              {expandido && <span>Pagamentos e cartões</span>}
+            </button>
+          </section>
         </nav>
       </div>
 
       <footer className="space-y-1 border-t border-line p-3">
+        <button
+          type="button"
+          onClick={() => router.push("/perfil")}
+          title={!expandido ? perfil.nome : undefined}
+          className={`mb-1 flex w-full items-center rounded-xl p-2 text-left transition hover:bg-background ${expandido ? "gap-3" : "justify-center"}`}
+        >
+          <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-bold text-on-accent">
+            {perfil.avatar ? <img src={perfil.avatar} alt="" className="h-full w-full object-cover" /> : (perfil.nome[0] || "?").toUpperCase()}
+          </span>
+          {expandido && (
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-ink">{perfil.nome}</span>
+              <span className="block truncate text-[11px] text-muted">{perfil.email}</span>
+            </span>
+          )}
+        </button>
         <button
           type="button"
           onClick={onAbrirGrupo}
@@ -277,6 +321,10 @@ export default function Sidebar({
           {expandido && <span>Sair da conta</span>}
         </button>
       </footer>
+
+      {cadastro && (
+        <GerenciarOpcoesModal tipo={cadastro} onClose={() => setCadastro(null)} onAtualizar={() => window.dispatchEvent(new Event("homecash:opcoes"))} />
+      )}
     </aside>
   );
 }

@@ -33,7 +33,7 @@ export default function Home() {
 
   const [verificandoAuth, setVerificandoAuth] = useState(true);
   const [modalGrupoAberto, setModalGrupoAberto] = useState(false);
-  const [membroSelecionado, setMembroSelecionado] = useState("TODOS");
+  const [membroSelecionado, setMembroSelecionado] = useState("EU"); // Privacidade: começa mostrando só os seus registros
   const [sidebarExpandida, setSidebarExpandida] = useState(true);
   const [mes, setMes] = useState("");
   const [aba, setAba] = useState<AbaId>("inicio");
@@ -181,11 +181,11 @@ export default function Home() {
             listaMembros={nomesOutrosMembros}
             onAbrirMenu={() => setMenuMobile(true)}
           />
-          <header className="hidden flex-wrap items-center justify-between gap-4">
+          <header className="card-glass hidden flex-wrap items-center justify-between gap-4 px-6 py-5 md:flex">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
                 {mostrarPainel
-                  ? "Visão geral"
+                  ? "Olá 👋 Visão geral"
                   : aba === "extrato"
                     ? "Extrato"
                     : aba === "lancamentos"
@@ -204,7 +204,17 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex h-10 items-center rounded-lg border border-line bg-surface">
+              <select
+                aria-label="Visualização"
+                value={membroSelecionado}
+                onChange={(e) => setMembroSelecionado(e.target.value)}
+                className="h-10 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink outline-none focus:ring-2 focus:ring-accent"
+              >
+                <option value="EU">Somente eu</option>
+                <option value="TODOS">Todo o grupo</option>
+                {nomesOutrosMembros.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
                 <button
                   type="button"
                   onClick={() => setMes(addMeses(mes, -1))}
@@ -249,7 +259,7 @@ export default function Home() {
               </div>
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 <InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} />
-                <ResponsavelPanel resumo={resumo} />
+                <ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} />
               </div>
             </>
           )}

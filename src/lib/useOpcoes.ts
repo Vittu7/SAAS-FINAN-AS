@@ -7,6 +7,8 @@ export interface Opcao {
   id: string;
   nome: string;
   cor: string;
+  eh_cartao?: boolean | null;
+  limite?: number | null;
 }
 
 export const COR_PADRAO = "#64748B";
@@ -44,6 +46,9 @@ export function useOpcoes() {
 
   useEffect(() => {
     recarregar();
+    // Recarrega quando categorias/formas de pagamento mudam pelo menu lateral
+    window.addEventListener("homecash:opcoes", recarregar);
+    return () => window.removeEventListener("homecash:opcoes", recarregar);
   }, [recarregar]);
 
   const corPagamento = (nome?: string | null) =>

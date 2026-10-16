@@ -35,6 +35,7 @@ export interface Membro {
   nome: string;
   cor: string | null;
   convidado: boolean;
+  avatar: string | null;
 }
 
 const COR_PADRAO_MEMBRO = "#64748B";
@@ -95,7 +96,7 @@ export function useFinanceStore() {
     if (gId) {
       const { data: perfisGrupo } = await supabase
         .from("perfis")
-        .select("id, nome_usuario, eh_convidado, cor")
+        .select("id, nome_usuario, eh_convidado, cor, avatar_url")
         .eq("grupo_id", gId);
 
       listaMembros = (perfisGrupo || []).map((perfilMembro: any) => ({
@@ -103,6 +104,7 @@ export function useFinanceStore() {
         nome: perfilMembro.nome_usuario || "Membro",
         cor: perfilMembro.cor || null,
         convidado: Boolean(perfilMembro.eh_convidado),
+        avatar: perfilMembro.avatar_url || null,
       }));
     }
 
@@ -118,14 +120,18 @@ export function useFinanceStore() {
       supabase.from("contas_fixas").select("*").or(filtro),
     ]);
 
+    // Partilha seletiva: além da regra no banco, esconde o que foi partilhado com outra pessoa
+    const visivel = (row: any) =>
+      !row.compartilhado_com || row.owner_id === user.id || row.compartilhado_com === user.id;
+
     setEstado({
-      extrato: (resExtrato.data || []).map((row: any) =>
+      extrato: (resExtrato.data || []).filter(visivel).map((row: any) =>
         enriquecer(row, listaMembros),
       ),
-      cartao: (resCartao.data || []).map((row: any) =>
+      cartao: (resCartao.data || []).filter(visivel).map((row: any) =>
         enriquecer(row, listaMembros),
       ),
-      contas: (resContas.data || []).map((row: any) =>
+      contas: (resContas.data || []).filter(visivel).map((row: any) =>
         enriquecer(row, listaMembros),
       ),
       config: {
@@ -169,6 +175,7 @@ export function useFinanceStore() {
       valor: item.valor,
       descricao: item.descricao,
       privado: (item as any).privado ?? false,
+      compartilhado_com: (item as any).compartilhado_com || null,
     };
 
     const { data, error } = await supabase
@@ -216,6 +223,7 @@ export function useFinanceStore() {
       categoria: item.categoria,
       valor: item.valor,
       privado: (item as any).privado ?? false,
+      compartilhado_com: (item as any).compartilhado_com || null,
     }));
 
     const { data, error } = await supabase
@@ -256,6 +264,7 @@ export function useFinanceStore() {
       valor: item.valor,
       forma_pagamento: (item as any).forma_pagamento || null,
       categoria: item.categoria || null,
+      compartilhado_com: (item as any).compartilhado_com || null,
       vencimento: (item as any).vencimento
         ? Number((item as any).vencimento)
         : null,

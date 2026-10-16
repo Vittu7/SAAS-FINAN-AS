@@ -7,6 +7,8 @@ interface Opcao {
   id: string;
   nome: string;
   cor: string;
+  eh_cartao?: boolean | null;
+  limite?: number | null;
 }
 
 export default function GerenciarOpcoesModal({
@@ -157,12 +159,10 @@ export default function GerenciarOpcoesModal({
         </form>
 
         {/* Lista de Opções Existentes */}
-        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
           {opcoes.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between p-2.5 bg-surface rounded-xl border border-line"
-            >
+            <div key={item.id} className="rounded-xl border border-line bg-surface p-2.5">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1">
                 {/* Seletor de cor circular interativo */}
                 <div
@@ -195,6 +195,37 @@ export default function GerenciarOpcoesModal({
               >
                 Remover
               </button>
+            </div>
+            {tipo === "pagamento" && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-line pt-2 pl-9">
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(item.eh_cartao)}
+                    onChange={(e) => atualizarOpcao(item.id, { eh_cartao: e.target.checked })}
+                    className="accent-[var(--accent)]"
+                  />
+                  Cartão de crédito
+                </label>
+                {item.eh_cartao && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted">
+                    Limite total R$
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      defaultValue={item.limite ?? ""}
+                      placeholder="0,00"
+                      onBlur={(e) => {
+                        const v = e.target.value === "" ? null : Number(e.target.value);
+                        if (v !== (item.limite ?? null)) atualizarOpcao(item.id, { limite: v });
+                      }}
+                      className="w-28 rounded-lg border border-line bg-background px-2 py-1 text-xs text-ink outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
             </div>
           ))}
         </div>

@@ -48,6 +48,10 @@ export default function RootLayout({
                 root.dataset.theme = t;
                 root.dataset.accent = a;
                 root.classList.toggle('dark', t === 'dark' || (t === 'system' && systemDark));
+                const bg = localStorage.getItem('homecash-bg') || 'none';
+                const img = localStorage.getItem('homecash-bg-img');
+                root.dataset.bg = bg === 'image' && !img ? 'none' : bg;
+                if (bg === 'image' && img) root.style.setProperty('--bg-img', 'url("' + img + '")');
               } catch (e) {}
             `,
           }}

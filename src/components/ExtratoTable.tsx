@@ -28,6 +28,10 @@ export default function ExtratoTable({
   const [descricao, setDescricao] = useState("");
 
   const [membros, setMembros] = useState<string[]>([]);
+  const [membrosIds, setMembrosIds] = useState<{ id: string; nome: string }[]>([]);
+  const [meuId, setMeuId] = useState("");
+  // "" = todo o grupo · "privado" = só eu · <id> = só eu e essa pessoa
+  const [visivelPara, setVisivelPara] = useState("");
   const [meuNome, setMeuNome] = useState("");
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
@@ -56,6 +60,7 @@ export default function ExtratoTable({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+    setMeuId(user.id);
 
     const { data: perfil } = await supabase
       .from("perfis")
@@ -70,8 +75,9 @@ export default function ExtratoTable({
     setResponsaveisSelecionados((prev) => (prev.length > 0 ? prev : [nomeReal]));
 
     if (perfil.grupo_id) {
-      const { data } = await supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id);
+      const { data } = await supabase.from("perfis").select("id, nome_usuario").eq("grupo_id", perfil.grupo_id);
       if (data) {
+        setMembrosIds(data.filter((m) => m.nome_usuario).map((m) => ({ id: m.id, nome: m.nome_usuario })));
         const nomes = data.map((m) => m.nome_usuario).filter(Boolean);
         setMembros(nomes.length > 0 ? nomes : [nomeReal]);
       }
@@ -114,6 +120,8 @@ export default function ExtratoTable({
         valor: valorIndividual,
         descricao: qtd > 1 ? `${descricao} (1/${qtd})` : descricao,
         responsavel: resp,
+        privado: visivelPara === "privado",
+        compartilhado_com: visivelPara && visivelPara !== "privado" ? visivelPara : null,
       });
     });
 
@@ -121,6 +129,7 @@ export default function ExtratoTable({
     setDescricao("");
     setResponsaveisSelecionados([meuNome || "Usuário"]);
     setMenuResponsavelAberto(false);
+    setVisivelPara("");
   };
 
   return (
@@ -173,7 +182,7 @@ export default function ExtratoTable({
         </div>
 
         {/* Descrição */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <label className="text-xs font-medium text-muted block mb-1">Descrição</label>
           <input
             type="text"
@@ -232,8 +241,24 @@ export default function ExtratoTable({
           )}
         </div>
 
-        {/* Botão Adicionar */}
+        {/* Quem pode ver */}
         <div className="lg:col-span-2">
+          <label className="text-xs font-medium text-muted block mb-1">Quem pode ver</label>
+          <select
+            value={visivelPara}
+            onChange={(e) => setVisivelPara(e.target.value)}
+            className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
+          >
+            <option value="">Todo o grupo</option>
+            <option value="privado">Só eu</option>
+            {membrosIds.filter((m) => m.id !== meuId).map((m) => (
+              <option key={m.id} value={m.id}>Só eu e {m.nome}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Botão Adicionar */}
+        <div className="lg:col-span-1">
           <button
             type="submit"
             className="w-full bg-accent text-on-accent h-[38px] rounded-xl font-medium text-sm hover:opacity-90 transition flex items-center justify-center shadow-sm"
@@ -279,7 +304,12 @@ export default function ExtratoTable({
                     <span className="text-muted">-</span>
                   )}
                 </td>
-                <td className="py-3">{item.descricao}</td>
+                <td className="py-3">
+                  {item.descricao}
+                  {item.compartilhado_com && (
+                    <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent" title="Visível só para você e uma pessoa">🔒 partilhado</span>
+                  )}
+                </td>
                 <td className="py-3">
                   <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
                 </td>

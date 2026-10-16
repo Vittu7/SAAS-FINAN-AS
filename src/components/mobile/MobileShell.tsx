@@ -57,8 +57,8 @@ export function MobileHeader({
           onChange={(e) => setMembroSelecionado(e.target.value)}
           className="h-9 max-w-[42%] rounded-full bg-surface px-3 text-xs font-medium text-ink outline-none ring-1 ring-line"
         >
-          <option value="TODOS">Todo o grupo</option>
           <option value="EU">Somente eu</option>
+          <option value="TODOS">Todo o grupo</option>
           {listaMembros.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
       </div>

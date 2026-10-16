@@ -84,3 +84,47 @@ body { background-color: var(--bg); color: var(--ink); }
   table { font-size: 0.8125rem; }
   .overflow-x-auto { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 }
+
+/* ---------- Superfícies modernas (computador) ---------- */
+:root { --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12); }
+:root.dark { --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.6); }
+
+@utility card-glass {
+  border-radius: 1.25rem;
+  border: 1px solid var(--line);
+  background-color: color-mix(in oklab, var(--surface) 88%, transparent);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- Fundos personalizados (baixa opacidade) ---------- */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+body { position: relative; isolation: isolate; }
+
+:root[data-bg="aurora"] body::before {
+  opacity: 0.22;
+  background:
+    radial-gradient(60% 50% at 15% 10%, var(--accent), transparent 70%),
+    radial-gradient(50% 40% at 85% 20%, #8b5cf6, transparent 70%),
+    radial-gradient(60% 50% at 70% 90%, #22d3ee, transparent 70%);
+  filter: blur(40px);
+}
+:root[data-bg="waves"] body::before {
+  opacity: 0.14;
+  background-color: transparent;
+  background-image:
+    repeating-radial-gradient(circle at 0 100%, transparent 0 38px, var(--accent) 39px 40px),
+    repeating-radial-gradient(circle at 100% 0, transparent 0 58px, var(--accent) 59px 60px);
+}
+:root[data-bg="image"] body::before {
+  opacity: 0.16;
+  background: var(--bg-img) center / cover no-repeat;
+}

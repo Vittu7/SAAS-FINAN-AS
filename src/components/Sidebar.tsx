@@ -251,6 +251,9 @@ export default function Sidebar({
               if (destaque) {
                 onSelecionarAba?.("extrato");
                 if (pathname !== "/") router.push("/");
+                window.setTimeout(() => {
+                  document.getElementById("form-lancamento")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 100);
               } else if (item.id === "geral") {
                 router.push("/");
               } else {

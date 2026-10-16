@@ -127,9 +127,9 @@ export default function CartaoTable({
   };
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
+    <div className="rounded-2xl border border-line bg-surface p-3 sm:p-4 md:p-6 shadow-sm md:shadow-lg space-y-4">
       {/* Formulário otimizado com grid responsivo de 12 colunas para ajuste perfeito em telas menores e com zoom */}
-      <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
+      <form id="form-parcelas" onSubmit={handleAdicionar} className="scroll-mt-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-12">
         {/* FORMA DE PAGAMENTO (Ocupa 2 colunas em telas grandes) */}
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
@@ -267,50 +267,50 @@ export default function CartaoTable({
         </div>
       </form>
 
-      {/* TABELA DE EXIBIÇÃO */}
-      <div className="overflow-x-auto">
+      {/* Cartões compactos para celular */}
+      <div className="space-y-3 md:hidden">
+        {itens.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center">
+            <p className="text-sm font-semibold text-ink">Nenhuma parcela neste mês</p>
+            <p className="mt-1 text-xs text-muted">Cadastre uma compra no formulário acima.</p>
+          </div>
+        ) : itens.map((item) => (
+          <article key={item.id} className="rounded-2xl border border-line bg-background p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words text-sm font-semibold text-ink">{item.descricao}</p>
+                <p className="mt-1 text-xs text-muted">Parcela {item.parcelaAtual}/{item.parcelaTotal}</p>
+              </div>
+              <p className="shrink-0 text-base font-bold tabular-nums text-ink">{brl(item.valor)}</p>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Selo nome={item.cartao || "Forma de Pagamento"} cor={corPagamento(item.cartao)} />
+              {item.categoria && <Selo nome={item.categoria} cor={corCategoria(item.categoria)} />}
+              <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
+            </div>
+            <div className="mt-3 flex justify-end gap-4 border-t border-line/60 pt-3">
+              {onEdit && <button type="button" onClick={() => setEditando(item)} className="text-xs font-semibold text-accent">Editar</button>}
+              <button type="button" onClick={() => onRemove(item.id)} className="text-xs font-semibold text-red-400">Remover</button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {/* Tabela completa no desktop */}
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs text-muted">
-              <th className="py-2">Forma de Pagamento</th>
-              <th className="py-2">Categoria</th>
-              <th className="py-2">Descrição</th>
-              <th className="py-2">Parcela</th>
-              <th className="py-2">Responsável</th>
-              <th className="py-2 text-right">Valor Parcela</th>
-              <th className="py-2 text-center">Ações</th>
+          <thead><tr className="border-b border-line text-xs text-muted">
+            <th className="py-2">Forma de Pagamento</th><th className="py-2">Categoria</th><th className="py-2">Descrição</th><th className="py-2">Parcela</th><th className="py-2">Responsável</th><th className="py-2 text-right">Valor Parcela</th><th className="py-2 text-center">Ações</th>
+          </tr></thead>
+          <tbody>{itens.map((item) => (
+            <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
+              <td className="py-3 font-medium"><Selo nome={item.cartao || "Forma de Pagamento"} cor={corPagamento(item.cartao)} /></td>
+              <td className="py-3">{item.categoria ? <Selo nome={item.categoria} cor={corCategoria(item.categoria)} /> : "-"}</td>
+              <td className="py-3">{item.descricao}</td><td className="py-3 text-xs text-muted">{item.parcelaAtual}/{item.parcelaTotal}</td>
+              <td className="py-3"><Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} /></td><td className="py-3 text-right font-bold">{brl(item.valor)}</td>
+              <td className="py-3 text-center">{onEdit && <button type="button" onClick={() => setEditando(item)} className="mr-3 text-xs text-accent hover:underline">Editar</button>}<button type="button" onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">Remover</button></td>
             </tr>
-          </thead>
-          <tbody>
-            {itens.map((item) => (
-              <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
-                <td className="py-3 font-medium">
-                  <Selo nome={item.cartao || "Forma de Pagamento"} cor={corPagamento(item.cartao)} />
-                </td>
-                <td className="py-3">
-                  {item.categoria ? <Selo nome={item.categoria} cor={corCategoria(item.categoria)} /> : "-"}
-                </td>
-                <td className="py-3">{item.descricao}</td>
-                <td className="py-3 text-xs text-muted">
-                  {item.parcelaAtual}/{item.parcelaTotal}
-                </td>
-                <td className="py-3">
-                  <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
-                </td>
-                <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
-                <td className="py-3 text-center">
-                  {onEdit && (
-                    <button type="button" onClick={() => setEditando(item)} className="mr-3 text-xs text-accent hover:underline">
-                      Editar
-                    </button>
-                  )}
-                  <button onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
-                    Remover
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          ))}</tbody>
         </table>
       </div>
 

@@ -128,7 +128,7 @@ export default function ContasFixasTable({
   };
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
+    <div className="rounded-2xl border border-line bg-surface p-3 sm:p-4 md:p-6 shadow-sm md:shadow-lg space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-semibold text-muted">Contas Recorrentes do Mês</h3>
         <button
@@ -140,7 +140,7 @@ export default function ContasFixasTable({
         </button>
       </div>
 
-      <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
+      <form id="form-contas-fixas" onSubmit={handleAdicionar} className="scroll-mt-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-12">
         {/* Nome da Conta */}
         <div className="lg:col-span-2">
           <label className="text-xs font-medium text-muted block mb-1">Nome da Conta</label>
@@ -266,69 +266,53 @@ export default function ContasFixasTable({
         </div>
       </form>
 
-      {/* Tabela */}
-      <div className="overflow-x-auto">
+      {/* Lista de contas em cartões no celular */}
+      <div className="space-y-3 md:hidden">
+        {itens.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center">
+            <p className="text-sm font-semibold text-ink">Nenhuma conta fixa neste mês</p>
+            <p className="mt-1 text-xs text-muted">Adicione suas contas recorrentes acima.</p>
+            <button type="button" onClick={onCopiarMesAnterior} className="mt-3 text-xs font-semibold text-accent">Copiar mês anterior</button>
+          </div>
+        ) : itens.map((item) => (
+          <article key={item.id} className="rounded-2xl border border-line bg-background p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words text-sm font-semibold text-ink">{item.nome}</p>
+                <p className="mt-1 text-xs text-muted">{item.vencimento ? "Vence dia " + item.vencimento : "Sem vencimento definido"} · {item.responsavel || "Membro"}</p>
+              </div>
+              <p className="shrink-0 text-base font-bold tabular-nums text-ink">{brl(item.valor)}</p>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => onTogglePago(item.id)} className={`rounded-full border px-3 py-1 text-xs font-semibold ${item.pago ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-500" : "border-amber-500/20 bg-amber-500/10 text-amber-500"}`}>
+                {item.pago ? "✓ Pago" : "Pendente · marcar pago"}
+              </button>
+              {item.forma_pagamento && <Selo nome={item.forma_pagamento} cor={corPagamento(item.forma_pagamento)} />}
+              {item.categoria && <Selo nome={item.categoria} cor={corCategoria(item.categoria)} />}
+            </div>
+            <div className="mt-3 flex justify-end gap-4 border-t border-line/60 pt-3">
+              {onEdit && <button type="button" onClick={() => setEditando(item)} className="text-xs font-semibold text-accent">Editar</button>}
+              <button type="button" onClick={() => onRemove(item.id)} className="text-xs font-semibold text-red-400">Remover</button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {/* Tabela completa no desktop */}
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs text-muted">
-              <th className="py-2">Status</th>
-              <th className="py-2">Conta</th>
-              <th className="py-2">Forma de Pagamento</th>
-              <th className="py-2">Categoria</th>
-              <th className="py-2">Vencimento</th>
-              <th className="py-2">Responsável</th>
-              <th className="py-2 text-right">Valor</th>
-              <th className="py-2 text-center">Ações</th>
+          <thead><tr className="border-b border-line text-xs text-muted">
+            <th className="py-2">Status</th><th className="py-2">Conta</th><th className="py-2">Forma de Pagamento</th><th className="py-2">Categoria</th><th className="py-2">Vencimento</th><th className="py-2">Responsável</th><th className="py-2 text-right">Valor</th><th className="py-2 text-center">Ações</th>
+          </tr></thead>
+          <tbody>{itens.map((item) => (
+            <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
+              <td className="py-3"><button type="button" onClick={() => onTogglePago(item.id)} className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${item.pago ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" : "border-amber-500/20 bg-amber-500/10 text-amber-400"}`}>{item.pago ? "✓ Pago" : "Pendente"}</button></td>
+              <td className="py-3 font-medium">{item.nome}</td><td className="py-3">{item.forma_pagamento ? <Selo nome={item.forma_pagamento} cor={corPagamento(item.forma_pagamento)} /> : <span className="text-muted">-</span>}</td>
+              <td className="py-3">{item.categoria ? <Selo nome={item.categoria} cor={corCategoria(item.categoria)} /> : <span className="text-muted">-</span>}</td>
+              <td className="py-3 text-xs text-muted">{item.vencimento ? `Dia ${item.vencimento}` : "-"}</td><td className="py-3"><Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} /></td><td className="py-3 text-right font-bold">{brl(item.valor)}</td>
+              <td className="py-3 text-center">{onEdit && <button type="button" onClick={() => setEditando(item)} className="mr-3 text-xs text-accent hover:underline">Editar</button>}<button type="button" onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">Remover</button></td>
             </tr>
-          </thead>
-          <tbody>
-            {itens.map((item) => (
-              <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
-                <td className="py-3">
-                  <button
-                    type="button"
-                    onClick={() => onTogglePago(item.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${item.pago
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      }`}
-                  >
-                    {item.pago ? "✓ Pago" : "Pendente"}
-                  </button>
-                </td>
-                <td className="py-3 font-medium">{item.nome}</td>
-                <td className="py-3">
-                  {item.forma_pagamento ? (
-                    <Selo nome={item.forma_pagamento} cor={corPagamento(item.forma_pagamento)} />
-                  ) : (
-                    <span className="text-muted">-</span>
-                  )}
-                </td>
-                <td className="py-3">
-                  {item.categoria ? (
-                    <Selo nome={item.categoria} cor={corCategoria(item.categoria)} />
-                  ) : (
-                    <span className="text-muted">-</span>
-                  )}
-                </td>
-                <td className="py-3 text-xs text-muted">{item.vencimento ? `Dia ${item.vencimento}` : "-"}</td>
-                <td className="py-3">
-                  <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
-                </td>
-                <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
-                <td className="py-3 text-center">
-                  {onEdit && (
-                    <button type="button" onClick={() => setEditando(item)} className="mr-3 text-xs text-accent hover:underline">
-                      Editar
-                    </button>
-                  )}
-                  <button type="button" onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
-                    Remover
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          ))}</tbody>
         </table>
       </div>
 

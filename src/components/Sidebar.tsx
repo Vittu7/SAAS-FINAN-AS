@@ -95,6 +95,7 @@ export default function Sidebar({
     } ${ativo ? "bg-accent text-on-accent shadow-sm" : "text-muted hover:bg-background hover:text-ink"}`;
 
   return (
+    <>
     <aside
       className={`fixed left-0 top-0 z-40 hidden h-screen flex-col justify-between border-r border-line bg-surface transition-all duration-300 md:flex ${expandido ? "w-64" : "w-20"}`}
     >
@@ -249,13 +250,12 @@ export default function Sidebar({
             onClick={() => {
               if (destaque) {
                 onSelecionarAba?.("extrato");
-                onSelecionarAba?.("extrato");
-                if (path !== "/") router.push("/");
+                if (pathname !== "/") router.push("/");
               } else if (item.id === "geral") {
                 router.push("/");
               } else {
                 onSelecionarAba?.(item.id);
-                if (path !== "/") router.push("/");
+                if (pathname !== "/") router.push("/");
               }
             }}
             aria-current={ativo ? "page" : undefined}
@@ -269,5 +269,6 @@ export default function Sidebar({
         );
       })}
     </nav>
+    </>
   );
 }

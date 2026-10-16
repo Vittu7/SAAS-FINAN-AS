@@ -121,13 +121,13 @@ export default function Home() {
           }`}
       >
         <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 md:p-8">
-          <header className="flex flex-wrap items-center justify-between gap-4">
+          <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div>
               <h1 className="text-2xl font-bold">Painel de controle</h1>
               <p className="text-xs text-muted">Gerencie seus gastos individuais e em grupo.</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <div className="flex items-center rounded-xl border border-line bg-surface">
                 <button
                   type="button"

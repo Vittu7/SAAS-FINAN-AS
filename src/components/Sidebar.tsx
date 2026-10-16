@@ -249,7 +249,8 @@ export default function Sidebar({
             onClick={() => {
               if (destaque) {
                 onSelecionarAba?.("extrato");
-                router.push("/?novo=1");
+                onSelecionarAba?.("extrato");
+                if (path !== "/") router.push("/");
               } else if (item.id === "geral") {
                 router.push("/");
               } else {

@@ -6,6 +6,30 @@ export const COR_RESPONSAVEL: Record<string, string> = {
   "Geral": "#3b82f6",
 };
 
+export interface Categoria {
+  id: string;
+  nome: string;
+}
+
+export interface FormaPagamento {
+  id: string;
+  nome: string;
+  isCartaoCredito?: boolean;
+  limiteTotal?: number;
+}
+
+export interface Lancamento {
+  id: string;
+  descricao: string;
+  valor: number;
+  tipo: 'receita' | 'despesa';
+  categoria: string;
+  formaPagamento: string;
+  responsavel: string;
+  data: string;
+  pago?: boolean;
+}
+
 export type Extrato = {
   id: string;
   mes: string;

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { addMeses, brl, rotuloMes, type Resumo } from "@/lib/finance";
 import ThemeToggle from "@/components/ThemeToggle";
+import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 
 type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas";
 
@@ -45,11 +46,25 @@ export function MobileHeader({
 
       <div className="mt-3 flex items-center gap-2">
         <div className="flex h-9 flex-1 items-center justify-between rounded-full bg-surface px-1 ring-1 ring-line">
-          <button type="button" aria-label="Mês anterior" onClick={() => setMes(addMeses(mes, -1))}
-            className="grid size-7 place-items-center rounded-full text-muted active:bg-background">‹</button>
-          <span className="text-sm font-medium capitalize" aria-live="polite">{rotuloMes(mes)}</span>
-          <button type="button" aria-label="Próximo mês" onClick={() => setMes(addMeses(mes, 1))}
-            className="grid size-7 place-items-center rounded-full text-muted active:bg-background">›</button>
+          <button
+            type="button"
+            aria-label="Mês anterior"
+            onClick={() => setMes(addMeses(mes, -1))}
+            className="grid size-7 place-items-center rounded-full text-muted active:bg-background"
+          >
+            ‹
+          </button>
+          <span className="text-sm font-medium capitalize" aria-live="polite">
+            {rotuloMes(mes)}
+          </span>
+          <button
+            type="button"
+            aria-label="Próximo mês"
+            onClick={() => setMes(addMeses(mes, 1))}
+            className="grid size-7 place-items-center rounded-full text-muted active:bg-background"
+          >
+            ›
+          </button>
         </div>
         <select
           aria-label="Visualização"
@@ -59,7 +74,11 @@ export function MobileHeader({
         >
           <option value="EU">Somente eu</option>
           <option value="TODOS">Todo o grupo</option>
-          {listaMembros.map((m) => <option key={m} value={m}>{m}</option>)}
+          {listaMembros.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
         </select>
       </div>
     </header>
@@ -95,8 +114,12 @@ export function MobileSaldo({
         <div className="pointer-events-none absolute -bottom-14 -left-8 size-36 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between">
           <p className="text-xs font-medium opacity-80">{negativo ? "Acima do salário" : "Disponível no mês"}</p>
-          <button type="button" onClick={() => setOculto((o) => !o)} aria-label={oculto ? "Mostrar valores" : "Ocultar valores"}
-            className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium active:scale-95">
+          <button
+            type="button"
+            onClick={() => setOculto((o) => !o)}
+            aria-label={oculto ? "Mostrar valores" : "Ocultar valores"}
+            className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium active:scale-95"
+          >
             {oculto ? "Mostrar" : "Ocultar"}
           </button>
         </div>
@@ -136,12 +159,21 @@ export function MobileSaldo({
 }
 
 /* ---------- Atalhos rápidos ---------- */
-export function MobileAtalhos({ onAba, onGrupo }: { onAba: (a: Aba) => void; onGrupo: () => void }) {
+export function MobileAtalhos({
+  onAba,
+  onGrupo,
+  onCadastros,
+}: {
+  onAba: (a: Aba) => void;
+  onGrupo: () => void;
+  onCadastros?: () => void;
+}) {
   const itens = [
     { r: "Lançar", s: "＋", f: () => onAba("lancamentos") },
     { r: "Extrato", s: "≡", f: () => onAba("extrato") },
     { r: "Gráficos", s: "◷", f: () => document.getElementById("graficos")?.scrollIntoView({ behavior: "smooth" }) },
     { r: "Grupo", s: "◉", f: onGrupo },
+    ...(onCadastros ? [{ r: "Cadastros", s: "◈", f: onCadastros }] : []),
   ];
   return (
     <div className="-mx-4 flex gap-4 overflow-x-auto px-4 py-1 md:hidden">
@@ -161,8 +193,14 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
   const Item = ({ id, r, s }: { id: Aba; r: string; s: string }) => {
     const ativo = aba === id;
     return (
-      <button type="button" onClick={() => onAba(id)} aria-current={ativo ? "page" : undefined}
-        className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition ${ativo ? "text-accent" : "text-muted"}`}>
+      <button
+        type="button"
+        onClick={() => onAba(id)}
+        aria-current={ativo ? "page" : undefined}
+        className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition ${
+          ativo ? "text-accent" : "text-muted"
+        }`}
+      >
         <span className={`grid h-7 w-12 place-items-center rounded-full text-lg ${ativo ? "bg-accent/15" : ""}`}>{s}</span>
         {r}
       </button>
@@ -176,8 +214,12 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
           <Item id="inicio" r="Início" s="⌂" />
           <Item id="extrato" r="Extrato" s="≡" />
           <div className="flex flex-1 justify-center">
-            <button type="button" onClick={() => setNovoAberto(true)} aria-label="Novo lançamento"
-              className="-mt-6 grid size-14 place-items-center rounded-full bg-accent text-2xl text-on-accent shadow-lg ring-4 ring-background active:scale-95">
+            <button
+              type="button"
+              onClick={() => setNovoAberto(true)}
+              aria-label="Novo lançamento"
+              className="-mt-6 grid size-14 place-items-center rounded-full bg-accent text-2xl text-on-accent shadow-lg ring-4 ring-background active:scale-95"
+            >
               ＋
             </button>
           </div>
@@ -192,8 +234,15 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
           { id: "cartao" as Aba, r: "Conta parcelada", d: "Compras divididas em parcelas", s: "▤" },
           { id: "contas" as Aba, r: "Conta fixa", d: "Aluguel, internet, assinaturas", s: "▣" },
         ].map((t) => (
-          <button key={t.id} type="button" onClick={() => { onAba(t.id); setNovoAberto(false); }}
-            className="flex w-full items-center gap-3 rounded-2xl p-3 text-left active:bg-background">
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => {
+              onAba(t.id);
+              setNovoAberto(false);
+            }}
+            className="flex w-full items-center gap-3 rounded-2xl p-3 text-left active:bg-background"
+          >
             <span className="grid size-11 place-items-center rounded-full bg-accent/10 text-lg text-accent">{t.s}</span>
             <span className="flex-1">
               <span className="block text-sm font-semibold">{t.r}</span>
@@ -207,37 +256,114 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
   );
 }
 
-/* ---------- Menu (perfil, grupo, tema, sair) ---------- */
-export function MobileMenu({ aberto, onFechar, onGrupo }: { aberto: boolean; onFechar: () => void; onGrupo: () => void }) {
+/* ---------- Menu (perfil, grupo, cadastros, tema, sair) ---------- */
+export function MobileMenu({
+  aberto,
+  onFechar,
+  onGrupo,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  onGrupo: () => void;
+}) {
   const router = useRouter();
-  const sair = async () => { await supabase.auth.signOut(); router.push("/login"); };
+  const [modalCadastrosAberto, setModalCadastrosAberto] = useState(false);
+
+  const sair = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
   const linha = "flex w-full items-center gap-3 rounded-2xl p-3 text-left text-sm font-medium active:bg-background";
+
   return (
-    <Sheet aberto={aberto} onFechar={onFechar} titulo="Menu">
-      <button type="button" className={linha} onClick={() => { onFechar(); router.push("/perfil"); }}>
-        <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">⚙</span>Perfil e ajustes
-      </button>
-      <button type="button" className={linha} onClick={() => { onFechar(); onGrupo(); }}>
-        <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◉</span>Gerenciar grupo
-      </button>
-      <div className={`${linha} justify-between`}>
-        <span className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◐</span>Tema</span>
-        <ThemeToggle />
-      </div>
-      <button type="button" className={`${linha} text-rose-500`} onClick={sair}>
-        <span className="grid size-10 place-items-center rounded-full bg-rose-500/10">↪</span>Sair da conta
-      </button>
-    </Sheet>
+    <>
+      <Sheet aberto={aberto} onFechar={onFechar} titulo="Menu">
+        <button
+          type="button"
+          className={linha}
+          onClick={() => {
+            onFechar();
+            setModalCadastrosAberto(true);
+          }}
+        >
+          <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◈</span>
+          Cadastros & Opções
+        </button>
+
+        <button
+          type="button"
+          className={linha}
+          onClick={() => {
+            onFechar();
+            router.push("/perfil");
+          }}
+        >
+          <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">⚙</span>
+          Perfil e ajustes
+        </button>
+
+        <button
+          type="button"
+          className={linha}
+          onClick={() => {
+            onFechar();
+            onGrupo();
+          }}
+        >
+          <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◉</span>
+          Gerenciar grupo
+        </button>
+
+        <div className={`${linha} justify-between`}>
+          <span className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◐</span>
+            Tema
+          </span>
+          <ThemeToggle />
+        </div>
+
+        <button type="button" className={`${linha} text-rose-500`} onClick={sair}>
+          <span className="grid size-10 place-items-center rounded-full bg-rose-500/10">↪</span>
+          Sair da conta
+        </button>
+      </Sheet>
+
+      {modalCadastrosAberto && (
+        <GerenciarOpcoesModal
+          onClose={() => setModalCadastrosAberto(false)}
+          onAtualizar={() => window.dispatchEvent(new Event("homecash:opcoes"))}
+        />
+      )}
+    </>
   );
 }
 
 /* ---------- Gaveta que sobe de baixo ---------- */
-export function Sheet({ aberto, onFechar, titulo, children }: { aberto: boolean; onFechar: () => void; titulo: string; children: React.ReactNode }) {
+export function Sheet({
+  aberto,
+  onFechar,
+  titulo,
+  children,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  titulo: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className={`fixed inset-0 z-50 md:hidden ${aberto ? "" : "pointer-events-none"}`} aria-hidden={!aberto}>
-      <div onClick={onFechar} className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${aberto ? "opacity-100" : "opacity-0"}`} />
-      <div role="dialog" aria-label={titulo}
-        className={`absolute inset-x-0 bottom-0 rounded-t-3xl bg-surface px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-2 shadow-2xl transition-transform duration-300 ease-out ${aberto ? "translate-y-0" : "translate-y-full"}`}>
+      <div
+        onClick={onFechar}
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${aberto ? "opacity-100" : "opacity-0"}`}
+      />
+      <div
+        role="dialog"
+        aria-label={titulo}
+        className={`absolute inset-x-0 bottom-0 rounded-t-3xl bg-surface px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-2 shadow-2xl transition-transform duration-300 ease-out ${
+          aberto ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />
         <p className="px-3 pb-2 text-base font-semibold">{titulo}</p>
         <div className="space-y-1">{children}</div>

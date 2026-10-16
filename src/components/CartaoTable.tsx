@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
 import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
-import { useOpcoes } from "@/lib/useOpcoes";
+import { useOpcoes, type Opcao } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 
@@ -22,7 +22,6 @@ export default function CartaoTable({
   onRemove: (id: string) => void;
   onEdit?: (id: string, patch: Record<string, any>) => Promise<boolean | void>;
 }) {
-  // "cartao" guarda a forma de pagamento escolhida (nome do campo no banco continua "cartao")
   const [cartao, setCartao] = useState("");
   const [categoria, setCategoria] = useState("");
   const [valorTexto, setValorTexto] = useState("");
@@ -36,13 +35,11 @@ export default function CartaoTable({
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
 
-  // Listas compartilhadas (as mesmas do Extrato e das Contas Fixas), já com as cores
   const { pagamento, categoria: opcoesCategoria, recarregar, corPagamento, corCategoria } = useOpcoes();
   const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
 
-  // Seleciona a primeira forma de pagamento quando a lista chega
   useEffect(() => {
     if (!cartao && pagamento.length > 0) {
       setCartao(pagamento[0].nome);
@@ -128,15 +125,96 @@ export default function CartaoTable({
     setMenuResponsavelAberto(false);
   };
 
+  // Cálculo e agrupamento de limites para os cartões cadastrados
+  const cartoesComLimite = pagamento
+    .filter((f: Opcao) => f.eh_cartao)
+    .map((cartaoItem: Opcao) => {
+      const lancamentosDoCartao = itens.filter(
+        (c) => (c.cartao || "").toLowerCase() === cartaoItem.nome.toLowerCase()
+      );
+      const totalUtilizado = lancamentosDoCartao.reduce((acc, cur) => acc + (Number(cur.valor) || 0), 0);
+      const limite = Number(cartaoItem.limite) || 0;
+      const disponivel = limite - totalUtilizado;
+
+      return {
+        ...cartaoItem,
+        totalUtilizado,
+        disponivel,
+      };
+    });
+
   return (
-    <div className="space-y-4 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
-      <button type="button" onClick={() => setFormAberto((a) => !a)}
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-on-accent active:scale-[0.98] md:hidden">
+    <div className="space-y-6 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
+      {/* PAINEL RESUMO DE LIMITES */}
+      {cartoesComLimite.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {cartoesComLimite.map((c: any) => {
+            const limite = c.limite || 0;
+            const porcentagemUso = limite > 0 ? Math.min(100, (c.totalUtilizado / limite) * 100) : 0;
+
+            return (
+              <div
+                key={c.id || c.nome}
+                className="p-4 rounded-2xl border border-line bg-background/50 shadow-sm space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Selo nome={c.nome} cor={corPagamento(c.nome)} />
+                  </div>
+                  <span className="text-xs font-semibold text-muted">
+                    {porcentagemUso.toFixed(0)}% usado
+                  </span>
+                </div>
+
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted">Fatura Atual:</span>
+                    <span className="font-bold text-red-400">{brl(c.totalUtilizado)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Limite Total:</span>
+                    <span className="font-medium text-ink">{brl(limite)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Disponível:</span>
+                    <span className="font-medium text-accent">{brl(c.disponivel)}</span>
+                  </div>
+                </div>
+
+                <div className="w-full bg-line rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      porcentagemUso > 90
+                        ? "bg-red-500"
+                        : porcentagemUso > 70
+                        ? "bg-amber-500"
+                        : "bg-accent"
+                    }`}
+                    style={{ width: `${porcentagemUso}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* BOTÃO MOBILE DE ADICIONAR */}
+      <button
+        type="button"
+        onClick={() => setFormAberto((a) => !a)}
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-on-accent active:scale-[0.98] md:hidden"
+      >
         {formAberto ? "Fechar formulário" : "＋ Adicionar novo"}
       </button>
-      {/* Formulário otimizado com grid responsivo de 12 colunas para ajuste perfeito em telas menores e com zoom */}
-      <form onSubmit={handleAdicionar} className={`${formAberto ? "grid" : "hidden"} rounded-2xl bg-surface p-4 ring-1 ring-line md:grid md:rounded-none md:bg-transparent md:p-0 md:ring-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end`}>
-        {/* FORMA DE PAGAMENTO (Ocupa 2 colunas em telas grandes) */}
+
+      {/* FORMULÁRIO */}
+      <form
+        onSubmit={handleAdicionar}
+        className={`${
+          formAberto ? "grid" : "hidden"
+        } rounded-2xl bg-surface p-4 ring-1 ring-line md:grid md:rounded-none md:bg-transparent md:p-0 md:ring-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end`}
+      >
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
             <label className="text-xs font-medium text-muted">Forma de Pagamento</label>
@@ -151,7 +229,6 @@ export default function CartaoTable({
           <SeletorOpcao opcoes={pagamento} valor={cartao} onChange={setCartao} />
         </div>
 
-        {/* CATEGORIA (Ocupa 2 colunas) */}
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
             <label className="text-xs font-medium text-muted">Categoria</label>
@@ -166,7 +243,6 @@ export default function CartaoTable({
           <SeletorOpcao opcoes={opcoesCategoria} valor={categoria} onChange={setCategoria} />
         </div>
 
-        {/* VALOR DA PARCELA (Ocupa 2 colunas) */}
         <div className="lg:col-span-2">
           <label className="text-xs font-medium text-muted block mb-1">Valor Parcela (R$)</label>
           <input
@@ -178,7 +254,6 @@ export default function CartaoTable({
           />
         </div>
 
-        {/* DESCRIÇÃO (Ocupa 2 colunas) */}
         <div className="lg:col-span-2">
           <label className="text-xs font-medium text-muted block mb-1">Descrição</label>
           <input
@@ -190,7 +265,6 @@ export default function CartaoTable({
           />
         </div>
 
-        {/* PARCELAS (Ocupa 1 coluna dividida internamente) */}
         <div className="lg:col-span-1 flex gap-1">
           <div className="w-1/2">
             <label className="text-xs font-medium text-muted block mb-1">Parc</label>
@@ -214,7 +288,6 @@ export default function CartaoTable({
           </div>
         </div>
 
-        {/* RESPONSÁVEL (Ocupa 1 coluna) */}
         <div className="lg:col-span-1 relative">
           <label className="text-xs font-medium text-muted block mb-1">Resp.</label>
           <button
@@ -262,7 +335,6 @@ export default function CartaoTable({
           )}
         </div>
 
-        {/* BOTÃO ADICIONAR (Ocupa 2 colunas no desktop, alinhado perfeitamente na linha) */}
         <div className="lg:col-span-2">
           <button
             type="submit"
@@ -273,15 +345,24 @@ export default function CartaoTable({
         </div>
       </form>
 
-      {/* TABELA DE EXIBIÇÃO */}
-      <MobileLista vazio="Nenhuma conta parcelada neste mês." itens={itens.map((item: any) => ({
-        id: item.id, titulo: item.descricao || item.nome || "Sem descrição", subtitulo: [item.cartao, item.categoria].filter(Boolean).join(" · "),
-        valor: item.valor, icone: "▤", tags: [item.cartao, item.categoria, item.responsavel],
-        status: { texto: `${item.parcelaAtual ?? 1}/${item.parcelaTotal ?? 1}`, tom: "neutro" as const },
-        progresso: ((item.parcelaAtual ?? 1) / Math.max(1, item.parcelaTotal ?? 1)) * 100,
-        onEditar: onEdit ? () => setEditando(item) : undefined, onRemover: () => onRemove(item.id),
-      }))} />
+      {/* EXIBIÇÃO MOBILE */}
+      <MobileLista
+        vazio="Nenhuma conta parcelada neste mês."
+        itens={itens.map((item: any) => ({
+          id: item.id,
+          titulo: item.descricao || item.nome || "Sem descrição",
+          subtitulo: [item.cartao, item.categoria].filter(Boolean).join(" · "),
+          valor: item.valor,
+          icone: "▤",
+          tags: [item.cartao, item.categoria, item.responsavel],
+          status: { texto: `${item.parcelaAtual ?? 1}/${item.parcelaTotal ?? 1}`, tom: "neutro" as const },
+          progresso: ((item.parcelaAtual ?? 1) / Math.max(1, item.parcelaTotal ?? 1)) * 100,
+          onEditar: onEdit ? () => setEditando(item) : undefined,
+          onRemover: () => onRemove(item.id),
+        }))}
+      />
 
+      {/* EXIBIÇÃO DESKTOP */}
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
           <thead>
@@ -328,7 +409,7 @@ export default function CartaoTable({
         </table>
       </div>
 
-      {/* MODAL DE GERENCIAMENTO DE OPÇÕES */}
+      {/* MODAIS */}
       {editando && onEdit && (
         <EditarLancamentoModal
           tipo="cartao"

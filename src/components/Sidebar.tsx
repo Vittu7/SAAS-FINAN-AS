@@ -54,18 +54,33 @@ export default function Sidebar({
   const [expandido, setExpandido] = useState(true);
   const [menuNovoAberto, setMenuNovoAberto] = useState(false);
   const [cadastro, setCadastro] = useState<"categoria" | "pagamento" | null>(null);
-  const [perfil, setPerfil] = useState<{ nome: string; avatar: string | null; email: string }>({ nome: "", avatar: null, email: "" });
+  const [perfil, setPerfil] = useState<{ nome: string; avatar: string | null; email: string }>({
+    nome: "",
+    avatar: null,
+    email: "",
+  });
+
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from("perfis").select("nome_usuario, avatar_url").eq("id", user.id).maybeSingle();
-      setPerfil({ nome: data?.nome_usuario || "Você", avatar: data?.avatar_url || null, email: user.email || "" });
+      const { data } = await supabase
+        .from("perfis")
+        .select("nome_usuario, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+      setPerfil({
+        nome: data?.nome_usuario || "Você",
+        avatar: data?.avatar_url || null,
+        email: user.email || "",
+      });
     })();
   }, []);
-  const router = useRouter();
-  const pathname = usePathname();
 
   const alterarExpandido = (valor: boolean) => {
     setExpandido(valor);
@@ -90,21 +105,26 @@ export default function Sidebar({
   };
 
   const classeItem = (ativo: boolean) =>
-    `flex min-h-10 w-full items-center rounded-xl px-3 text-sm transition ${expandido ? "gap-3" : "justify-center"
-    } ${ativo
-      ? "bg-accent/12 font-semibold text-accent ring-1 ring-accent/20"
-      : "text-muted hover:bg-background hover:text-ink"
+    `flex min-h-10 w-full items-center rounded-xl px-3 text-sm transition ${
+      expandido ? "gap-3" : "justify-center"
+    } ${
+      ativo
+        ? "bg-accent/12 font-semibold text-accent ring-1 ring-accent/20"
+        : "text-muted hover:bg-background hover:text-ink"
     }`;
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 hidden flex-col md:flex border-r border-line bg-surface/80 backdrop-blur-xl transition-[width] duration-200 ${expandido ? "w-60" : "w-16"
-        }`}
+      className={`fixed inset-y-0 left-0 z-40 hidden flex-col md:flex border-r border-line bg-surface/80 backdrop-blur-xl transition-[width] duration-200 ${
+        expandido ? "w-60" : "w-16"
+      }`}
     >
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {/* CABEÇALHO DA SIDEBAR */}
         <div
-          className={`flex h-12 items-center border-b border-line pb-3 ${expandido ? "justify-between" : "justify-center"
-            }`}
+          className={`flex h-12 items-center border-b border-line pb-3 ${
+            expandido ? "justify-between" : "justify-center"
+          }`}
         >
           {expandido && (
             <div className="flex items-center gap-2">
@@ -129,6 +149,7 @@ export default function Sidebar({
           </button>
         </div>
 
+        {/* FILTRO DE MEMBROS */}
         {expandido && setMembroSelecionado && (
           <div className="border-b border-line py-4">
             <label
@@ -154,14 +175,16 @@ export default function Sidebar({
           </div>
         )}
 
+        {/* BOTÃO NOVO LANÇAMENTO */}
         <div className="relative py-4">
           <button
             type="button"
             onClick={() => setMenuNovoAberto((aberto) => !aberto)}
             aria-expanded={menuNovoAberto}
             title={!expandido ? "Novo lançamento" : undefined}
-            className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:opacity-95 ${expandido ? "gap-2" : ""
-              }`}
+            className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:opacity-95 ${
+              expandido ? "gap-2" : ""
+            }`}
           >
             <span aria-hidden>＋</span>
             {expandido && <span>Novo lançamento</span>}
@@ -186,6 +209,7 @@ export default function Sidebar({
           )}
         </div>
 
+        {/* NAVEGAÇÃO */}
         <nav className="space-y-5">
           {SECOES.map((secao) => (
             <section key={secao.titulo} className="space-y-1">
@@ -213,6 +237,7 @@ export default function Sidebar({
             </section>
           ))}
 
+          {/* ANÁLISES */}
           <section className="space-y-1">
             {expandido && (
               <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">
@@ -223,7 +248,13 @@ export default function Sidebar({
               type="button"
               onClick={() => {
                 selecionarAba("inicio");
-                window.setTimeout(() => document.getElementById("graficos")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                window.setTimeout(
+                  () =>
+                    document
+                      .getElementById("graficos")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                  50
+                );
               }}
               className={classeItem(false)}
               title={!expandido ? "Gráficos" : undefined}
@@ -237,7 +268,13 @@ export default function Sidebar({
               type="button"
               onClick={() => {
                 selecionarAba("inicio");
-                window.setTimeout(() => document.getElementById("investimentos")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                window.setTimeout(
+                  () =>
+                    document
+                      .getElementById("investimentos")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                  50
+                );
               }}
               className={classeItem(false)}
               title={!expandido ? "Investimentos" : undefined}
@@ -249,41 +286,68 @@ export default function Sidebar({
             </button>
           </section>
 
+          {/* CADASTROS */}
           <section className="space-y-1">
             {expandido && (
               <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">
                 Cadastros
               </h2>
             )}
-            <button type="button" onClick={() => setCadastro("categoria")} className={classeItem(false)} title={!expandido ? "Categorias" : undefined}>
-              <span className="grid w-5 place-items-center text-base" aria-hidden>◈</span>
+            <button
+              type="button"
+              onClick={() => setCadastro("categoria")}
+              className={classeItem(false)}
+              title={!expandido ? "Categorias" : undefined}
+            >
+              <span className="grid w-5 place-items-center text-base" aria-hidden>
+                ◈
+              </span>
               {expandido && <span>Categorias</span>}
             </button>
-            <button type="button" onClick={() => setCadastro("pagamento")} className={classeItem(false)} title={!expandido ? "Formas de pagamento e cartões" : undefined}>
-              <span className="grid w-5 place-items-center text-base" aria-hidden>▭</span>
+            <button
+              type="button"
+              onClick={() => setCadastro("pagamento")}
+              className={classeItem(false)}
+              title={!expandido ? "Formas de pagamento e cartões" : undefined}
+            >
+              <span className="grid w-5 place-items-center text-base" aria-hidden>
+                ▭
+              </span>
               {expandido && <span>Pagamentos e cartões</span>}
             </button>
           </section>
         </nav>
       </div>
 
+      {/* RODAPÉ E PERFIL DO UTILIZADOR */}
       <footer className="space-y-1 border-t border-line p-3">
         <button
           type="button"
           onClick={() => router.push("/perfil")}
           title={!expandido ? perfil.nome : undefined}
-          className={`mb-1 flex w-full items-center rounded-xl p-2 text-left transition hover:bg-background ${expandido ? "gap-3" : "justify-center"}`}
+          className={`mb-1 flex w-full items-center rounded-xl p-2 text-left transition hover:bg-background ${
+            expandido ? "gap-3" : "justify-center"
+          }`}
         >
           <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-bold text-on-accent">
-            {perfil.avatar ? <img src={perfil.avatar} alt="" className="h-full w-full object-cover" /> : (perfil.nome[0] || "?").toUpperCase()}
+            {perfil.avatar ? (
+              <img src={perfil.avatar} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (perfil.nome[0] || "?").toUpperCase()
+            )}
           </span>
           {expandido && (
             <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-ink">{perfil.nome}</span>
-              <span className="block truncate text-[11px] text-muted">{perfil.email}</span>
+              <span className="block truncate text-sm font-semibold text-ink">
+                {perfil.nome}
+              </span>
+              <span className="block truncate text-[11px] text-muted">
+                {perfil.email}
+              </span>
             </span>
           )}
         </button>
+
         <button
           type="button"
           onClick={onAbrirGrupo}
@@ -311,8 +375,9 @@ export default function Sidebar({
         <button
           type="button"
           onClick={sair}
-          className={`flex min-h-10 w-full items-center rounded-lg px-3 text-sm text-muted transition hover:bg-red-500/10 hover:text-red-400 ${expandido ? "gap-3" : "justify-center"
-            }`}
+          className={`flex min-h-10 w-full items-center rounded-lg px-3 text-sm text-muted transition hover:bg-red-500/10 hover:text-red-400 ${
+            expandido ? "gap-3" : "justify-center"
+          }`}
           title={!expandido ? "Sair da conta" : undefined}
         >
           <span className="grid w-5 place-items-center" aria-hidden>
@@ -322,8 +387,13 @@ export default function Sidebar({
         </button>
       </footer>
 
+      {/* MODAL DE GERENCIAMENTO DE CADASTROS */}
       {cadastro && (
-        <GerenciarOpcoesModal tipo={cadastro} onClose={() => setCadastro(null)} onAtualizar={() => window.dispatchEvent(new Event("homecash:opcoes"))} />
+        <GerenciarOpcoesModal
+          tipo={cadastro}
+          onClose={() => setCadastro(null)}
+          onAtualizar={() => window.dispatchEvent(new Event("homecash:opcoes"))}
+        />
       )}
     </aside>
   );

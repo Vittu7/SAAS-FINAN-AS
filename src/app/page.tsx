@@ -39,9 +39,19 @@ export default function Home() {
   const [aba, setAba] = useState<AbaId>("inicio");
   const [menuMobile, setMenuMobile] = useState(false);
   const [filtrosMobile, setFiltrosMobile] = useState(false);
-  const irPara = (a: AbaId) => { setAba(a); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const irPara = (a: AbaId) => {
+    setAba(a);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const [filtros, setFiltros] = useState<FiltrosLancamentoState>({
-    busca: "", responsavel: "", categoria: "", pagamento: "", tipo: "todos", status: "todos",
+    busca: "",
+    responsavel: "",
+    categoria: "",
+    pagamento: "",
+    tipo: "todos",
+    status: "todos",
   });
 
   useEffect(() => {
@@ -80,12 +90,12 @@ export default function Home() {
       if (membroSelecionado === "EU") return item.responsavel_id === userId;
       return item.responsavel === membroSelecionado;
     },
-    [membroSelecionado, userId],
+    [membroSelecionado, userId]
   );
 
   const nomesOutrosMembros = useMemo(
     () => membros.filter((membro) => membro.id !== userId).map((membro) => membro.nome),
-    [membros, userId],
+    [membros, userId]
   );
 
   const estadoFiltrado = useMemo(
@@ -95,14 +105,17 @@ export default function Home() {
       cartao: estado.cartao.filter(passaFiltro),
       contas: estado.contas.filter(passaFiltro),
     }),
-    [estado, passaFiltro],
+    [estado, passaFiltro]
   );
 
-  const arraysMensais = useMemo(() => ({
-    extrato: estadoFiltrado.extrato.filter((item) => item.mes === mes),
-    cartao: estadoFiltrado.cartao.filter((item) => item.mes === mes),
-    contas: estadoFiltrado.contas.filter((item) => item.mes === mes),
-  }), [estadoFiltrado, mes]);
+  const arraysMensais = useMemo(
+    () => ({
+      extrato: estadoFiltrado.extrato.filter((item) => item.mes === mes),
+      cartao: estadoFiltrado.cartao.filter((item) => item.mes === mes),
+      contas: estadoFiltrado.contas.filter((item) => item.mes === mes),
+    }),
+    [estadoFiltrado, mes]
+  );
 
   const opcoesFiltro = useMemo(() => {
     const todos: any[] = [...arraysMensais.extrato, ...arraysMensais.cartao, ...arraysMensais.contas];
@@ -113,26 +126,41 @@ export default function Home() {
     };
   }, [arraysMensais]);
 
-  const correspondeFiltros = useCallback((item: any, origem: "extrato" | "cartao" | "contas") => {
-    if (aba === "inicio") return true;
-    if (aba === "extrato" && filtros.tipo !== "todos" && filtros.tipo !== origem) return false;
-    const descricao = String(item.descricao || item.nome || "").toLocaleLowerCase("pt-BR");
-    if (filtros.busca && !descricao.includes(filtros.busca.trim().toLocaleLowerCase("pt-BR"))) return false;
-    if (filtros.responsavel && item.responsavel !== filtros.responsavel) return false;
-    if (filtros.categoria && item.categoria !== filtros.categoria) return false;
-    const pagamento = item.pagamento || item.forma_pagamento || item.cartao || "";
-    if (filtros.pagamento && pagamento !== filtros.pagamento) return false;
-    if ((aba === "extrato" || aba === "contas") && origem === "contas" && filtros.status !== "todos") {
-      if (Boolean(item.pago) !== (filtros.status === "pago")) return false;
-    }
-    return true;
-  }, [aba, filtros]);
+  const correspondeFiltros = useCallback(
+    (item: any, origem: "extrato" | "cartao" | "contas") => {
+      if (aba === "inicio") return true;
+      if (aba === "extrato" && filtros.tipo !== "todos" && filtros.tipo !== origem) return false;
+      const descricao = String(item.descricao || item.nome || "").toLocaleLowerCase("pt-BR");
+      if (filtros.busca && !descricao.includes(filtros.busca.trim().toLocaleLowerCase("pt-BR"))) return false;
+      if (filtros.responsavel && item.responsavel !== filtros.responsavel) return false;
+      if (filtros.categoria && item.categoria !== filtros.categoria) return false;
+      const pagamento = item.pagamento || item.forma_pagamento || item.cartao || "";
+      if (filtros.pagamento && pagamento !== filtros.pagamento) return false;
+      if ((aba === "extrato" || aba === "contas") && origem === "contas" && filtros.status !== "todos") {
+        if (Boolean(item.pago) !== (filtros.status === "pago")) return false;
+      }
+      return true;
+    },
+    [aba, filtros]
+  );
 
-  const extrato = useMemo(() => arraysMensais.extrato.filter((item) => correspondeFiltros(item, "extrato")), [arraysMensais, correspondeFiltros]);
-  const cartao = useMemo(() => arraysMensais.cartao.filter((item) => correspondeFiltros(item, "cartao")), [arraysMensais, correspondeFiltros]);
-  const contas = useMemo(() => arraysMensais.contas.filter((item) => correspondeFiltros(item, "contas")), [arraysMensais, correspondeFiltros]);
+  const extrato = useMemo(
+    () => arraysMensais.extrato.filter((item) => correspondeFiltros(item, "extrato")),
+    [arraysMensais, correspondeFiltros]
+  );
+  const cartao = useMemo(
+    () => arraysMensais.cartao.filter((item) => correspondeFiltros(item, "cartao")),
+    [arraysMensais, correspondeFiltros]
+  );
+  const contas = useMemo(
+    () => arraysMensais.contas.filter((item) => correspondeFiltros(item, "contas")),
+    [arraysMensais, correspondeFiltros]
+  );
 
-  const estadoComFiltros = useMemo(() => ({ ...estadoFiltrado, extrato, cartao, contas }), [estadoFiltrado, extrato, cartao, contas]);
+  const estadoComFiltros = useMemo(
+    () => ({ ...estadoFiltrado, extrato, cartao, contas }),
+    [estadoFiltrado, extrato, cartao, contas]
+  );
 
   const resumo = useMemo(() => {
     const base = resumoDoMes(estadoComFiltros, mes);
@@ -168,12 +196,23 @@ export default function Home() {
       />
 
       <main
-        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${sidebarExpandida ? "md:pl-60" : "md:pl-16"
-          }`}
+        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${
+          sidebarExpandida ? "md:pl-60" : "md:pl-16"
+        }`}
       >
         <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
-            titulo={mostrarPainel ? "Olá 👋" : aba === "extrato" ? "Extrato" : aba === "lancamentos" ? "Lançamentos" : aba === "cartao" ? "Parcelas" : "Contas fixas"}
+            titulo={
+              mostrarPainel
+                ? "Olá 👋"
+                : aba === "extrato"
+                ? "Extrato"
+                : aba === "lancamentos"
+                ? "Lançamentos"
+                : aba === "cartao"
+                ? "Parcelas"
+                : "Contas fixas"
+            }
             mes={mes}
             setMes={setMes}
             membroSelecionado={membroSelecionado}
@@ -181,25 +220,26 @@ export default function Home() {
             listaMembros={nomesOutrosMembros}
             onAbrirMenu={() => setMenuMobile(true)}
           />
+
           <header className="card-glass hidden flex-wrap items-center justify-between gap-4 px-6 py-5 md:flex">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
                 {mostrarPainel
                   ? "Olá 👋 Visão geral"
                   : aba === "extrato"
-                    ? "Extrato"
-                    : aba === "lancamentos"
-                      ? "Lançamentos"
-                    : aba === "cartao"
-                      ? "Contas parceladas"
-                      : "Contas fixas"}
+                  ? "Extrato"
+                  : aba === "lancamentos"
+                  ? "Lançamentos"
+                  : aba === "cartao"
+                  ? "Contas parceladas"
+                  : "Contas fixas"}
               </h1>
               <p className="mt-1 text-sm text-muted">
                 {mostrarPainel
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
-                    ? "Todas as movimentações do mês em um só lugar."
-                    : "Cadastre, consulte e edite seus registros."}
+                  ? "Todas as movimentações do mês em um só lugar."
+                  : "Cadastre, consulte e edite seus registros."}
               </p>
             </div>
 
@@ -212,8 +252,13 @@ export default function Home() {
               >
                 <option value="EU">Somente eu</option>
                 <option value="TODOS">Todo o grupo</option>
-                {nomesOutrosMembros.map((m) => <option key={m} value={m}>{m}</option>)}
+                {nomesOutrosMembros.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
               </select>
+
               <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
                 <button
                   type="button"
@@ -224,10 +269,7 @@ export default function Home() {
                   ‹
                 </button>
 
-                <span
-                  className="min-w-32 px-2 text-center text-sm font-medium"
-                  aria-live="polite"
-                >
+                <span className="min-w-32 px-2 text-center text-sm font-medium" aria-live="polite">
                   {rotuloMes(mes)}
                 </span>
 
@@ -248,14 +290,22 @@ export default function Home() {
 
           {mostrarPainel && (
             <>
-              <MobileSaldo resumo={resumo} salario={estado.config.salario} onConfig={(salario) => loja.atualizarConfig({ salario })} />
-              <MobileAtalhos onAba={irPara} onGrupo={() => setModalGrupoAberto(true)} />
-              <div className="hidden md:block">
-              <SummaryCards
+              <MobileSaldo
                 resumo={resumo}
                 salario={estado.config.salario}
                 onConfig={(salario) => loja.atualizarConfig({ salario })}
               />
+              <MobileAtalhos
+                onAba={irPara}
+                onGrupo={() => setModalGrupoAberto(true)}
+                onCadastros={() => setMenuMobile(true)}
+              />
+              <div className="hidden md:block">
+                <SummaryCards
+                  resumo={resumo}
+                  salario={estado.config.salario}
+                  onConfig={(salario) => loja.atualizarConfig({ salario })}
+                />
               </div>
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 <InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} />
@@ -265,35 +315,34 @@ export default function Home() {
           )}
 
           {!mostrarPainel && (
-            <button type="button" onClick={() => setFiltrosMobile((f) => !f)}
-              className="flex h-10 w-full items-center justify-between rounded-full bg-surface px-4 text-sm font-medium ring-1 ring-line md:hidden">
-              <span>⚲ Buscar e filtrar</span><span className="text-muted">{filtrosMobile ? "▴" : "▾"}</span>
+            <button
+              type="button"
+              onClick={() => setFiltrosMobile((f) => !f)}
+              className="flex h-10 w-full items-center justify-between rounded-full bg-surface px-4 text-sm font-medium ring-1 ring-line md:hidden"
+            >
+              <span>⚲ Buscar e filtrar</span>
+              <span className="text-muted">{filtrosMobile ? "▴" : "▾"}</span>
             </button>
           )}
 
           {!mostrarPainel && (
             <div className={`${filtrosMobile ? "block" : "hidden"} md:block`}>
-            <FiltrosLancamentos
-              filtros={filtros}
-              setFiltros={setFiltros}
-              responsaveis={opcoesFiltro.responsaveis}
-              categorias={opcoesFiltro.categorias}
-              pagamentos={opcoesFiltro.pagamentos}
-              mostrarTipo={aba === "extrato"}
-              mostrarStatus={aba === "extrato" || aba === "contas"}
-            />
+              <FiltrosLancamentos
+                filtros={filtros}
+                setFiltros={setFiltros}
+                responsaveis={opcoesFiltro.responsaveis}
+                categorias={opcoesFiltro.categorias}
+                pagamentos={opcoesFiltro.pagamentos}
+                mostrarTipo={aba === "extrato"}
+                mostrarStatus={aba === "extrato" || aba === "contas"}
+              />
             </div>
           )}
 
           <div className="min-w-0">
             <section className="min-w-0">
               {aba === "extrato" && (
-                <ExtratoGeral
-                  mes={mes}
-                  extrato={extrato}
-                  cartao={cartao}
-                  contas={contas}
-                />
+                <ExtratoGeral mes={mes} extrato={extrato} cartao={cartao} contas={contas} />
               )}
 
               {aba === "lancamentos" && (
@@ -327,15 +376,16 @@ export default function Home() {
                 />
               )}
             </section>
-
           </div>
 
           <MobileBottomNav aba={aba} onAba={irPara} />
-          <MobileMenu aberto={menuMobile} onFechar={() => setMenuMobile(false)} onGrupo={() => setModalGrupoAberto(true)} />
+          <MobileMenu
+            aberto={menuMobile}
+            onFechar={() => setMenuMobile(false)}
+            onGrupo={() => setModalGrupoAberto(true)}
+          />
 
-          {modalGrupoAberto && (
-            <GrupoModal onClose={() => setModalGrupoAberto(false)} />
-          )}
+          {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}
         </div>
       </main>
     </div>

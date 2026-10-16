@@ -76,3 +76,11 @@ body { background-color: var(--bg); color: var(--ink); }
     animation: none !important;
   }
 }
+
+/* Celular: sem destaque azul ao tocar, rolagem suave e tabelas deslizáveis */
+@media (max-width: 767px) {
+  html { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
+  body { overscroll-behavior-y: none; }
+  table { font-size: 0.8125rem; }
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+}

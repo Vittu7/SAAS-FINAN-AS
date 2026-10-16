@@ -1,5 +1,6 @@
 "use client";
 
+import MobileLista from "@/components/mobile/MobileLista";
 import { brl } from "@/lib/finance";
 
 type Props = {
@@ -56,7 +57,20 @@ export default function ExtratoGeral({
     const total = linhas.reduce((soma, item) => soma + item.valor, 0);
 
     return (
-        <section className="rounded-2xl border border-line bg-surface p-4 shadow-lg md:p-6">
+        <section className="md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
+            <MobileLista
+                vazio="Não há movimentações neste mês."
+                itens={linhas.map((l) => ({
+                    id: l.id,
+                    titulo: l.descricao,
+                    subtitulo: `${l.tipo} · ${l.categoria !== "—" ? l.categoria : l.forma}`,
+                    valor: l.valor,
+                    icone: l.tipo === "Parcelado" ? "▤" : l.tipo === "Conta fixa" ? "▣" : "≡",
+                    tags: [l.forma, l.responsavel, l.categoria].filter((t) => t && t !== "—"),
+                    status: l.tipo === "Lançamento" ? undefined : { texto: l.status, tom: l.status === "Paga" ? "ok" as const : l.status === "Pendente" ? "alerta" as const : "neutro" as const },
+                }))}
+            />
+            <div className="hidden md:block">
             <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h2 className="text-lg font-semibold">Extrato do mês</h2>
@@ -105,6 +119,7 @@ export default function ExtratoGeral({
                     </table>
                 </div>
             )}
+            </div>
         </section>
     );
 }

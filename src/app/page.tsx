@@ -23,6 +23,7 @@ import {
   rotuloMes,
 } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
+import { MobileAtalhos, MobileBottomNav, MobileHeader, MobileMenu, MobileSaldo } from "@/components/mobile/MobileShell";
 
 type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas";
 
@@ -36,6 +37,9 @@ export default function Home() {
   const [sidebarExpandida, setSidebarExpandida] = useState(true);
   const [mes, setMes] = useState("");
   const [aba, setAba] = useState<AbaId>("inicio");
+  const [menuMobile, setMenuMobile] = useState(false);
+  const [filtrosMobile, setFiltrosMobile] = useState(false);
+  const irPara = (a: AbaId) => { setAba(a); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const [filtros, setFiltros] = useState<FiltrosLancamentoState>({
     busca: "", responsavel: "", categoria: "", pagamento: "", tipo: "todos", status: "todos",
   });
@@ -164,11 +168,20 @@ export default function Home() {
       />
 
       <main
-        className={`min-h-screen min-w-0 transition-[padding] duration-200 ${sidebarExpandida ? "pl-16 md:pl-60" : "pl-16"
+        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${sidebarExpandida ? "md:pl-60" : "md:pl-16"
           }`}
       >
-        <div className="mx-auto w-full max-w-6xl space-y-5 p-4 md:p-8">
-          <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
+          <MobileHeader
+            titulo={mostrarPainel ? "Olá 👋" : aba === "extrato" ? "Extrato" : aba === "lancamentos" ? "Lançamentos" : aba === "cartao" ? "Parcelas" : "Contas fixas"}
+            mes={mes}
+            setMes={setMes}
+            membroSelecionado={membroSelecionado}
+            setMembroSelecionado={setMembroSelecionado}
+            listaMembros={nomesOutrosMembros}
+            onAbrirMenu={() => setMenuMobile(true)}
+          />
+          <header className="hidden flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
                 {mostrarPainel
@@ -225,11 +238,15 @@ export default function Home() {
 
           {mostrarPainel && (
             <>
+              <MobileSaldo resumo={resumo} salario={estado.config.salario} onConfig={(salario) => loja.atualizarConfig({ salario })} />
+              <MobileAtalhos onAba={irPara} onGrupo={() => setModalGrupoAberto(true)} />
+              <div className="hidden md:block">
               <SummaryCards
                 resumo={resumo}
                 salario={estado.config.salario}
                 onConfig={(salario) => loja.atualizarConfig({ salario })}
               />
+              </div>
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 <InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} />
                 <ResponsavelPanel resumo={resumo} />
@@ -238,6 +255,14 @@ export default function Home() {
           )}
 
           {!mostrarPainel && (
+            <button type="button" onClick={() => setFiltrosMobile((f) => !f)}
+              className="flex h-10 w-full items-center justify-between rounded-full bg-surface px-4 text-sm font-medium ring-1 ring-line md:hidden">
+              <span>⚲ Buscar e filtrar</span><span className="text-muted">{filtrosMobile ? "▴" : "▾"}</span>
+            </button>
+          )}
+
+          {!mostrarPainel && (
+            <div className={`${filtrosMobile ? "block" : "hidden"} md:block`}>
             <FiltrosLancamentos
               filtros={filtros}
               setFiltros={setFiltros}
@@ -247,6 +272,7 @@ export default function Home() {
               mostrarTipo={aba === "extrato"}
               mostrarStatus={aba === "extrato" || aba === "contas"}
             />
+            </div>
           )}
 
           <div className="min-w-0">
@@ -293,6 +319,9 @@ export default function Home() {
             </section>
 
           </div>
+
+          <MobileBottomNav aba={aba} onAba={irPara} />
+          <MobileMenu aberto={menuMobile} onFechar={() => setMenuMobile(false)} onGrupo={() => setModalGrupoAberto(true)} />
 
           {modalGrupoAberto && (
             <GrupoModal onClose={() => setModalGrupoAberto(false)} />

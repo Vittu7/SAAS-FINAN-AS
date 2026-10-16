@@ -1,5 +1,6 @@
 "use client";
 
+import MobileLista from "@/components/mobile/MobileLista";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
@@ -168,7 +169,7 @@ export default function ContasFixasTable({
   };
 
   return (
-    <section className="space-y-4 rounded-2xl border border-line bg-surface p-4 md:p-6">
+    <section className="space-y-4 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-ink">Contas fixas</h2>
@@ -344,72 +345,21 @@ export default function ContasFixasTable({
         </form>
       </ModalFormulario>
 
-      <div className="space-y-3 md:hidden">
-        {itens.map((item) => (
-          <article key={item.id} className="rounded-xl border border-line bg-background/40 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="break-words font-medium text-ink">{item.nome}</h3>
-                <p className="mt-1 text-lg font-semibold tabular-nums">{brl(item.valor)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onTogglePago(item.id)}
-                aria-label={item.pago ? "Marcar como pendente" : "Marcar como paga"}
-                aria-pressed={Boolean(item.pago)}
-                className={`inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full border px-3 text-xs font-semibold ${item.pago
-                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                  }`}
-              >
-                <span aria-hidden="true">{item.pago ? "✓" : "!"}</span>
-                {item.pago ? "Pago" : "Pendente"}
-              </button>
-            </div>
-
-            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-xs text-muted">Forma de pagamento</dt>
-                <dd className="mt-1">
-                  {item.forma_pagamento ? <Selo nome={item.forma_pagamento} cor={corPagamento(item.forma_pagamento)} /> : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Categoria</dt>
-                <dd className="mt-1">
-                  {item.categoria ? <Selo nome={item.categoria} cor={corCategoria(item.categoria)} /> : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Vencimento</dt>
-                <dd className="mt-1">{item.vencimento ? `Dia ${item.vencimento}` : "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Responsável</dt>
-                <dd className="mt-1">
-                  <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
-                </dd>
-              </div>
-            </dl>
-
-            <div className="mt-3 flex justify-end gap-4 border-t border-line pt-2">
-              {onEdit && (
-                <button type="button" onClick={() => setEditando(item)} className="min-h-10 text-sm font-medium text-accent">
-                  Editar
-                </button>
-              )}
-              <button type="button" onClick={() => onRemove(item.id)} className="min-h-10 text-sm font-medium text-red-500">
-                Excluir
-              </button>
-            </div>
-          </article>
-        ))}
-        {itens.length === 0 && (
-          <div className="rounded-xl border border-dashed border-line px-4 py-10 text-center text-sm text-muted">
-            Nenhuma conta fixa cadastrada neste mês.
-          </div>
-        )}
-      </div>
+      <MobileLista
+        vazio="Nenhuma conta fixa cadastrada neste mês."
+        resumo={{
+          rotulo: "Falta pagar",
+          valor: itens.filter((i: any) => !i.pago).reduce((t: number, i: any) => t + (Number(i.valor) || 0), 0),
+          extra: `${itens.filter((i: any) => i.pago).length} de ${itens.length} pagas`,
+        }}
+        itens={[...itens].sort((x: any, y: any) => Number(x.pago) - Number(y.pago)).map((item: any) => ({
+          id: item.id, titulo: item.nome || "Sem nome", subtitulo: [item.categoria, item.formaPagamento || item.forma_pagamento].filter(Boolean).join(" · "),
+          valor: item.valor, icone: item.pago ? "✓" : "▣", tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
+          status: item.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
+          onAlternar: () => onTogglePago(item.id), rotuloAlternar: item.pago ? "Desmarcar" : "Marcar como paga",
+          onEditar: () => setEditando(item), onRemover: () => onRemove(item.id),
+        }))}
+      />
 
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[760px] text-left text-sm">

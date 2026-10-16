@@ -1,5 +1,6 @@
 "use client";
 
+import MobileLista from "@/components/mobile/MobileLista";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, parseValor } from "@/lib/finance";
@@ -40,6 +41,7 @@ export default function ExtratoTable({
     corCategoria,
   } = useOpcoes();
   const [modalOpcaoAberto, setModalOpcaoAberto] = useState<"pagamento" | "categoria" | null>(null);
+  const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
 
   // Seleciona a primeira forma de pagamento quando a lista chega
@@ -122,8 +124,12 @@ export default function ExtratoTable({
   };
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
-      <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
+    <div className="space-y-4 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
+      <button type="button" onClick={() => setFormAberto((a) => !a)}
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-on-accent active:scale-[0.98] md:hidden">
+        {formAberto ? "Fechar formulário" : "＋ Adicionar novo"}
+      </button>
+      <form onSubmit={handleAdicionar} className={`${formAberto ? "grid" : "hidden"} rounded-2xl bg-surface p-4 ring-1 ring-line md:grid md:rounded-none md:bg-transparent md:p-0 md:ring-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end`}>
         {/* Forma de Pagamento */}
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
@@ -237,8 +243,14 @@ export default function ExtratoTable({
         </div>
       </form>
 
+      <MobileLista vazio="Nenhum lançamento neste mês." itens={itens.map((item: any) => ({
+        id: item.id, titulo: item.descricao || "Sem descrição", subtitulo: [item.categoria, item.pagamento].filter(Boolean).join(" · "),
+        valor: item.valor, icone: "≡", tags: [item.pagamento, item.categoria, item.responsavel],
+        onEditar: onEdit ? () => setEditando(item) : undefined, onRemover: () => onRemove(item.id),
+      }))} />
+
       {/* Tabela */}
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-muted">

@@ -119,7 +119,7 @@ export default function Home() {
       <main
         className={`min-w-0 flex-1 transition-all duration-300 ${sidebarExpandida ? "md:pl-64" : "md:pl-20"}`}
       >
-        <div className="mx-auto w-full max-w-[1400px] space-y-4 p-3 pb-28 sm:space-y-6 sm:p-4 sm:pb-24 md:p-8">
+        <div className="mx-auto w-full max-w-[1400px] space-y-4 p-3 pb-32 sm:space-y-6 sm:p-4 sm:pb-24 md:p-8">
           <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div>
               <h1 className="text-xl font-bold sm:text-2xl">Painel de controle</h1>
@@ -213,6 +213,20 @@ export default function Home() {
               <ResponsavelPanel resumo={resumo} />
             </div>
           </div>
+
+          {/* Ação principal no celular */}
+          <button
+            type="button"
+            aria-label="Novo lançamento"
+            title="Novo lançamento"
+            onClick={() => {
+              const alvo = aba === "extrato" ? "form-lancamento" : aba === "cartao" ? "form-parcelas" : "form-contas-fixas";
+              document.getElementById(alvo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="fixed bottom-20 right-4 z-40 grid size-14 place-items-center rounded-full bg-accent text-3xl font-light text-on-accent shadow-lg shadow-black/15 transition-transform active:scale-95 md:hidden"
+          >
+            +
+          </button>
 
           {/* Modal de Gerenciamento do Grupo */}
           {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}

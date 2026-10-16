@@ -45,3 +45,28 @@
     animation: none !important;
   }
 }
+
+/* Ajustes de usabilidade para telas pequenas */
+@media (max-width: 767px) {
+  html {
+    scroll-padding-top: 1rem;
+    scroll-padding-bottom: 6rem;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    touch-action: manipulation;
+  }
+
+  /* Tabelas podem ter muitas colunas; permitem rolagem sem estourar a página. */
+  .overflow-x-auto {
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+}

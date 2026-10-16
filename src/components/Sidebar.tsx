@@ -232,12 +232,11 @@ export default function Sidebar({
 
     <nav
       aria-label="Navegação principal"
-      className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-line bg-surface/95 px-1 pt-2 pb-[max(env(safe-area-inset-bottom),0.35rem)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-line bg-surface/95 px-1 pt-2 pb-[max(env(safe-area-inset-bottom),0.35rem)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
     >
       {[
         { id: "geral", rotulo: "Início", icone: "📊" },
         { id: "extrato", rotulo: "Extrato", icone: "📄" },
-        { id: "novo", rotulo: "Novo", icone: "＋" },
         { id: "cartao", rotulo: "Parcelas", icone: "💳" },
         { id: "contas", rotulo: "Contas", icone: "📌" },
       ].map((item) => {

@@ -145,61 +145,108 @@ export default function CartaoTable({
 
   return (
     <div className="space-y-6 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
-      {/* PAINEL RESUMO DE LIMITES */}
+      {/* CARROSSEL DE CARTÕES */}
       {cartoesComLimite.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {cartoesComLimite.map((c: any) => {
-            const limite = c.limite || 0;
-            const porcentagemUso = limite > 0 ? Math.min(100, (c.totalUtilizado / limite) * 100) : 0;
+        <section aria-label="Resumo dos cartões">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                Cartões
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-ink">
+                Faturas e limites
+              </h2>
+            </div>
 
-            return (
-              <div
-                key={c.id || c.nome}
-                className="p-4 rounded-2xl border border-line bg-background/50 shadow-sm space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Selo nome={c.nome} cor={corPagamento(c.nome)} />
-                  </div>
-                  <span className="text-xs font-semibold text-muted">
-                    {porcentagemUso.toFixed(0)}% usado
-                  </span>
-                </div>
+            <span className="text-xs text-muted">
+              Deslize para ver mais →
+            </span>
+          </div>
 
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted">Fatura Atual:</span>
-                    <span className="font-bold text-red-400">{brl(c.totalUtilizado)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Limite Total:</span>
-                    <span className="font-medium text-ink">{brl(limite)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Disponível:</span>
-                    <span className="font-medium text-accent">{brl(c.disponivel)}</span>
-                  </div>
-                </div>
+          <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 [-webkit-overflow-scrolling:touch]">
+            {cartoesComLimite.map((cartaoItem: any) => {
+              const limite = Number(cartaoItem.limite || 0);
+              const faturaAtual = Number(cartaoItem.totalUtilizado || 0);
+              const limiteDisponivel = Math.max(
+                0,
+                Number(cartaoItem.disponivel || 0),
+              );
 
-                <div className="w-full bg-line rounded-full h-2 overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-300 ${
-                      porcentagemUso > 90
-                        ? "bg-red-500"
-                        : porcentagemUso > 70
-                        ? "bg-amber-500"
-                        : "bg-accent"
-                    }`}
-                    style={{ width: `${porcentagemUso}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              const porcentagemUso =
+                limite > 0
+                  ? Math.min(100, (faturaAtual / limite) * 100)
+                  : 0;
+
+              const corCartao =
+                cartaoItem.cor || corPagamento(cartaoItem.nome);
+
+              return (
+                <article
+                  key={cartaoItem.id || cartaoItem.nome}
+                  className="min-w-[17rem] snap-start overflow-hidden rounded-3xl p-5 text-white shadow-lg sm:min-w-[19rem]"
+                  style={{
+                    background: `linear-gradient(135deg, ${corCartao}, #0f172a)`,
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold">
+                        {cartaoItem.nome}
+                      </p>
+                      <p className="mt-1 text-xs text-white/70">
+                        Cartão de crédito
+                      </p>
+                    </div>
+
+                    <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold">
+                      {porcentagemUso.toFixed(0)}% usado
+                    </span>
+                  </div>
+
+                  <div className="mt-7">
+                    <p className="text-xs font-medium text-white/70">
+                      Fatura atual
+                    </p>
+                    <p className="mt-1 text-3xl font-bold tracking-tight">
+                      {brl(faturaAtual)}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-white/70">Limite total</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {brl(limite)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-white/70">Disponível</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {brl(limiteDisponivel)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="h-2 overflow-hidden rounded-full bg-white/20">
+                      <div
+                        className="h-full rounded-full bg-white transition-[width] duration-300"
+                        style={{ width: `${porcentagemUso}%` }}
+                      />
+                    </div>
+
+                    <div className="mt-2 flex justify-between text-xs text-white/75">
+                      <span>Uso do limite</span>
+                      <span>{porcentagemUso.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
       )}
-
-      {/* BOTÃO MOBILE DE ADICIONAR */}
       <button
         type="button"
         onClick={() => setFormAberto((a) => !a)}
@@ -211,9 +258,8 @@ export default function CartaoTable({
       {/* FORMULÁRIO */}
       <form
         onSubmit={handleAdicionar}
-        className={`${
-          formAberto ? "grid" : "hidden"
-        } rounded-2xl bg-surface p-4 ring-1 ring-line md:grid md:rounded-none md:bg-transparent md:p-0 md:ring-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end`}
+        className={`${formAberto ? "grid" : "hidden"
+          } rounded-2xl bg-surface p-4 ring-1 ring-line md:grid md:rounded-none md:bg-transparent md:p-0 md:ring-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end`}
       >
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">

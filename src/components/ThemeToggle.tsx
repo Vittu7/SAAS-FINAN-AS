@@ -132,78 +132,85 @@ export default function ThemeToggle() {
   };
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setAberto((valor) => !valor)}
-        aria-expanded={aberto}
-        aria-haspopup="dialog"
-        className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-sm transition hover:border-accent/50 hover:bg-background"
-      >
+    <div
+      className="relative z-[100] pointer-events-auto"
+      onPointerDown={(event) => event.stopPropagation()}
+    >      <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        setAberto((valor) => !valor);
+      }} aria-expanded={aberto}
+      aria-haspopup="dialog"
+      className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-sm transition hover:border-accent/50 hover:bg-background"
+    >
         <span aria-hidden="true">◐</span>
         <span className="hidden sm:inline">Aparência</span>
       </button>
 
-      {aberto && (
-        <div role="dialog" aria-label="Personalizar aparência" className="absolute right-0 top-12 z-50 max-h-[80vh] overflow-y-auto w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-4 shadow-2xl">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-semibold text-ink">Aparência</h2>
-              <p className="mt-0.5 text-xs text-muted">Personalize o visual do HomeCash.</p>
-            </div>
-            <button type="button" onClick={() => setAberto(false)} aria-label="Fechar aparência" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-background">×</button>
+      {aberto && (<div
+        role="dialog"
+        aria-label="Personalizar aparência"
+        onClick={(event) => event.stopPropagation()}
+        className="absolute right-0 top-12 z-100 max-h-[80vh] overflow-y-auto w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-4 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-ink">Aparência</h2>
+            <p className="mt-0.5 text-xs text-muted">Personalize o visual do HomeCash.</p>
           </div>
+          <button type="button" onClick={() => setAberto(false)} aria-label="Fechar aparência" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-background">×</button>
+        </div>
 
-          <fieldset>
-            <legend className="mb-2 text-xs font-semibold text-muted">Tema</legend>
-            <div className="grid grid-cols-3 gap-2">
-              {(["light", "dark", "system"] as Tema[]).map((opcao) => {
-                const nomes = { light: "Claro", dark: "Escuro", system: "Sistema" };
-                return (
-                  <button key={opcao} type="button" onClick={() => mudarTema(opcao)} aria-pressed={tema === opcao} className={`rounded-lg border px-2 py-2 text-xs transition ${tema === opcao ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
-                    {nomes[opcao]}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
+        <fieldset>
+          <legend className="mb-2 text-xs font-semibold text-muted">Tema</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {(["light", "dark", "system"] as Tema[]).map((opcao) => {
+              const nomes = { light: "Claro", dark: "Escuro", system: "Sistema" };
+              return (
+                <button key={opcao} type="button" onClick={() => mudarTema(opcao)} aria-pressed={tema === opcao} className={`rounded-lg border px-2 py-2 text-xs transition ${tema === opcao ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+                  {nomes[opcao]}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
-          <fieldset className="mt-4">
-            <legend className="mb-2 text-xs font-semibold text-muted">Cor de destaque</legend>
-            <div className="grid grid-cols-2 gap-2">
-              {DESTAQUES.map((opcao) => (
-                <button key={opcao.id} type="button" onClick={() => mudarDestaque(opcao.id)} aria-pressed={destaque === opcao.id} className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs text-ink transition ${destaque === opcao.id ? "border-accent bg-background" : "border-line hover:bg-background"}`}>
-                  <span className="size-3 rounded-full" style={{ backgroundColor: opcao.cor }} />
+        <fieldset className="mt-4">
+          <legend className="mb-2 text-xs font-semibold text-muted">Cor de destaque</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {DESTAQUES.map((opcao) => (
+              <button key={opcao.id} type="button" onClick={() => mudarDestaque(opcao.id)} aria-pressed={destaque === opcao.id} className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs text-ink transition ${destaque === opcao.id ? "border-accent bg-background" : "border-line hover:bg-background"}`}>
+                <span className="size-3 rounded-full" style={{ backgroundColor: opcao.cor }} />
+                {opcao.nome}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="mt-4">
+          <legend className="mb-2 text-xs font-semibold text-muted">Fundo</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {FUNDOS.map((opcao) =>
+              opcao.id === "image" ? (
+                <label key={opcao.id} className={`flex cursor-pointer items-center justify-center rounded-lg border px-2 py-2 text-xs transition ${fundo === "image" ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+                  <input type="file" accept="image/*" className="sr-only" onChange={(e) => escolherImagem(e.target.files?.[0])} />
+                  {opcao.nome}
+                </label>
+              ) : (
+                <button key={opcao.id} type="button" onClick={() => mudarFundo(opcao.id)} aria-pressed={fundo === opcao.id} className={`rounded-lg border px-2 py-2 text-xs transition ${fundo === opcao.id ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
                   {opcao.nome}
                 </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className="mt-4">
-            <legend className="mb-2 text-xs font-semibold text-muted">Fundo</legend>
-            <div className="grid grid-cols-2 gap-2">
-              {FUNDOS.map((opcao) =>
-                opcao.id === "image" ? (
-                  <label key={opcao.id} className={`flex cursor-pointer items-center justify-center rounded-lg border px-2 py-2 text-xs transition ${fundo === "image" ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
-                    <input type="file" accept="image/*" className="sr-only" onChange={(e) => escolherImagem(e.target.files?.[0])} />
-                    {opcao.nome}
-                  </label>
-                ) : (
-                  <button key={opcao.id} type="button" onClick={() => mudarFundo(opcao.id)} aria-pressed={fundo === opcao.id} className={`rounded-lg border px-2 py-2 text-xs transition ${fundo === opcao.id ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
-                    {opcao.nome}
-                  </button>
-                ),
-              )}
-            </div>
-            <p className="mt-1.5 text-[11px] text-muted">Aplicado com baixa opacidade para não atrapalhar a leitura.</p>
-          </fieldset>
-
-          <div className="mt-4 rounded-xl border border-line bg-background p-3">
-            <p className="text-[11px] font-medium text-muted">Prévia da cor</p>
-            <button type="button" className="mt-2 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent">Botão principal</button>
+              ),
+            )}
           </div>
+          <p className="mt-1.5 text-[11px] text-muted">Aplicado com baixa opacidade para não atrapalhar a leitura.</p>
+        </fieldset>
+
+        <div className="mt-4 rounded-xl border border-line bg-background p-3">
+          <p className="text-[11px] font-medium text-muted">Prévia da cor</p>
+          <button type="button" className="mt-2 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent">Botão principal</button>
         </div>
+      </div>
       )}
     </div>
   );

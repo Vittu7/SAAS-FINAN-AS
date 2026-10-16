@@ -11,9 +11,18 @@ export interface Opcao {
   limite?: number | null;
 }
 
+type DadosPagamento = {
+  isCartaoCredito?: boolean;
+  limiteTotal?: number;
+  cor?: string;
+};
+
 export const COR_PADRAO = "#64748B";
 
-// Carrega e gere as listas compartilhadas do grupo (para Extrato, Contas Parceladas e Contas Fixas)
+function normalizarNome(nome: string) {
+  return nome.trim().replace(/\s+/g, " ");
+}
+
 export function useOpcoes() {
   const [pagamento, setPagamento] = useState<Opcao[]>([]);
   const [categoria, setCategoria] = useState<Opcao[]>([]);
@@ -22,181 +31,279 @@ export function useOpcoes() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
     if (!user) return;
 
-    const { data: perfil } = await supabase
+    const { data: perfil, error: erroPerfil } = await supabase
       .from("perfis")
       .select("grupo_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!perfil?.grupo_id) return;
+    if (erroPerfil) {
+      console.error("Erro ao carregar perfil:", erroPerfil);
+      return;
+    }
+
+    if (!perfil?.grupo_id) {
+      setPagamento([]);
+      setCategoria([]);
+      return;
+    }
+
+    /*
+     * Esta função foi criada na migration SQL.
+     * É idempotente: pode ser chamada quantas vezes quiser sem duplicar
+     * Débito, Pix e Dinheiro.
+     */
+    const { error: erroPadroes } = await supabase.rpc(
+      "criar_formas_pagamento_padrao",
+      { p_grupo_id: perfil.grupo_id },
+    );
+
+    if (erroPadroes) {
+      console.error(
+        "Erro ao garantir formas de pagamento padrão:",
+        erroPadroes,
+      );
+    }
 
     const [resPagamento, resCategoria] = await Promise.all([
-      supabase.from("opcoes_pagamento").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
-      supabase.from("opcoes_categoria").select("*").eq("grupo_id", perfil.grupo_id).order("nome"),
+      supabase
+        .from("opcoes_pagamento")
+        .select("*")
+        .eq("grupo_id", perfil.grupo_id)
+        .order("nome"),
+
+      supabase
+        .from("opcoes_categoria")
+        .select("*")
+        .eq("grupo_id", perfil.grupo_id)
+        .order("nome"),
     ]);
 
-    if (resPagamento.error) console.error("Erro ao carregar formas de pagamento:", resPagamento.error);
-    if (resCategoria.error) console.error("Erro ao carregar categorias:", resCategoria.error);
+    if (resPagamento.error) {
+      console.error(
+        "Erro ao carregar formas de pagamento:",
+        resPagamento.error,
+      );
+    } else {
+      setPagamento((resPagamento.data || []) as Opcao[]);
+    }
 
-    if (resPagamento.data) setPagamento(resPagamento.data);
-    if (resCategoria.data) setCategoria(resCategoria.data);
+    if (resCategoria.error) {
+      console.error("Erro ao carregar categorias:", resCategoria.error);
+    } else {
+      setCategoria((resCategoria.data || []) as Opcao[]);
+    }
   }, []);
 
   useEffect(() => {
-    recarregar();
-    // Recarrega quando categorias/formas de pagamento mudam pelo menu lateral
+    void recarregar();
+
     window.addEventListener("homecash:opcoes", recarregar);
-    return () => window.removeEventListener("homecash:opcoes", recarregar);
+
+    return () => {
+      window.removeEventListener("homecash:opcoes", recarregar);
+    };
   }, [recarregar]);
 
-  // ADICIONAR FORMA DE PAGAMENTO OU CARTÃO DE CRÉDITO
+  const obterGrupoAtual = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("Faça login antes de alterar os cadastros.");
+    }
+
+    const { data: perfil, error } = await supabase
+      .from("perfis")
+      .select("grupo_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!perfil?.grupo_id) {
+      throw new Error("Crie ou entre em um grupo antes de cadastrar opções.");
+    }
+
+    return perfil.grupo_id as string;
+  };
+
+  const notificarAtualizacao = async () => {
+    await recarregar();
+    window.dispatchEvent(new Event("homecash:opcoes"));
+  };
+
   const adicionarPagamento = async (
-    nome: string,
-    opcoesExtra?: { isCartaoCredito?: boolean; limiteTotal?: number }
+    nomeOriginal: string,
+    dados: DadosPagamento = {},
   ) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    const nome = normalizarNome(nomeOriginal);
 
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("grupo_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    if (!nome) {
+      throw new Error("Informe o nome da forma de pagamento.");
+    }
 
-    if (!perfil?.grupo_id) return;
+    const grupoId = await obterGrupoAtual();
 
-    const { error } = await supabase.from("opcoes_pagamento").insert([
-      {
-        nome,
-        grupo_id: perfil.grupo_id,
-        cor: COR_PADRAO,
-        eh_cartao: opcoesExtra?.isCartaoCredito ?? false,
-        limite: opcoesExtra?.limiteTotal ?? 0,
-      },
-    ]);
+    const { error } = await supabase.from("opcoes_pagamento").insert({
+      grupo_id: grupoId,
+      nome,
+      cor: dados.cor || COR_PADRAO,
+      eh_cartao: Boolean(dados.isCartaoCredito),
+      limite: dados.isCartaoCredito
+        ? Math.max(0, Number(dados.limiteTotal || 0))
+        : 0,
+    });
 
     if (error) {
-      console.error("Erro ao adicionar forma de pagamento:", error);
-    } else {
-      await recarregar();
-      window.dispatchEvent(new Event("homecash:opcoes"));
+      if (error.code === "23505") {
+        throw new Error("Já existe uma forma de pagamento com esse nome.");
+      }
+
+      throw error;
     }
+
+    await notificarAtualizacao();
   };
 
-  // REMOVER FORMA DE PAGAMENTO / CARTÃO
-  const removerPagamento = async (idOrNome: string) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+  const atualizarPagamento = async (
+    id: string,
+    patch: Partial<Pick<Opcao, "nome" | "cor" | "eh_cartao" | "limite">>,
+  ) => {
+    const dados: Record<string, unknown> = { ...patch };
 
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("grupo_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    if (typeof dados.nome === "string") {
+      dados.nome = normalizarNome(dados.nome);
 
-    if (!perfil?.grupo_id) return;
-
-    let query = supabase.from("opcoes_pagamento").delete().eq("grupo_id", perfil.grupo_id);
-
-    // Identifica se é um UUID ou o nome do registo
-    if (idOrNome.includes("-") || !isNaN(Number(idOrNome))) {
-      query = query.eq("id", idOrNome);
-    } else {
-      query = query.eq("nome", idOrNome);
+      if (!dados.nome) {
+        throw new Error("O nome não pode ficar vazio.");
+      }
     }
 
-    const { error } = await query;
+    if (dados.limite !== undefined) {
+      dados.limite = Math.max(0, Number(dados.limite || 0));
+    }
+
+    const { error } = await supabase
+      .from("opcoes_pagamento")
+      .update(dados)
+      .eq("id", id);
+
     if (error) {
-      console.error("Erro ao remover forma de pagamento:", error);
-    } else {
-      await recarregar();
-      window.dispatchEvent(new Event("homecash:opcoes"));
+      if (error.code === "23505") {
+        throw new Error("Já existe uma forma de pagamento com esse nome.");
+      }
+
+      throw error;
     }
+
+    await notificarAtualizacao();
   };
 
-  // ADICIONAR CATEGORIA
-  const adicionarCategoria = async (nome: string) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+  const removerPagamento = async (id: string) => {
+    const { error } = await supabase
+      .from("opcoes_pagamento")
+      .delete()
+      .eq("id", id);
 
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("grupo_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    if (error) throw error;
 
-    if (!perfil?.grupo_id) return;
-
-    const { error } = await supabase.from("opcoes_categoria").insert([
-      {
-        nome,
-        grupo_id: perfil.grupo_id,
-        cor: COR_PADRAO,
-      },
-    ]);
-
-    if (error) {
-      console.error("Erro ao adicionar categoria:", error);
-    } else {
-      await recarregar();
-      window.dispatchEvent(new Event("homecash:opcoes"));
-    }
+    await notificarAtualizacao();
   };
 
-  // REMOVER CATEGORIA
-  const removerCategoria = async (idOrNome: string) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+  const adicionarCategoria = async (
+    nomeOriginal: string,
+    cor = COR_PADRAO,
+  ) => {
+    const nome = normalizarNome(nomeOriginal);
 
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("grupo_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!perfil?.grupo_id) return;
-
-    let query = supabase.from("opcoes_categoria").delete().eq("grupo_id", perfil.grupo_id);
-
-    if (idOrNome.includes("-") || !isNaN(Number(idOrNome))) {
-      query = query.eq("id", idOrNome);
-    } else {
-      query = query.eq("nome", idOrNome);
+    if (!nome) {
+      throw new Error("Informe o nome da categoria.");
     }
 
-    const { error } = await query;
+    const grupoId = await obterGrupoAtual();
+
+    const { error } = await supabase.from("opcoes_categoria").insert({
+      grupo_id: grupoId,
+      nome,
+      cor,
+    });
+
     if (error) {
-      console.error("Erro ao remover categoria:", error);
-    } else {
-      await recarregar();
-      window.dispatchEvent(new Event("homecash:opcoes"));
+      if (error.code === "23505") {
+        throw new Error("Já existe uma categoria com esse nome.");
+      }
+
+      throw error;
     }
+
+    await notificarAtualizacao();
+  };
+
+  const atualizarCategoria = async (
+    id: string,
+    patch: Partial<Pick<Opcao, "nome" | "cor">>,
+  ) => {
+    const dados: Record<string, unknown> = { ...patch };
+
+    if (typeof dados.nome === "string") {
+      dados.nome = normalizarNome(dados.nome);
+
+      if (!dados.nome) {
+        throw new Error("O nome não pode ficar vazio.");
+      }
+    }
+
+    const { error } = await supabase
+      .from("opcoes_categoria")
+      .update(dados)
+      .eq("id", id);
+
+    if (error) {
+      if (error.code === "23505") {
+        throw new Error("Já existe uma categoria com esse nome.");
+      }
+
+      throw error;
+    }
+
+    await notificarAtualizacao();
+  };
+
+  const removerCategoria = async (id: string) => {
+    const { error } = await supabase
+      .from("opcoes_categoria")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    await notificarAtualizacao();
   };
 
   const corPagamento = (nome?: string | null) =>
-    pagamento.find((o) => o.nome === nome)?.cor ?? COR_PADRAO;
+    pagamento.find((item) => item.nome === nome)?.cor ?? COR_PADRAO;
 
   const corCategoria = (nome?: string | null) =>
-    categoria.find((o) => o.nome === nome)?.cor ?? COR_PADRAO;
+    categoria.find((item) => item.nome === nome)?.cor ?? COR_PADRAO;
 
   return {
     pagamento,
     categoria,
     recarregar,
+
     adicionarPagamento,
+    atualizarPagamento,
     removerPagamento,
+
     adicionarCategoria,
+    atualizarCategoria,
     removerCategoria,
+
     corPagamento,
     corCategoria,
   };

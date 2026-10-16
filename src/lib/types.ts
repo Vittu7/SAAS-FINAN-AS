@@ -3,32 +3,8 @@ export type Responsavel = string;
 export const RESPONSAVEIS: string[] = ["TODOS", "EU"];
 
 export const COR_RESPONSAVEL: Record<string, string> = {
-  "Geral": "#3b82f6",
+  Geral: "#3b82f6",
 };
-
-export interface Categoria {
-  id: string;
-  nome: string;
-}
-
-export interface FormaPagamento {
-  id: string;
-  nome: string;
-  isCartaoCredito?: boolean;
-  limiteTotal?: number;
-}
-
-export interface Lancamento {
-  id: string;
-  descricao: string;
-  valor: number;
-  tipo: 'receita' | 'despesa';
-  categoria: string;
-  formaPagamento: string;
-  responsavel: string;
-  data: string;
-  pago?: boolean;
-}
 
 export type Extrato = {
   id: string;
@@ -44,7 +20,6 @@ export type Cartao = {
   id: string;
   mes: string;
   nome: string;
-  /** Nome/descrição exibido no formulário de cartão parcelado. No banco, é salvo na coluna nome. */
   descricao?: string;
   cartao: string;
   parcelaAtual: number;
@@ -62,7 +37,6 @@ export type ContaFixa = {
   valor: number;
   responsavel: Responsavel;
   formaPagamento: string;
-  /** Categoria da conta fixa, armazenada na coluna categoria do Supabase. */
   categoria?: string;
 };
 

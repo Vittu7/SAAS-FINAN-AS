@@ -123,7 +123,7 @@ export default function ExtratoTable({
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 md:p-6 shadow-lg space-y-4">
-      <form onSubmit={handleAdicionar} className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
+      <form id="form-lancamento" onSubmit={handleAdicionar} className="grid scroll-mt-4 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end">
         {/* Forma de Pagamento */}
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-1">
@@ -237,8 +237,38 @@ export default function ExtratoTable({
         </div>
       </form>
 
-      {/* Tabela */}
-      <div className="overflow-x-auto">
+      {/* Lista compacta para celular */}
+      <div className="space-y-3 md:hidden">
+        {itens.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center">
+            <p className="text-sm font-medium text-ink">Nenhum lançamento neste mês</p>
+            <p className="mt-1 text-xs text-muted">Use o formulário acima para adicionar o primeiro.</p>
+          </div>
+        ) : itens.map((item) => (
+          <article key={item.id} className="rounded-xl border border-line bg-background/60 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words text-sm font-semibold text-ink">{item.descricao}</p>
+                <p className="mt-1 text-xs text-muted">{item.responsavel || "Membro"}</p>
+              </div>
+              <p className="shrink-0 text-right text-base font-bold tabular-nums text-ink">{brl(item.valor)}</p>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.pagamento && <Selo nome={item.pagamento} cor={corPagamento(item.pagamento)} />}
+              {item.categoria && <Selo nome={item.categoria} cor={corCategoria(item.categoria)} />}
+            </div>
+            <div className="mt-3 flex justify-end gap-4 border-t border-line/60 pt-2">
+              {onEdit && (
+                <button type="button" onClick={() => setEditando(item)} className="text-xs font-medium text-accent">Editar</button>
+              )}
+              <button type="button" onClick={() => onRemove(item.id)} className="text-xs font-medium text-red-400">Remover</button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {/* Tabela completa em telas maiores */}
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-muted">

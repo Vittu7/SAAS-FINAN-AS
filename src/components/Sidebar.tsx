@@ -95,9 +95,9 @@ export default function Sidebar({
     } ${ativo ? "bg-accent text-on-accent shadow-sm" : "text-muted hover:bg-background hover:text-ink"}`;
 
   return (
+    <>
     <aside
-      className={`fixed left-0 top-0 z-40 flex h-screen flex-col justify-between border-r border-line bg-surface transition-all duration-300 ${expandido ? "w-64" : "w-20"
-        }`}
+      className={`fixed left-0 top-0 z-40 hidden h-screen flex-col justify-between border-r border-line bg-surface transition-all duration-300 md:flex ${expandido ? "w-64" : "w-20"}`}
     >
       <div className="min-h-0 overflow-y-auto overflow-x-hidden">
         {/* Topo: expandido mostra logo + botão de recolher; recolhido mostra só a seta para abrir */}
@@ -229,5 +229,48 @@ export default function Sidebar({
         </button>
       </div>
     </aside>
+
+    <nav
+      aria-label="Navegação principal"
+      className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-line bg-surface/95 px-1 pt-2 pb-[max(env(safe-area-inset-bottom),0.35rem)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
+    >
+      {[
+        { id: "geral", rotulo: "Início", icone: "📊" },
+        { id: "extrato", rotulo: "Extrato", icone: "📄" },
+        { id: "cartao", rotulo: "Parcelas", icone: "💳" },
+        { id: "contas", rotulo: "Contas", icone: "📌" },
+      ].map((item) => {
+        const ativo = (item.id === "geral" && !abaAtiva) || abaAtiva === item.id;
+        const destaque = item.id === "novo";
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              if (destaque) {
+                onSelecionarAba?.("extrato");
+                if (pathname !== "/") router.push("/");
+                window.setTimeout(() => {
+                  document.getElementById("form-lancamento")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 100);
+              } else if (item.id === "geral") {
+                router.push("/");
+              } else {
+                onSelecionarAba?.(item.id);
+                if (pathname !== "/") router.push("/");
+              }
+            }}
+            aria-current={ativo ? "page" : undefined}
+            className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium"
+          >
+            <span className={`grid size-7 place-items-center rounded-xl text-base ${destaque ? "bg-accent text-on-accent" : ativo ? "bg-accent/10 text-accent" : "text-muted"}`} aria-hidden>
+              {item.icone}
+            </span>
+            <span className={ativo ? "text-accent" : "text-muted"}>{item.rotulo}</span>
+          </button>
+        );
+      })}
+    </nav>
+    </>
   );
 }

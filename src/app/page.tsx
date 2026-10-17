@@ -117,17 +117,16 @@ export default function Home() {
 
       {/* Conteúdo Principal: a margem esquerda reserva o espaço da Sidebar e o conteúdo fica centralizado */}
       <main
-        className={`min-w-0 flex-1 transition-all duration-300 ${sidebarExpandida ? "pl-20 md:pl-64" : "pl-20"
-          }`}
+        className={`min-w-0 flex-1 transition-all duration-300 ${sidebarExpandida ? "md:pl-64" : "md:pl-20"}`}
       >
-        <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 md:p-8">
-          <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="mx-auto w-full max-w-[1400px] space-y-4 p-3 pb-32 sm:space-y-6 sm:p-4 sm:pb-24 md:p-8">
+          <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div>
-              <h1 className="text-2xl font-bold">Painel de controle</h1>
-              <p className="text-xs text-muted">Gerencie seus gastos individuais e em grupo.</p>
+              <h1 className="text-xl font-bold sm:text-2xl">Painel de controle</h1>
+              <p className="mt-1 text-xs text-muted sm:text-sm">Gerencie seus gastos individuais e em grupo.</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <div className="flex items-center rounded-xl border border-line bg-surface">
                 <button
                   type="button"
@@ -214,6 +213,20 @@ export default function Home() {
               <ResponsavelPanel resumo={resumo} />
             </div>
           </div>
+
+          {/* Ação principal no celular */}
+          <button
+            type="button"
+            aria-label="Novo lançamento"
+            title="Novo lançamento"
+            onClick={() => {
+              const alvo = aba === "extrato" ? "form-lancamento" : aba === "cartao" ? "form-parcelas" : "form-contas-fixas";
+              document.getElementById(alvo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="fixed bottom-20 right-4 z-40 grid size-14 place-items-center rounded-full bg-accent text-3xl font-light text-on-accent shadow-lg shadow-black/15 transition-transform active:scale-95 md:hidden"
+          >
+            +
+          </button>
 
           {/* Modal de Gerenciamento do Grupo */}
           {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}

@@ -18,9 +18,9 @@ export default function SummaryCards({ resumo, config, onConfig }: Props) {
     config.reservaMeta > 0 ? Math.min(100, (config.reservaAtual / config.reservaMeta) * 100) : 0;
 
   return (
-    <section aria-label="Resumo do mês" className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1.3fr_1fr]">
+    <section aria-label="Resumo do mês" className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1.3fr_1fr]">
       {/* Salário (em destaque) */}
-      <div className="rounded-2xl border border-line bg-surface p-6">
+      <div className="order-2 rounded-2xl border border-line bg-surface p-4 sm:p-6">
         <p className="text-base font-semibold uppercase tracking-wide text-muted">Salário</p>
         <div className="mt-3">
           <SalarioEditavel valor={config.salario} onChange={(n) => onConfig({ salario: n })} />
@@ -29,7 +29,7 @@ export default function SummaryCards({ resumo, config, onConfig }: Props) {
       </div>
 
       {/* Gasto no mês */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
+      <div className="order-3 rounded-2xl border border-line bg-surface p-4 sm:p-5">
         <p className="text-sm text-muted">Gasto no mês</p>
         <p className="mt-2 text-2xl font-semibold tabular-nums">{brl(resumo.totalGasto)}</p>
         <dl className="mt-3 space-y-0.5 text-xs text-muted">
@@ -50,7 +50,7 @@ export default function SummaryCards({ resumo, config, onConfig }: Props) {
 
       {/* Sobra — o número principal da tela */}
       <div
-        className={`rounded-2xl p-5 ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent"}`}
+        className={`order-1 rounded-2xl p-5 shadow-sm sm:p-6 ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent"}`}
         aria-live="polite"
       >
         <p className="text-sm opacity-80">{negativo ? "Falta para fechar o mês" : "Sobra para você"}</p>
@@ -61,7 +61,7 @@ export default function SummaryCards({ resumo, config, onConfig }: Props) {
       </div>
 
       {/* Investimentos / Reserva */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
+      <div className="order-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
         <p className="mb-3 text-sm text-muted">Investimentos e reserva</p>
 
         <AportesInvestimento saldoAnterior={config.investido} />

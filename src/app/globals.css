@@ -45,3 +45,39 @@
     animation: none !important;
   }
 }
+
+/* Ajustes de usabilidade para telas pequenas */
+@media (max-width: 767px) {
+  html {
+    scroll-padding-top: 1rem;
+    scroll-padding-bottom: 6rem;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    touch-action: manipulation;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  main .rounded-2xl.border-line {
+    min-width: 0;
+  }
+
+  /* Tabelas podem ter muitas colunas; permitem rolagem sem estourar a página. */
+  .overflow-x-auto {
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+}

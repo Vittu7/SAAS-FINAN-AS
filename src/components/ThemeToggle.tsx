@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type React from "react";
 
 type Tema = "light" | "dark" | "system";
-type Fundo = "none" | "aurora" | "waves" | "image";
+type Fundo = "none" | "aurora" | "glow" | "dots" | "grid";
 type Destaque = "teal" | "purple" | "blue" | "pink" | "orange" | "graphite";
 
 const DESTAQUES: { id: Destaque; nome: string; cor: string }[] = [
@@ -38,39 +40,22 @@ function aplicarTema(tema: Tema, destaque: Destaque) {
 const FUNDOS: { id: Fundo; nome: string }[] = [
   { id: "none", nome: "Liso" },
   { id: "aurora", nome: "Aurora" },
-  { id: "waves", nome: "Ondas" },
-  { id: "image", nome: "Minha imagem" },
+  { id: "glow", nome: "Brilho" },
+  { id: "dots", nome: "Pontos" },
+  { id: "grid", nome: "Grade" },
 ];
 
-function aplicarFundo(fundo: Fundo) {
-  const raiz = document.documentElement;
-  const img = localStorage.getItem("homecash-bg-img");
-  const efetivo = fundo === "image" && !img ? "none" : fundo;
-  raiz.dataset.bg = efetivo;
-  if (efetivo === "image" && img) raiz.style.setProperty("--bg-img", `url("${img}")`);
-  else raiz.style.removeProperty("--bg-img");
-}
+const AMOSTRAS: Record<Fundo, React.CSSProperties> = {
+  none: {},
+  aurora: { backgroundImage: "radial-gradient(70% 70% at 10% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 70%), radial-gradient(60% 60% at 100% 100%, rgb(56 189 248 / .35), transparent 70%)" },
+  glow: { backgroundImage: "radial-gradient(90% 80% at 50% -20%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 70%)" },
+  dots: { backgroundImage: "radial-gradient(color-mix(in oklab, var(--accent) 60%, transparent) 1px, transparent 1.4px)", backgroundSize: "8px 8px" },
+  grid: { backgroundImage: "linear-gradient(color-mix(in oklab, var(--accent) 35%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--accent) 35%, transparent) 1px, transparent 1px)", backgroundSize: "10px 10px" },
+};
 
-// Reduz a imagem para caber no armazenamento do navegador (~1600px, JPEG)
-function lerImagemReduzida(arquivo: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const leitor = new FileReader();
-    leitor.onerror = reject;
-    leitor.onload = () => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * escala);
-        canvas.height = Math.round(img.height * escala);
-        canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.8));
-      };
-      img.src = String(leitor.result);
-    };
-    leitor.readAsDataURL(arquivo);
-  });
+function aplicarFundo(fundo: Fundo) {
+  document.documentElement.dataset.bg = fundo;
+  localStorage.removeItem("homecash-bg-img");
 }
 
 export default function ThemeToggle() {
@@ -78,6 +63,27 @@ export default function ThemeToggle() {
   const [tema, setTema] = useState<Tema>("system");
   const [destaque, setDestaque] = useState<Destaque>("teal");
   const [aberto, setAberto] = useState(false);
+  const botaoRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number; mobile: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const atualizar = () => {
+      const r = botaoRef.current?.getBoundingClientRect();
+      const mobile = window.innerWidth < 640;
+      if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right), mobile });
+    };
+    atualizar();
+    const fecharEsc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    window.addEventListener("resize", atualizar);
+    window.addEventListener("scroll", atualizar, true);
+    window.addEventListener("keydown", fecharEsc);
+    return () => {
+      window.removeEventListener("resize", atualizar);
+      window.removeEventListener("scroll", atualizar, true);
+      window.removeEventListener("keydown", fecharEsc);
+    };
+  }, [aberto]);
 
   useEffect(() => {
     const temaSalvo = (localStorage.getItem("homecash-theme") || localStorage.getItem("tema")) as Tema | null;
@@ -120,22 +126,12 @@ export default function ThemeToggle() {
     aplicarFundo(novo);
   };
 
-  const escolherImagem = async (arquivo?: File) => {
-    if (!arquivo) return;
-    try {
-      const dados = await lerImagemReduzida(arquivo);
-      localStorage.setItem("homecash-bg-img", dados);
-      mudarFundo("image");
-    } catch {
-      alert("Não foi possível usar esta imagem. Tente outra (JPG ou PNG).");
-    }
-  };
-
   return (
     <div
       className="relative z-[100] pointer-events-auto"
       onPointerDown={(event) => event.stopPropagation()}
     >      <button
+      ref={botaoRef}
       type="button"
       onClick={(event) => {
         event.stopPropagation();
@@ -148,70 +144,71 @@ export default function ThemeToggle() {
         <span className="hidden sm:inline">Aparência</span>
       </button>
 
-      {aberto && (<div
-        role="dialog"
-        aria-label="Personalizar aparência"
-        onClick={(event) => event.stopPropagation()}
-        className="absolute right-0 top-12 z-100 max-h-[80vh] overflow-y-auto w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-4 shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-ink">Aparência</h2>
-            <p className="mt-0.5 text-xs text-muted">Personalize o visual do HomeCash.</p>
+      {aberto && pos && createPortal(<>
+        <div aria-hidden="true" onClick={() => setAberto(false)} style={{ position: "fixed", inset: 0, zIndex: 9998, background: pos.mobile ? "rgb(0 0 0 / .5)" : "transparent" }} />
+        <div
+          role="dialog"
+          aria-label="Personalizar aparência"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          style={pos.mobile
+            ? { position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 9999, maxHeight: "85dvh", paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }
+            : { position: "fixed", top: pos.top, right: pos.right, zIndex: 9999, maxHeight: `calc(100dvh - ${pos.top + 16}px)` }}
+          className={`overflow-y-auto overscroll-contain border border-line bg-surface p-4 shadow-2xl ${pos.mobile ? "w-full rounded-t-3xl px-5 pt-3" : "w-80 rounded-2xl"}`}>
+          {pos.mobile && <div aria-hidden="true" className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-ink">Aparência</h2>
+              <p className="mt-0.5 text-xs text-muted">Personalize o visual do HomeCash.</p>
+            </div>
+            <button type="button" onClick={() => setAberto(false)} aria-label="Fechar aparência" className="grid size-10 text-lg place-items-center rounded-lg text-muted hover:bg-background">×</button>
           </div>
-          <button type="button" onClick={() => setAberto(false)} aria-label="Fechar aparência" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-background">×</button>
-        </div>
 
-        <fieldset>
-          <legend className="mb-2 text-xs font-semibold text-muted">Tema</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {(["light", "dark", "system"] as Tema[]).map((opcao) => {
-              const nomes = { light: "Claro", dark: "Escuro", system: "Sistema" };
-              return (
-                <button key={opcao} type="button" onClick={() => mudarTema(opcao)} aria-pressed={tema === opcao} className={`rounded-lg border px-2 py-2 text-xs transition ${tema === opcao ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
-                  {nomes[opcao]}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+          <fieldset>
+            <legend className="mb-2 text-xs font-semibold text-muted">Tema</legend>
+            <div className="grid grid-cols-3 gap-2">
+              {(["light", "dark", "system"] as Tema[]).map((opcao) => {
+                const nomes = { light: "Claro", dark: "Escuro", system: "Sistema" };
+                return (
+                  <button key={opcao} type="button" onClick={() => mudarTema(opcao)} aria-pressed={tema === opcao} className={`rounded-xl border px-2 py-3 text-sm transition ${tema === opcao ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+                    {nomes[opcao]}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
 
-        <fieldset className="mt-4">
-          <legend className="mb-2 text-xs font-semibold text-muted">Cor de destaque</legend>
-          <div className="grid grid-cols-2 gap-2">
-            {DESTAQUES.map((opcao) => (
-              <button key={opcao.id} type="button" onClick={() => mudarDestaque(opcao.id)} aria-pressed={destaque === opcao.id} className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs text-ink transition ${destaque === opcao.id ? "border-accent bg-background" : "border-line hover:bg-background"}`}>
-                <span className="size-3 rounded-full" style={{ backgroundColor: opcao.cor }} />
-                {opcao.nome}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset className="mt-4">
-          <legend className="mb-2 text-xs font-semibold text-muted">Fundo</legend>
-          <div className="grid grid-cols-2 gap-2">
-            {FUNDOS.map((opcao) =>
-              opcao.id === "image" ? (
-                <label key={opcao.id} className={`flex cursor-pointer items-center justify-center rounded-lg border px-2 py-2 text-xs transition ${fundo === "image" ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
-                  <input type="file" accept="image/*" className="sr-only" onChange={(e) => escolherImagem(e.target.files?.[0])} />
-                  {opcao.nome}
-                </label>
-              ) : (
-                <button key={opcao.id} type="button" onClick={() => mudarFundo(opcao.id)} aria-pressed={fundo === opcao.id} className={`rounded-lg border px-2 py-2 text-xs transition ${fundo === opcao.id ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+          <fieldset className="mt-4">
+            <legend className="mb-2 text-xs font-semibold text-muted">Cor de destaque</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {DESTAQUES.map((opcao) => (
+                <button key={opcao.id} type="button" onClick={() => mudarDestaque(opcao.id)} aria-pressed={destaque === opcao.id} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm text-ink transition ${destaque === opcao.id ? "border-accent bg-background" : "border-line hover:bg-background"}`}>
+                  <span className="size-4 shrink-0 rounded-full" style={{ backgroundColor: opcao.cor }} />
                   {opcao.nome}
                 </button>
-              ),
-            )}
-          </div>
-          <p className="mt-1.5 text-[11px] text-muted">Aplicado com baixa opacidade para não atrapalhar a leitura.</p>
-        </fieldset>
+              ))}
+            </div>
+          </fieldset>
 
-        <div className="mt-4 rounded-xl border border-line bg-background p-3">
-          <p className="text-[11px] font-medium text-muted">Prévia da cor</p>
-          <button type="button" className="mt-2 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent">Botão principal</button>
+          <fieldset className="mt-4">
+            <legend className="mb-2 text-xs font-semibold text-muted">Fundo</legend>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
+              {FUNDOS.map((opcao) => (
+                <button key={opcao.id} type="button" onClick={() => mudarFundo(opcao.id)} aria-pressed={fundo === opcao.id} className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-xs transition ${fundo === opcao.id ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+                  <span aria-hidden="true" className="h-10 w-full rounded-lg border border-line bg-background" style={AMOSTRAS[opcao.id]} />
+                  {opcao.nome}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted">Aplicado de forma suave para não atrapalhar a leitura.</p>
+          </fieldset>
+
+          <div className="mt-4 rounded-xl border border-line bg-background p-3">
+            <p className="text-[11px] font-medium text-muted">Prévia da cor</p>
+            <button type="button" className="mt-2 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent">Botão principal</button>
+          </div>
         </div>
-      </div>
-      )}
+      </>, document.body)}
     </div>
   );
 }

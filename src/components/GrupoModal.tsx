@@ -151,7 +151,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10030] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-line relative">
         <button onClick={onClose} className="absolute right-4 top-4 text-muted hover:text-ink">
           ✕

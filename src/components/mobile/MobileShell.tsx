@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { addMeses, brl, rotuloMes, type Resumo } from "@/lib/finance";
-import ThemeToggle from "@/components/ThemeToggle";
+import { useAparencia } from "@/components/ThemeToggle";
 import DialogResponsivo from "@/components/DialogResponsivo";
 
 type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
@@ -162,7 +163,6 @@ export function MobileSaldo({
 export function MobileAtalhos({
   onAba,
   onGrupo,
-  onCadastros,
 }: {
   onAba: (a: Aba) => void;
   onGrupo: () => void;
@@ -170,18 +170,20 @@ export function MobileAtalhos({
 }) {
   const itens = [
     { r: "Lançar", s: "＋", f: () => onAba("lancamentos") },
+    { r: "Parcelas", s: "▤", f: () => onAba("cartao") },
+    { r: "Faturas", s: "▭", f: () => onAba("fatura") },
+    { r: "Fixas", s: "▣", f: () => onAba("contas") },
     { r: "Extrato", s: "≡", f: () => onAba("extrato") },
-    { r: "Fatura", s: "▭", f: () => onAba("fatura") },
     { r: "Gráficos", s: "◷", f: () => document.getElementById("graficos")?.scrollIntoView({ behavior: "smooth" }) },
     { r: "Grupo", s: "◉", f: onGrupo },
     { r: "Ajustes", s: "⚙", f: () => onAba("ajustes") },
   ];
   return (
-    <div className="-mx-4 flex gap-4 overflow-x-auto px-4 py-1 md:hidden">
+    <div className="grid grid-cols-4 gap-y-4 rounded-3xl bg-surface p-4 ring-1 ring-line md:hidden">
       {itens.map((i) => (
-        <button key={i.r} type="button" onClick={i.f} className="flex min-w-16 flex-col items-center gap-1.5 active:scale-95">
-          <span className="grid size-14 place-items-center rounded-full bg-surface text-xl text-accent ring-1 ring-line">{i.s}</span>
-          <span className="text-xs font-medium">{i.r}</span>
+        <button key={i.r} type="button" onClick={i.f} className="flex min-w-0 flex-col items-center gap-1.5 active:scale-95">
+          <span className="grid size-12 place-items-center rounded-2xl bg-accent/10 text-xl text-accent">{i.s}</span>
+          <span className="truncate text-xs font-medium">{i.r}</span>
         </button>
       ))}
     </div>
@@ -210,7 +212,7 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 left-0 right-0 z-50 w-full border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
         <div className="mx-auto flex max-w-md items-end px-2">
           <Item id="inicio" r="Início" s="⌂" />
           <Item id="extrato" r="Extrato" s="≡" />
@@ -224,8 +226,8 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
               ＋
             </button>
           </div>
+          <Item id="cartao" r="Parcelas" s="▤" />
           <Item id="fatura" r="Faturas" s="▭" />
-          <Item id="contas" r="Fixas" s="▣" />
         </div>
       </nav>
 
@@ -257,7 +259,7 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
   );
 }
 
-/* ---------- Menu (perfil, grupo, cadastros, tema, sair) ---------- */
+/* ---------- Menu lateral (gaveta fixa à direita) ---------- */
 export function MobileMenu({
   aberto,
   onFechar,
@@ -270,69 +272,66 @@ export function MobileMenu({
   onAba: (a: Aba) => void;
 }) {
   const router = useRouter();
+  const { tema, mudarTema } = useAparencia();
 
+  useEffect(() => {
+    if (!aberto) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onFechar();
+    window.addEventListener("keydown", esc);
+    return () => { document.body.style.overflow = overflow; window.removeEventListener("keydown", esc); };
+  }, [aberto, onFechar]);
+
+  if (!aberto || typeof document === "undefined") return null;
 
   const sair = async () => {
     await supabase.auth.signOut();
     router.push("/login");
   };
-
+  const ir = (a: Aba) => { onFechar(); onAba(a); };
   const linha = "flex w-full items-center gap-3 rounded-2xl p-3 text-left text-sm font-medium active:bg-background";
+  const icone = "grid size-10 shrink-0 place-items-center rounded-full bg-accent/10 text-accent";
 
-  return (
-    <>
-      <Sheet aberto={aberto} onFechar={onFechar} titulo="Menu">
-        <button
-          type="button"
-          className={linha}
-          onClick={() => {
-            onFechar();
-            onAba("ajustes");
-          }}
-        >
-          <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◈</span>
-          Ajustes / Mais
-        </button>
+  return createPortal(
+    <div className="fixed inset-0 z-[10020] md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+      <div className="absolute inset-0 bg-black/50" onClick={onFechar} />
+      <aside className="absolute inset-y-0 right-0 flex w-[min(85vw,340px)] flex-col bg-surface shadow-2xl" style={{ paddingTop: "max(env(safe-area-inset-top),16px)", paddingBottom: "max(env(safe-area-inset-bottom),16px)", animation: "hc-drawer-in .22s ease-out" }}>
+        <style>{`@keyframes hc-drawer-in{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
+        <header className="flex items-center justify-between px-4 pb-3">
+          <p className="text-lg font-semibold">Menu</p>
+          <button type="button" onClick={onFechar} aria-label="Fechar menu" className="grid size-10 place-items-center rounded-full text-muted active:bg-background">✕</button>
+        </header>
+        <div className="flex-1 space-y-1 overflow-y-auto px-3">
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Contas</p>
+          <button type="button" className={linha} onClick={() => ir("cartao")}><span className={icone}>▤</span>Contas parceladas</button>
+          <button type="button" className={linha} onClick={() => ir("fatura")}><span className={icone}>▭</span>Faturas do cartão</button>
+          <button type="button" className={linha} onClick={() => ir("contas")}><span className={icone}>▣</span>Contas fixas</button>
+          <button type="button" className={linha} onClick={() => ir("lancamentos")}><span className={icone}>≡</span>Lançamentos</button>
 
-        <button
-          type="button"
-          className={linha}
-          onClick={() => {
-            onFechar();
-            router.push("/perfil");
-          }}
-        >
-          <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">⚙</span>
-          Perfil e ajustes
-        </button>
+          <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Conta</p>
+          <button type="button" className={linha} onClick={() => ir("ajustes")}><span className={icone}>⚙</span>Configurações e perfil</button>
+          <button type="button" className={linha} onClick={() => { onFechar(); onGrupo(); }}><span className={icone}>◉</span>Gerenciar grupo</button>
 
-        <button
-          type="button"
-          className={linha}
-          onClick={() => {
-            onFechar();
-            onGrupo();
-          }}
-        >
-          <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◉</span>
-          Gerenciar grupo
-        </button>
-
-        <div className={`${linha} justify-between`}>
-          <span className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◐</span>
-            Tema
-          </span>
-          <ThemeToggle />
+          <p className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Tema</p>
+          <div className="mx-1 grid grid-cols-3 gap-1 rounded-2xl bg-background p-1 ring-1 ring-line">
+            {([["light", "☀", "Claro"], ["dark", "☾", "Escuro"], ["system", "◐", "Sistema"]] as const).map(([id, s, r]) => (
+              <button key={id} type="button" aria-pressed={tema === id} onClick={() => mudarTema(id)}
+                className={`flex flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium ${tema === id ? "bg-accent text-on-accent" : "text-ink"}`}>
+                <span aria-hidden className="text-base">{s}</span>{r}
+              </button>
+            ))}
+          </div>
+          <button type="button" className={`${linha} mt-1 text-muted`} onClick={() => ir("ajustes")}><span className={icone}>◐</span>Mais opções de aparência</button>
         </div>
-
-        <button type="button" className={`${linha} text-rose-500`} onClick={sair}>
-          <span className="grid size-10 place-items-center rounded-full bg-rose-500/10">↪</span>
-          Sair da conta
-        </button>
-      </Sheet>
-
-    </>
+        <div className="border-t border-line px-3 pt-2">
+          <button type="button" className={`${linha} text-rose-500`} onClick={sair}>
+            <span className="grid size-10 place-items-center rounded-full bg-rose-500/10">↪</span>Sair da conta
+          </button>
+        </div>
+      </aside>
+    </div>,
+    document.body
   );
 }
 

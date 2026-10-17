@@ -289,8 +289,8 @@ export default function Sidebar({
 
           <section className="space-y-1">
             {expandido && <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">AJUSTES</h2>}
-            <button type="button" onClick={() => selecionarAba("ajustes")} className={classeItem(abaAtiva === "ajustes")} title="Ajustes / Mais">
-              <span className="grid w-5 place-items-center" aria-hidden>⚙</span>{expandido && <span>Ajustes / Mais</span>}
+            <button type="button" onClick={() => selecionarAba("ajustes")} className={classeItem(abaAtiva === "ajustes")} title="Configurações">
+              <span className="grid w-5 place-items-center" aria-hidden>⚙</span>{expandido && <span>Configurações</span>}
             </button>
           </section>
         </nav>
@@ -300,7 +300,7 @@ export default function Sidebar({
       <footer className="space-y-1 border-t border-line p-3">
         <button
           type="button"
-          onClick={() => router.push("/perfil")}
+          onClick={() => onSelecionarAba?.("ajustes")}
           title={!expandido ? perfil.nome : undefined}
           className={`mb-1 flex w-full items-center rounded-xl p-2 text-left transition hover:bg-background ${
             expandido ? "gap-3" : "justify-center"
@@ -337,17 +337,6 @@ export default function Sidebar({
           {expandido && <span>Gerenciar grupo</span>}
         </button>
 
-        <button
-          type="button"
-          onClick={() => router.push("/perfil")}
-          className={classeItem(pathname === "/perfil")}
-          title={!expandido ? "Perfil e ajustes" : undefined}
-        >
-          <span className="grid w-5 place-items-center" aria-hidden>
-            ⚙
-          </span>
-          {expandido && <span>Perfil e ajustes</span>}
-        </button>
 
         <button
           type="button"

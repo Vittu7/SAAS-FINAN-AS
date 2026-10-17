@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import CentralAjustes from "@/components/CentralAjustes";
+import CentralAjustes, { type SecaoAjustes } from "@/components/CentralAjustes";
 import FaturaCartao, { FaturasDoMes } from "@/components/FaturaCartao";
 import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
 import CartaoTable from "@/components/CartaoTable";
@@ -42,6 +42,17 @@ export default function Home() {
   const [aba, setAba] = useState<AbaId>("inicio");
   const [menuMobile, setMenuMobile] = useState(false);
   const [filtrosMobile, setFiltrosMobile] = useState(false);
+  const [secaoAjustes, setSecaoAjustes] = useState<SecaoAjustes>("perfil");
+
+  // Permite abrir direto uma aba (ex.: /?aba=ajustes&secao=perfil, vindo da antiga página de perfil)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const a = p.get("aba") as AbaId | null;
+    if (a && ["inicio", "extrato", "lancamentos", "cartao", "contas", "fatura", "ajustes"].includes(a)) setAba(a);
+    const sec = p.get("secao") as SecaoAjustes | null;
+    if (sec) setSecaoAjustes(sec);
+    if (a) window.history.replaceState(null, "", "/");
+  }, []);
 
   const irPara = (a: AbaId) => {
     setAba(a);
@@ -208,14 +219,14 @@ export default function Home() {
         <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
             titulo={
-              aba === "ajustes" ? "Ajustes / Mais" : aba === "fatura" ? "Fatura do cartão" : mostrarPainel
+              aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Faturas do cartão" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
                 ? "Extrato"
                 : aba === "lancamentos"
                 ? "Lançamentos"
                 : aba === "cartao"
-                ? "Parcelas"
+                ? "Contas parceladas"
                 : "Contas fixas"
             }
             mes={mes}
@@ -229,7 +240,7 @@ export default function Home() {
           <header className="hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line py-5 md:flex">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight">
-                {aba === "ajustes" ? "Ajustes / Mais" : aba === "fatura" ? "Fatura do cartão" : mostrarPainel
+                {aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Faturas do cartão" : mostrarPainel
                   ? "Olá 👋 Visão geral"
                   : aba === "extrato"
                   ? "Extrato"
@@ -244,6 +255,10 @@ export default function Home() {
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
                   ? "Todas as movimentações do mês em um só lugar."
+                  : aba === "ajustes"
+                  ? "Perfil, plano, aparência, cadastros e tela inicial."
+                  : aba === "fatura"
+                  ? "Escolha um cartão para ver a fatura do mês."
                   : "Cadastre, consulte e edite seus registros."}
               </p>
             </div>
@@ -311,11 +326,16 @@ export default function Home() {
                   onConfig={(salario) => loja.atualizarConfig({ salario })}
                 />
               </div>}
-              <div className="grid items-start gap-4 lg:grid-cols-2">
-                {dashboard.preferencias.investimentos && <div id="investimentos"><InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} /></div>}
-                {dashboard.preferencias.graficos && <div id="graficos"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
-              </div>
               {dashboard.preferencias.faturas && <FaturasDoMes estado={estadoFiltrado} mes={mes} onAbrir={() => irPara("fatura")} />}
+              <div className="grid items-start gap-4 lg:grid-cols-2">
+                {dashboard.preferencias.graficos && <div id="graficos" className="min-w-0"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
+                {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0"><InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} /></div>}
+              </div>
+              <div className="flex justify-center pt-1">
+                <button type="button" onClick={() => { setSecaoAjustes("dashboard"); irPara("ajustes"); }} className="rounded-full bg-surface px-4 py-2 text-xs font-medium text-muted ring-1 ring-line transition hover:text-ink">
+                  ✎ Personalizar tela inicial
+                </button>
+              </div>
             </>
           )}
 
@@ -346,7 +366,7 @@ export default function Home() {
 
           <div className="min-w-0">
             <section className="min-w-0">
-              {aba === "ajustes" && <CentralAjustes preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
+              {aba === "ajustes" && <CentralAjustes key={secaoAjustes} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
               {aba === "fatura" && <FaturaCartao estado={estadoFiltrado} mes={mes} setMes={setMes} />}
               {aba === "extrato" && (
                 <ExtratoGeral mes={mes} extrato={extrato} cartao={cartao} contas={contas} />
@@ -385,17 +405,18 @@ export default function Home() {
             </section>
           </div>
 
-          <MobileBottomNav aba={aba} onAba={irPara} />
-          <MobileMenu
-            onAba={irPara}
-            aberto={menuMobile}
-            onFechar={() => setMenuMobile(false)}
-            onGrupo={() => setModalGrupoAberto(true)}
-          />
-
-          {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}
         </div>
       </main>
+
+      {/* Fora do container centralizado: barra fixa no rodapé e menu lateral */}
+      <MobileBottomNav aba={aba} onAba={irPara} />
+      <MobileMenu
+        onAba={irPara}
+        aberto={menuMobile}
+        onFechar={() => setMenuMobile(false)}
+        onGrupo={() => setModalGrupoAberto(true)}
+      />
+      {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}
     </div>
   );
 }

@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { addMeses, brl, rotuloMes, type Resumo } from "@/lib/finance";
 import ThemeToggle from "@/components/ThemeToggle";
-import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
+import DialogResponsivo from "@/components/DialogResponsivo";
 
-type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas";
+type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
 
 /* ---------- Cabeçalho do app no celular ---------- */
 export function MobileHeader({
@@ -29,10 +29,10 @@ export function MobileHeader({
 }) {
   return (
     <header className="sticky top-0 z-30 -mx-4 bg-background/85 px-4 pb-3 pt-[max(env(safe-area-inset-top),12px)] backdrop-blur-xl md:hidden">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <img src="/logo.png" alt="" className="h-7 w-auto" />
-          <span className="text-lg font-semibold tracking-tight">{titulo}</span>
+          <span className="min-w-0 truncate text-lg font-semibold">{titulo}</span>
         </div>
         <button
           type="button"
@@ -171,9 +171,10 @@ export function MobileAtalhos({
   const itens = [
     { r: "Lançar", s: "＋", f: () => onAba("lancamentos") },
     { r: "Extrato", s: "≡", f: () => onAba("extrato") },
+    { r: "Fatura", s: "▭", f: () => onAba("fatura") },
     { r: "Gráficos", s: "◷", f: () => document.getElementById("graficos")?.scrollIntoView({ behavior: "smooth" }) },
     { r: "Grupo", s: "◉", f: onGrupo },
-    ...(onCadastros ? [{ r: "Cadastros", s: "◈", f: onCadastros }] : []),
+    { r: "Ajustes", s: "⚙", f: () => onAba("ajustes") },
   ];
   return (
     <div className="-mx-4 flex gap-4 overflow-x-auto px-4 py-1 md:hidden">
@@ -223,7 +224,7 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
               ＋
             </button>
           </div>
-          <Item id="cartao" r="Parcelas" s="▤" />
+          <Item id="fatura" r="Faturas" s="▭" />
           <Item id="contas" r="Fixas" s="▣" />
         </div>
       </nav>
@@ -261,13 +262,15 @@ export function MobileMenu({
   aberto,
   onFechar,
   onGrupo,
+  onAba,
 }: {
   aberto: boolean;
   onFechar: () => void;
   onGrupo: () => void;
+  onAba: (a: Aba) => void;
 }) {
   const router = useRouter();
-  const [modalCadastrosAberto, setModalCadastrosAberto] = useState(false);
+
 
   const sair = async () => {
     await supabase.auth.signOut();
@@ -284,11 +287,11 @@ export function MobileMenu({
           className={linha}
           onClick={() => {
             onFechar();
-            setModalCadastrosAberto(true);
+            onAba("ajustes");
           }}
         >
           <span className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent">◈</span>
-          Cadastros & Opções
+          Ajustes / Mais
         </button>
 
         <button
@@ -329,12 +332,6 @@ export function MobileMenu({
         </button>
       </Sheet>
 
-      {modalCadastrosAberto && (
-        <GerenciarOpcoesModal
-          onClose={() => setModalCadastrosAberto(false)}
-          onAtualizar={() => window.dispatchEvent(new Event("homecash:opcoes"))}
-        />
-      )}
     </>
   );
 }
@@ -351,23 +348,5 @@ export function Sheet({
   titulo: string;
   children: React.ReactNode;
 }) {
-  return (
-    <div className={`fixed inset-0 z-50 md:hidden ${aberto ? "" : "pointer-events-none"}`} aria-hidden={!aberto}>
-      <div
-        onClick={onFechar}
-        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${aberto ? "opacity-100" : "opacity-0"}`}
-      />
-      <div
-        role="dialog"
-        aria-label={titulo}
-        className={`absolute inset-x-0 bottom-0 rounded-t-3xl bg-surface px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-2 shadow-2xl transition-transform duration-300 ease-out ${
-          aberto ? "translate-y-0" : "translate-y-full"
-        }`}
-      >
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />
-        <p className="px-3 pb-2 text-base font-semibold">{titulo}</p>
-        <div className="space-y-1">{children}</div>
-      </div>
-    </div>
-  );
+  return aberto ? <DialogResponsivo titulo={titulo} onFechar={onFechar}><div className="space-y-1">{children}</div></DialogResponsivo> : null;
 }

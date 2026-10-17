@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import CentralAjustes from "@/components/CentralAjustes";
+import FaturaCartao, { FaturasDoMes } from "@/components/FaturaCartao";
+import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
 import CartaoTable from "@/components/CartaoTable";
 import ContasFixasTable from "@/components/ContasFixasTable";
 import ExtratoTable from "@/components/ExtratoTable";
@@ -25,7 +28,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { MobileAtalhos, MobileBottomNav, MobileHeader, MobileMenu, MobileSaldo } from "@/components/mobile/MobileShell";
 
-type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas";
+type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
 
 export default function Home() {
   const router = useRouter();
@@ -83,6 +86,7 @@ export default function Home() {
   }, [router]);
 
   const { estado, userId, membros } = loja;
+  const dashboard = useDashboardPreferences(userId);
 
   const passaFiltro = useCallback(
     (item: any) => {
@@ -182,6 +186,7 @@ export default function Home() {
   }
 
   const mostrarPainel = aba === "inicio";
+  const mostrarFiltros = !mostrarPainel && aba !== "ajustes" && aba !== "fatura";
 
   return (
     <div className="min-h-screen bg-background text-ink">
@@ -203,7 +208,7 @@ export default function Home() {
         <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
             titulo={
-              mostrarPainel
+              aba === "ajustes" ? "Ajustes / Mais" : aba === "fatura" ? "Fatura do cartão" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
                 ? "Extrato"
@@ -221,10 +226,10 @@ export default function Home() {
             onAbrirMenu={() => setMenuMobile(true)}
           />
 
-          <header className="card-glass hidden flex-wrap items-center justify-between gap-4 px-6 py-5 md:flex">
-            <div>
+          <header className="hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line py-5 md:flex">
+            <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight">
-                {mostrarPainel
+                {aba === "ajustes" ? "Ajustes / Mais" : aba === "fatura" ? "Fatura do cartão" : mostrarPainel
                   ? "Olá 👋 Visão geral"
                   : aba === "extrato"
                   ? "Extrato"
@@ -290,31 +295,31 @@ export default function Home() {
 
           {mostrarPainel && (
             <>
-              <MobileSaldo
+              {dashboard.preferencias.resumo && <MobileSaldo
                 resumo={resumo}
                 salario={estado.config.salario}
                 onConfig={(salario) => loja.atualizarConfig({ salario })}
-              />
+              />}
               <MobileAtalhos
                 onAba={irPara}
                 onGrupo={() => setModalGrupoAberto(true)}
-                onCadastros={() => setMenuMobile(true)}
               />
-              <div className="hidden md:block">
+              {dashboard.preferencias.resumo && <div className="hidden md:block">
                 <SummaryCards
                   resumo={resumo}
                   salario={estado.config.salario}
                   onConfig={(salario) => loja.atualizarConfig({ salario })}
                 />
-              </div>
+              </div>}
               <div className="grid items-start gap-4 lg:grid-cols-2">
-                <InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} />
-                <ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} />
+                {dashboard.preferencias.investimentos && <div id="investimentos"><InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} /></div>}
+                {dashboard.preferencias.graficos && <div id="graficos"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
               </div>
+              {dashboard.preferencias.faturas && <FaturasDoMes estado={estadoFiltrado} mes={mes} onAbrir={() => irPara("fatura")} />}
             </>
           )}
 
-          {!mostrarPainel && (
+          {mostrarFiltros && (
             <button
               type="button"
               onClick={() => setFiltrosMobile((f) => !f)}
@@ -325,7 +330,7 @@ export default function Home() {
             </button>
           )}
 
-          {!mostrarPainel && (
+          {mostrarFiltros && (
             <div className={`${filtrosMobile ? "block" : "hidden"} md:block`}>
               <FiltrosLancamentos
                 filtros={filtros}
@@ -341,6 +346,8 @@ export default function Home() {
 
           <div className="min-w-0">
             <section className="min-w-0">
+              {aba === "ajustes" && <CentralAjustes preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
+              {aba === "fatura" && <FaturaCartao estado={estadoFiltrado} mes={mes} setMes={setMes} />}
               {aba === "extrato" && (
                 <ExtratoGeral mes={mes} extrato={extrato} cartao={cartao} contas={contas} />
               )}
@@ -380,6 +387,7 @@ export default function Home() {
 
           <MobileBottomNav aba={aba} onAba={irPara} />
           <MobileMenu
+            onAba={irPara}
             aberto={menuMobile}
             onFechar={() => setMenuMobile(false)}
             onGrupo={() => setModalGrupoAberto(true)}

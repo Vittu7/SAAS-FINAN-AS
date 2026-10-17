@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
+
 
 interface SidebarProps {
   onAbrirGrupo: () => void;
@@ -30,6 +30,7 @@ const SECOES = [
   {
     titulo: "Contas",
     itens: [
+      { id: "fatura", rotulo: "Fatura do cartão", simbolo: "▭" },
       { id: "cartao", rotulo: "Contas parceladas", simbolo: "▤" },
       { id: "contas", rotulo: "Contas fixas", simbolo: "▣" },
     ],
@@ -53,7 +54,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const [expandido, setExpandido] = useState(true);
   const [menuNovoAberto, setMenuNovoAberto] = useState(false);
-  const [cadastro, setCadastro] = useState<"categoria" | "pagamento" | null>(null);
+
   const [perfil, setPerfil] = useState<{ nome: string; avatar: string | null; email: string }>({
     nome: "",
     avatar: null,
@@ -286,34 +287,10 @@ export default function Sidebar({
             </button>
           </section>
 
-          {/* CADASTROS */}
           <section className="space-y-1">
-            {expandido && (
-              <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">
-                Cadastros
-              </h2>
-            )}
-            <button
-              type="button"
-              onClick={() => setCadastro("categoria")}
-              className={classeItem(false)}
-              title={!expandido ? "Categorias" : undefined}
-            >
-              <span className="grid w-5 place-items-center text-base" aria-hidden>
-                ◈
-              </span>
-              {expandido && <span>Categorias</span>}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCadastro("pagamento")}
-              className={classeItem(false)}
-              title={!expandido ? "Formas de pagamento e cartões" : undefined}
-            >
-              <span className="grid w-5 place-items-center text-base" aria-hidden>
-                ▭
-              </span>
-              {expandido && <span>Pagamentos e cartões</span>}
+            {expandido && <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">AJUSTES</h2>}
+            <button type="button" onClick={() => selecionarAba("ajustes")} className={classeItem(abaAtiva === "ajustes")} title="Ajustes / Mais">
+              <span className="grid w-5 place-items-center" aria-hidden>⚙</span>{expandido && <span>Ajustes / Mais</span>}
             </button>
           </section>
         </nav>
@@ -387,14 +364,6 @@ export default function Sidebar({
         </button>
       </footer>
 
-      {/* MODAL DE GERENCIAMENTO DE CADASTROS */}
-      {cadastro && (
-        <GerenciarOpcoesModal
-          tipo={cadastro}
-          onClose={() => setCadastro(null)}
-          onAtualizar={() => window.dispatchEvent(new Event("homecash:opcoes"))}
-        />
-      )}
     </aside>
   );
 }

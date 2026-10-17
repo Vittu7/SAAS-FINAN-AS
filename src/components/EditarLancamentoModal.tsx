@@ -1,5 +1,6 @@
 "use client";
 
+import DialogResponsivo from "./DialogResponsivo";
 import { useState } from "react";
 import { parseValor } from "@/lib/finance";
 import { useOpcoes } from "@/lib/useOpcoes";
@@ -150,22 +151,8 @@ export default function EditarLancamentoModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <form
-        onSubmit={handleSalvar}
-        className="relative max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-line bg-background p-6 shadow-2xl"
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Cancelar edição"
-          className="absolute right-4 top-4 text-muted hover:text-ink"
-        >
-          ✕
-        </button>
-
-        <h3 className="pr-8 text-xl font-bold">Editar lançamento</h3>
-
+    <DialogResponsivo titulo="Editar lançamento" onFechar={onClose}>
+      <form onSubmit={handleSalvar} className="min-w-0 space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">
@@ -338,6 +325,6 @@ export default function EditarLancamentoModal({
           </button>
         </div>
       </form>
-    </div>
+    </DialogResponsivo>
   );
 }

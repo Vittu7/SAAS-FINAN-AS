@@ -64,16 +64,23 @@ export default function ThemeToggle() {
   const [destaque, setDestaque] = useState<Destaque>("teal");
   const [aberto, setAberto] = useState(false);
   const botaoRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ top: number; right: number; mobile: boolean } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number; maxH: number; mobile: boolean } | null>(null);
 
   useEffect(() => {
     if (!aberto) return;
     const atualizar = () => {
       const r = botaoRef.current?.getBoundingClientRect();
-      const mobile = window.innerWidth < 640;
-      if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right), mobile });
+      const mobile = window.innerWidth < 768 || window.matchMedia("(pointer: coarse)").matches;
+      if (!r) return;
+      const right = Math.max(8, window.innerWidth - r.right);
+      const abaixo = window.innerHeight - r.bottom - 16;
+      const acima = r.top - 16;
+      if (mobile || abaixo >= 420 || abaixo >= acima) setPos({ top: r.bottom + 8, right, maxH: abaixo, mobile });
+      else setPos({ bottom: window.innerHeight - r.top + 8, right, maxH: acima, mobile });
     };
     atualizar();
+    const overflowAnterior = document.body.style.overflow;
+    if (window.innerWidth < 768 || window.matchMedia("(pointer: coarse)").matches) document.body.style.overflow = "hidden";
     const fecharEsc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
     window.addEventListener("resize", atualizar);
     window.addEventListener("scroll", atualizar, true);
@@ -82,6 +89,7 @@ export default function ThemeToggle() {
       window.removeEventListener("resize", atualizar);
       window.removeEventListener("scroll", atualizar, true);
       window.removeEventListener("keydown", fecharEsc);
+      document.body.style.overflow = overflowAnterior;
     };
   }, [aberto]);
 
@@ -152,9 +160,10 @@ export default function ThemeToggle() {
           onClick={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
           style={pos.mobile
-            ? { position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 9999, maxHeight: "85dvh", paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }
-            : { position: "fixed", top: pos.top, right: pos.right, zIndex: 9999, maxHeight: `calc(100dvh - ${pos.top + 16}px)` }}
-          className={`overflow-y-auto overscroll-contain border border-line bg-surface p-4 shadow-2xl ${pos.mobile ? "w-full rounded-t-3xl px-5 pt-3" : "w-80 rounded-2xl"}`}>
+            ? { position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 9999, maxHeight: "90dvh", paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))", animation: "hc-sheet-up .22s ease-out" }
+            : { position: "fixed", top: pos.top, bottom: pos.bottom, right: pos.right, zIndex: 9999, maxHeight: Math.max(240, pos.maxH) }}
+          className={`overflow-y-auto overscroll-contain border border-line bg-surface p-4 shadow-2xl ${pos.mobile ? "mx-auto w-full max-w-lg rounded-t-3xl px-5 pt-3" : "w-80 rounded-2xl"}`}>
+          <style>{`@keyframes hc-sheet-up{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
           {pos.mobile && <div aria-hidden="true" className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />}
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
@@ -166,11 +175,13 @@ export default function ThemeToggle() {
 
           <fieldset>
             <legend className="mb-2 text-xs font-semibold text-muted">Tema</legend>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1 rounded-2xl border border-line bg-background p-1">
               {(["light", "dark", "system"] as Tema[]).map((opcao) => {
                 const nomes = { light: "Claro", dark: "Escuro", system: "Sistema" };
+                const icones = { light: "☀", dark: "☾", system: "◐" };
                 return (
-                  <button key={opcao} type="button" onClick={() => mudarTema(opcao)} aria-pressed={tema === opcao} className={`rounded-xl border px-2 py-3 text-sm transition ${tema === opcao ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
+                  <button key={opcao} type="button" onClick={() => mudarTema(opcao)} aria-pressed={tema === opcao} className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-2.5 text-sm font-medium transition ${tema === opcao ? "bg-accent text-on-accent shadow-sm" : "text-ink hover:bg-surface"}`}>
+                    <span aria-hidden="true" className="text-base leading-none">{icones[opcao]}</span>
                     {nomes[opcao]}
                   </button>
                 );
@@ -180,11 +191,13 @@ export default function ThemeToggle() {
 
           <fieldset className="mt-4">
             <legend className="mb-2 text-xs font-semibold text-muted">Cor de destaque</legend>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-6 gap-2">
               {DESTAQUES.map((opcao) => (
-                <button key={opcao.id} type="button" onClick={() => mudarDestaque(opcao.id)} aria-pressed={destaque === opcao.id} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm text-ink transition ${destaque === opcao.id ? "border-accent bg-background" : "border-line hover:bg-background"}`}>
-                  <span className="size-4 shrink-0 rounded-full" style={{ backgroundColor: opcao.cor }} />
-                  {opcao.nome}
+                <button key={opcao.id} type="button" onClick={() => mudarDestaque(opcao.id)} aria-pressed={destaque === opcao.id} aria-label={opcao.nome} title={opcao.nome} className="flex flex-col items-center gap-1 rounded-xl py-1 text-[10px] text-muted transition">
+                  <span className={`grid size-9 place-items-center rounded-full text-sm font-bold text-white transition ${destaque === opcao.id ? "ring-2 ring-offset-2 ring-offset-surface scale-105" : "hover:scale-105"}`} style={{ backgroundColor: opcao.cor, ["--tw-ring-color" as string]: opcao.cor } as React.CSSProperties}>
+                    {destaque === opcao.id ? "✓" : ""}
+                  </span>
+                  <span className={`w-full truncate text-center ${destaque === opcao.id ? "font-semibold text-ink" : ""}`}>{opcao.nome}</span>
                 </button>
               ))}
             </div>

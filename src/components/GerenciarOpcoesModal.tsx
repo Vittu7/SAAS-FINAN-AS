@@ -1,21 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { parseValor } from "@/lib/finance";
 import { type Opcao, useOpcoes } from "@/lib/useOpcoes";
 
-type Aba = "cartoes" | "categorias" | "pagamentos";
+type Aba = "cartoes" | "pagamentos" | "categorias";
 
-const CORES = [
-  "#0EA5E9",
-  "#10B981",
-  "#6366F1",
-  "#8B5CF6",
-  "#EC4899",
-  "#F59E0B",
-  "#EF4444",
-  "#64748B",
+const CORES = ["#0EA5E9", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#EF4444", "#64748B"];
+
+const ABAS: { id: Aba; nome: string; icone: string; singular: string }[] = [
+  { id: "cartoes", nome: "Cartões", icone: "💳", singular: "cartão" },
+  { id: "pagamentos", nome: "Formas de pagamento", icone: "💸", singular: "forma de pagamento" },
+  { id: "categorias", nome: "Categorias", icone: "🏷️", singular: "categoria" },
 ];
+
+type Formulario = {
+  id: string | null; // null = novo
+  nome: string;
+  cor: string;
+  ehCartao: boolean;
+  limite: string;
+};
+
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function formularioVazio(aba: Aba): Formulario {
+  return { id: null, nome: "", cor: aba === "cartoes" ? "#6366F1" : "#64748B", ehCartao: aba === "cartoes", limite: "" };
+}
 
 export default function GerenciarOpcoesModal({
   tipo = "pagamento",
@@ -37,506 +49,455 @@ export default function GerenciarOpcoesModal({
     removerCategoria,
   } = useOpcoes();
 
-  const [aba, setAba] = useState<Aba>(
-    tipo === "categoria" ? "categorias" : "cartoes",
-  );
-
-  const [nome, setNome] = useState("");
-  const [cor, setCor] = useState("#6366F1");
-  const [limiteTexto, setLimiteTexto] = useState("");
+  const [montado, setMontado] = useState(false);
+  const [aba, setAba] = useState<Aba>(tipo === "categoria" ? "categorias" : "cartoes");
+  const [form, setForm] = useState<Formulario | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [mensagem, setMensagem] = useState("");
+  const [erro, setErro] = useState("");
+  const [busca, setBusca] = useState("");
+
+  useEffect(() => {
+    setMontado(true);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", esc);
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener("keydown", esc);
+    };
+  }, [onClose]);
 
   const lista = useMemo(() => {
-    if (aba === "categorias") return categoria;
+    const base =
+      aba === "categorias"
+        ? categoria
+        : aba === "cartoes"
+          ? pagamento.filter((i) => Boolean(i.eh_cartao))
+          : pagamento.filter((i) => !i.eh_cartao);
+    const termo = busca.trim().toLowerCase();
+    return termo ? base.filter((i) => i.nome.toLowerCase().includes(termo)) : base;
+  }, [aba, categoria, pagamento, busca]);
 
-    if (aba === "cartoes") {
-      return pagamento.filter((item) => Boolean(item.eh_cartao));
-    }
-
-    return pagamento.filter((item) => !item.eh_cartao);
-  }, [aba, categoria, pagamento]);
-
-  const titulo =
-    aba === "cartoes"
-      ? "Novo cartão"
-      : aba === "categorias"
-        ? "Nova categoria"
-        : "Nova forma de pagamento";
-
-  const limparFormulario = () => {
-    setNome("");
-    setLimiteTexto("");
-    setCor(aba === "cartoes" ? "#6366F1" : "#64748B");
+  const contagem: Record<Aba, number> = {
+    cartoes: pagamento.filter((i) => i.eh_cartao).length,
+    pagamentos: pagamento.filter((i) => !i.eh_cartao).length,
+    categorias: categoria.length,
   };
 
-  const trocarAba = (novaAba: Aba) => {
-    setAba(novaAba);
-    setMensagem("");
-    setNome("");
-    setLimiteTexto("");
-    setCor(novaAba === "cartoes" ? "#6366F1" : "#64748B");
+  const abaAtual = ABAS.find((a) => a.id === aba)!;
+
+  const trocarAba = (nova: Aba) => {
+    setAba(nova);
+    setForm(null);
+    setErro("");
+    setBusca("");
   };
 
-  const adicionar = async (event: React.FormEvent) => {
+  const editar = (item: Opcao) => {
+    setErro("");
+    setForm({
+      id: item.id,
+      nome: item.nome,
+      cor: item.cor || "#64748B",
+      ehCartao: Boolean(item.eh_cartao),
+      limite: item.limite ? String(item.limite).replace(".", ",") : "",
+    });
+  };
+
+  const salvar = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!form) return;
+    if (!form.nome.trim()) return setErro("Informe um nome.");
 
-    if (!nome.trim()) {
-      setMensagem("Informe um nome.");
-      return;
-    }
-
-    const limite = parseValor(limiteTexto);
-
-    if (aba === "cartoes" && limite <= 0) {
-      setMensagem("Informe um limite maior que zero para o cartão.");
-      return;
+    const ehPagamento = aba !== "categorias";
+    const limite = parseValor(form.limite);
+    if (ehPagamento && form.ehCartao && limite <= 0) {
+      return setErro("Informe um limite maior que zero para o cartão de crédito.");
     }
 
     try {
       setSalvando(true);
-      setMensagem("");
-
-      if (aba === "cartoes") {
-        await adicionarPagamento(nome, {
-          isCartaoCredito: true,
-          limiteTotal: limite,
-          cor,
+      setErro("");
+      if (!ehPagamento) {
+        if (form.id) await atualizarCategoria(form.id, { nome: form.nome, cor: form.cor });
+        else await adicionarCategoria(form.nome, form.cor);
+      } else if (form.id) {
+        await atualizarPagamento(form.id, {
+          nome: form.nome,
+          cor: form.cor,
+          eh_cartao: form.ehCartao,
+          limite: form.ehCartao ? limite : 0,
         });
+        // Se a conta virou (ou deixou de ser) cartão, acompanhe na aba certa
+        const novaAba: Aba = form.ehCartao ? "cartoes" : "pagamentos";
+        if (novaAba !== aba) setAba(novaAba);
+      } else {
+        await adicionarPagamento(form.nome, { isCartaoCredito: form.ehCartao, limiteTotal: limite, cor: form.cor });
       }
-
-      if (aba === "pagamentos") {
-        await adicionarPagamento(nome, {
-          isCartaoCredito: false,
-          cor,
-        });
-      }
-
-      if (aba === "categorias") {
-        await adicionarCategoria(nome, cor);
-      }
-
-      limparFormulario();
+      setForm(null);
       onAtualizar?.();
-    } catch (error) {
-      setMensagem(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível salvar o cadastro.",
-      );
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
       setSalvando(false);
     }
   };
 
   const remover = async (item: Opcao) => {
-    const confirmou = window.confirm(
-      `Deseja remover “${item.nome}”? Isso não remove lançamentos já existentes.`,
-    );
-
-    if (!confirmou) return;
-
+    if (!window.confirm(`Deseja excluir “${item.nome}”? Lançamentos já existentes não serão apagados.`)) return;
     try {
       setSalvando(true);
-      setMensagem("");
-
-      if (aba === "categorias") {
-        await removerCategoria(item.id);
-      } else {
-        await removerPagamento(item.id);
-      }
-
+      setErro("");
+      if (aba === "categorias") await removerCategoria(item.id);
+      else await removerPagamento(item.id);
+      if (form?.id === item.id) setForm(null);
       onAtualizar?.();
-    } catch (error) {
-      setMensagem(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível remover o cadastro.",
-      );
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível excluir.");
     } finally {
       setSalvando(false);
     }
   };
 
-  const atualizar = async (
-    item: Opcao,
-    patch: Partial<Pick<Opcao, "nome" | "cor" | "eh_cartao" | "limite">>,
-  ) => {
-    try {
-      setMensagem("");
+  if (!montado) return null;
 
-      if (aba === "categorias") {
-        await atualizarCategoria(item.id, {
-          nome: patch.nome,
-          cor: patch.cor,
-        });
-      } else {
-        await atualizarPagamento(item.id, patch);
-      }
-
-      onAtualizar?.();
-    } catch (error) {
-      setMensagem(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível atualizar o cadastro.",
-      );
-    }
-  };
-
-  const limitePreview = parseValor(limiteTexto);
-
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+      className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-6"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
       }}
     >
       <section
         role="dialog"
         aria-modal="true"
-        aria-label="Cadastros e opções"
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface shadow-2xl"
+        aria-label="Cartões, formas de pagamento e categorias"
+        className="flex h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-line bg-surface shadow-2xl sm:h-[min(720px,90dvh)] sm:max-w-4xl sm:rounded-2xl"
       >
-        <header className="flex items-center justify-between border-b border-line p-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Organização financeira
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-ink">
-              Cadastros e opções
-            </h2>
+        {/* Cabeçalho */}
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Configurações</p>
+            <h2 className="mt-0.5 truncate text-lg font-semibold text-ink">Cartões, pagamentos e categorias</h2>
           </div>
-
           <button
             type="button"
             onClick={onClose}
-            className="grid size-9 place-items-center rounded-xl text-muted transition hover:bg-background hover:text-ink"
-            aria-label="Fechar cadastros"
+            aria-label="Fechar"
+            className="grid size-10 shrink-0 place-items-center rounded-xl text-muted transition hover:bg-background hover:text-ink"
           >
             ✕
           </button>
         </header>
 
-        <div className="grid grid-cols-3 border-b border-line bg-background/50">
-          <AbaButton
-            ativo={aba === "cartoes"}
-            onClick={() => trocarAba("cartoes")}
-          >
-            Cartões
-          </AbaButton>
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          {/* Abas: horizontais no celular, laterais no computador */}
+          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-background/50 p-2 sm:w-56 sm:flex-col sm:border-b-0 sm:border-r sm:p-3">
+            {ABAS.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => trocarAba(a.id)}
+                aria-pressed={aba === a.id}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                  aba === a.id ? "bg-accent text-on-accent shadow-sm" : "text-ink hover:bg-surface"
+                }`}
+              >
+                <span aria-hidden="true">{a.icone}</span>
+                <span className="whitespace-nowrap">{a.nome}</span>
+                <span
+                  className={`ml-auto rounded-full px-2 py-0.5 text-[11px] ${
+                    aba === a.id ? "bg-black/15" : "bg-background text-muted"
+                  }`}
+                >
+                  {contagem[a.id]}
+                </span>
+              </button>
+            ))}
+          </nav>
 
-          <AbaButton
-            ativo={aba === "categorias"}
-            onClick={() => trocarAba("categorias")}
-          >
-            Categorias
-          </AbaButton>
+          {/* Conteúdo */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder={`Buscar ${abaAtual.nome.toLowerCase()}…`}
+                className="min-w-0 flex-1 rounded-xl border border-line bg-background px-3 py-2.5 text-sm text-ink outline-none focus:ring-2 focus:ring-accent"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setErro("");
+                  setForm(formularioVazio(aba));
+                }}
+                className="shrink-0 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition hover:opacity-90"
+              >
+                + Novo {abaAtual.singular}
+              </button>
+            </div>
 
-          <AbaButton
-            ativo={aba === "pagamentos"}
-            onClick={() => trocarAba("pagamentos")}
-          >
-            Pagamentos
-          </AbaButton>
-        </div>
-
-        <div className="space-y-5 p-5">
-          {aba === "cartoes" && (
-            <div
-              className="rounded-2xl p-5 text-white shadow-lg transition-colors"
-              style={{
-                background: `linear-gradient(135deg, ${cor}, #0f172a)`,
-              }}
-            >
-              <p className="text-xs font-medium text-white/70">
-                Prévia do cartão
+            {aba === "pagamentos" && (
+              <p className="mb-3 rounded-xl border border-line bg-background px-3 py-2 text-xs text-muted">
+                Dica: para transformar uma conta (ex.: Nubank) em cartão de crédito, clique em <b>Editar</b> e marque
+                “É cartão de crédito”. Não é preciso cadastrar de novo.
               </p>
+            )}
 
-              <p className="mt-7 text-lg font-semibold">
-                {nome.trim() || "Nome do cartão"}
+            {erro && !form && (
+              <p role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+                {erro}
               </p>
-
-              <div className="mt-5 flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-xs text-white/70">Limite total</p>
-                  <p className="mt-1 text-xl font-bold">
-                    {limitePreview.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </p>
-                </div>
-
-                <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs">
-                  Crédito
-                </span>
-              </div>
-            </div>
-          )}
-
-          <form
-            onSubmit={adicionar}
-            className="rounded-2xl border border-line bg-background p-4"
-          >
-            <div className="mb-4">
-              <h3 className="font-semibold text-ink">{titulo}</h3>
-              <p className="mt-1 text-xs text-muted">
-                {aba === "cartoes"
-                  ? "O limite será usado para calcular a fatura e o valor disponível."
-                  : "Use nomes curtos para facilitar os lançamentos."}
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="sm:col-span-2">
-                <span className="mb-1.5 block text-xs font-medium text-muted">
-                  Nome
-                </span>
-
-                <input
-                  type="text"
-                  required
-                  maxLength={80}
-                  value={nome}
-                  onChange={(event) => setNome(event.target.value)}
-                  placeholder={
-                    aba === "cartoes"
-                      ? "Ex.: Nubank"
-                      : aba === "categorias"
-                        ? "Ex.: Alimentação"
-                        : "Ex.: Boleto"
-                  }
-                  className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:ring-2 focus:ring-accent"
-                />
-              </label>
-
-              {aba === "cartoes" && (
-                <label>
-                  <span className="mb-1.5 block text-xs font-medium text-muted">
-                    Limite total
-                  </span>
-
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={limiteTexto}
-                    onChange={(event) => setLimiteTexto(event.target.value)}
-                    placeholder="0,00"
-                    className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:ring-2 focus:ring-accent"
-                  />
-                </label>
-              )}
-
-              <label className={aba === "cartoes" ? "" : "sm:col-span-2"}>
-                <span className="mb-1.5 block text-xs font-medium text-muted">
-                  Cor
-                </span>
-
-                <span className="flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-3">
-                  <span
-                    className="size-5 rounded-full ring-1 ring-black/10"
-                    style={{ backgroundColor: cor }}
-                  />
-
-                  <input
-                    type="color"
-                    value={cor}
-                    onChange={(event) => setCor(event.target.value)}
-                    className="h-7 w-10 cursor-pointer bg-transparent"
-                    aria-label="Selecionar cor"
-                  />
-
-                  <span className="font-mono text-xs text-muted">
-                    {cor.toUpperCase()}
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {CORES.map((corDaPaleta) => (
-                <button
-                  key={corDaPaleta}
-                  type="button"
-                  onClick={() => setCor(corDaPaleta)}
-                  aria-label={`Usar a cor ${corDaPaleta}`}
-                  className={`size-7 rounded-full ring-offset-2 transition ${cor === corDaPaleta
-                      ? "scale-110 ring-2 ring-accent"
-                      : "hover:scale-105"
-                    }`}
-                  style={{ backgroundColor: corDaPaleta }}
-                />
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              disabled={salvando}
-              className="mt-4 w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {salvando ? "Salvando…" : "Adicionar"}
-            </button>
-          </form>
-
-          {mensagem && (
-            <p
-              role="status"
-              className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500"
-            >
-              {mensagem}
-            </p>
-          )}
-
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-ink">
-                {aba === "cartoes"
-                  ? "Cartões cadastrados"
-                  : aba === "categorias"
-                    ? "Categorias cadastradas"
-                    : "Formas de pagamento cadastradas"}
-              </h3>
-
-              <span className="text-xs text-muted">
-                {lista.length} {lista.length === 1 ? "item" : "itens"}
-              </span>
-            </div>
+            )}
 
             {lista.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line p-4 text-sm text-muted">
-                Nenhum cadastro encontrado.
+              <div className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-muted">
+                {busca ? "Nada encontrado para essa busca." : `Nenhum(a) ${abaAtual.singular} cadastrado(a) ainda.`}
               </div>
             ) : (
-              <div className="space-y-2">
+              <ul className={`grid gap-2 ${aba === "cartoes" ? "sm:grid-cols-2" : ""}`}>
                 {lista.map((item) => (
-                  <LinhaOpcao
-                    key={item.id}
-                    item={item}
-                    mostrarLimite={aba === "cartoes"}
-                    bloqueado={salvando}
-                    onSalvar={(patch) => atualizar(item, patch)}
-                    onRemover={() => remover(item)}
-                  />
+                  <li key={item.id}>
+                    {aba === "cartoes" ? (
+                      <CartaoItem item={item} bloqueado={salvando} onEditar={() => editar(item)} onExcluir={() => remover(item)} />
+                    ) : (
+                      <LinhaItem item={item} bloqueado={salvando} onEditar={() => editar(item)} onExcluir={() => remover(item)} />
+                    )}
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-          </section>
+          </div>
         </div>
       </section>
+
+      {form && (
+        <FormularioDialog
+          form={form}
+          setForm={setForm}
+          aba={aba}
+          erro={erro}
+          salvando={salvando}
+          onSalvar={salvar}
+          onCancelar={() => {
+            setForm(null);
+            setErro("");
+          }}
+        />
+      )}
+    </div>,
+    document.body,
+  );
+}
+
+function BotoesAcao({ nome, bloqueado, onEditar, onExcluir, claro }: { nome: string; bloqueado: boolean; onEditar: () => void; onExcluir: () => void; claro?: boolean }) {
+  return (
+    <div className="flex shrink-0 gap-1.5">
+      <button
+        type="button"
+        onClick={onEditar}
+        disabled={bloqueado}
+        aria-label={`Editar ${nome}`}
+        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+          claro ? "border-white/30 bg-white/10 text-white hover:bg-white/20" : "border-line text-ink hover:bg-surface"
+        }`}
+      >
+        ✎ Editar
+      </button>
+      <button
+        type="button"
+        onClick={onExcluir}
+        disabled={bloqueado}
+        aria-label={`Excluir ${nome}`}
+        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+          claro ? "border-white/30 bg-white/10 text-white hover:bg-red-500/60" : "border-red-500/30 text-red-500 hover:bg-red-500/10"
+        }`}
+      >
+        🗑 Excluir
+      </button>
     </div>
   );
 }
 
-function AbaButton({
-  ativo,
-  onClick,
-  children,
-}: {
-  ativo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function CartaoItem({ item, bloqueado, onEditar, onExcluir }: { item: Opcao; bloqueado: boolean; onEditar: () => void; onExcluir: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`border-b-2 px-2 py-3 text-xs font-semibold transition ${ativo
-          ? "border-accent bg-surface text-accent"
-          : "border-transparent text-muted hover:bg-background hover:text-ink"
-        }`}
+    <div
+      className="flex h-full flex-col justify-between gap-4 rounded-2xl p-4 text-white shadow-md"
+      style={{ background: `linear-gradient(135deg, ${item.cor || "#6366F1"}, #0f172a)` }}
     >
-      {children}
-    </button>
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 truncate text-base font-semibold">{item.nome}</p>
+        <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[11px]">Crédito</span>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] text-white/70">Limite total</p>
+          <p className="text-lg font-bold">{brl(Number(item.limite || 0))}</p>
+        </div>
+        <BotoesAcao nome={item.nome} bloqueado={bloqueado} onEditar={onEditar} onExcluir={onExcluir} claro />
+      </div>
+    </div>
   );
 }
 
-function LinhaOpcao({
-  item,
-  mostrarLimite,
-  bloqueado,
+function LinhaItem({ item, bloqueado, onEditar, onExcluir }: { item: Opcao; bloqueado: boolean; onEditar: () => void; onExcluir: () => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-background px-3 py-3">
+      <span className="size-8 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: item.cor || "#64748B" }} />
+      <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{item.nome}</p>
+      <BotoesAcao nome={item.nome} bloqueado={bloqueado} onEditar={onEditar} onExcluir={onExcluir} />
+    </div>
+  );
+}
+
+function FormularioDialog({
+  form,
+  setForm,
+  aba,
+  erro,
+  salvando,
   onSalvar,
-  onRemover,
+  onCancelar,
 }: {
-  item: Opcao;
-  mostrarLimite: boolean;
-  bloqueado: boolean;
-  onSalvar: (
-    patch: Partial<Pick<Opcao, "nome" | "cor" | "eh_cartao" | "limite">>,
-  ) => Promise<void>;
-  onRemover: () => Promise<void>;
+  form: Formulario;
+  setForm: (f: Formulario) => void;
+  aba: Aba;
+  erro: string;
+  salvando: boolean;
+  onSalvar: (e: React.FormEvent) => void;
+  onCancelar: () => void;
 }) {
-  const [nome, setNome] = useState(item.nome);
-  const [cor, setCor] = useState(item.cor || "#64748B");
-  const [limite, setLimite] = useState(String(item.limite || ""));
-
-  const salvarNome = async () => {
-    if (nome.trim() && nome.trim() !== item.nome) {
-      await onSalvar({ nome: nome.trim() });
-    }
-  };
-
-  const salvarCor = async (novaCor: string) => {
-    setCor(novaCor);
-
-    if (novaCor !== item.cor) {
-      await onSalvar({ cor: novaCor });
-    }
-  };
-
-  const salvarLimite = async () => {
-    const valor = parseValor(limite);
-
-    if (valor !== Number(item.limite || 0)) {
-      await onSalvar({ limite: valor });
-    }
-  };
+  const ehPagamento = aba !== "categorias";
+  const titulo = form.id
+    ? `Editar ${form.nome || "item"}`
+    : aba === "cartoes"
+      ? "Novo cartão"
+      : aba === "categorias"
+        ? "Nova categoria"
+        : "Nova forma de pagamento";
+  const campo = "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-background px-3 py-3">
-      <input
-        type="color"
-        value={cor}
-        onChange={(event) => void salvarCor(event.target.value)}
-        className="size-8 cursor-pointer rounded-full border-0 bg-transparent p-0"
-        aria-label={`Alterar cor de ${item.nome}`}
-      />
+    <div
+      className="fixed inset-0 z-[10001] flex items-end justify-center bg-black/40 sm:items-center sm:p-6"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancelar();
+      }}
+    >
+      <form
+        onSubmit={onSalvar}
+        role="dialog"
+        aria-modal="true"
+        aria-label={titulo}
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-line bg-background p-5 shadow-2xl sm:max-w-md sm:rounded-2xl"
+        style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 className="min-w-0 truncate text-base font-semibold text-ink">{titulo}</h3>
+          <button type="button" onClick={onCancelar} aria-label="Cancelar" className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface">
+            ✕
+          </button>
+        </div>
 
-      <div className="min-w-0 flex-1">
-        <input
-          value={nome}
-          onChange={(event) => setNome(event.target.value)}
-          onBlur={() => void salvarNome()}
-          disabled={bloqueado}
-          className="w-full bg-transparent text-sm font-medium text-ink outline-none"
-          aria-label={`Nome de ${item.nome}`}
-        />
+        {ehPagamento && form.ehCartao && (
+          <div className="mb-4 rounded-2xl p-4 text-white shadow" style={{ background: `linear-gradient(135deg, ${form.cor}, #0f172a)` }}>
+            <p className="text-[11px] text-white/70">Prévia do cartão</p>
+            <p className="mt-4 truncate font-semibold">{form.nome.trim() || "Nome do cartão"}</p>
+            <p className="mt-2 text-lg font-bold">{brl(parseValor(form.limite))}</p>
+          </div>
+        )}
 
-        {mostrarLimite && (
-          <label className="mt-1 flex items-center gap-1 text-xs text-muted">
-            Limite:
+        <div className="space-y-3">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-muted">Nome</span>
             <input
-              value={limite}
-              inputMode="decimal"
-              onChange={(event) => setLimite(event.target.value)}
-              onBlur={() => void salvarLimite()}
-              disabled={bloqueado}
-              className="w-28 border-b border-line bg-transparent py-0.5 text-xs text-ink outline-none focus:border-accent"
-              aria-label={`Limite de ${item.nome}`}
+              autoFocus
+              required
+              maxLength={80}
+              value={form.nome}
+              onChange={(e) => setForm({ ...form, nome: e.target.value })}
+              placeholder={aba === "cartoes" ? "Ex.: Nubank" : aba === "categorias" ? "Ex.: Alimentação" : "Ex.: Boleto"}
+              className={campo}
             />
           </label>
-        )}
-      </div>
 
-      <button
-        type="button"
-        disabled={bloqueado}
-        onClick={() => void onRemover()}
-        className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition hover:bg-red-500/10 disabled:opacity-50"
-      >
-        Remover
-      </button>
+          {ehPagamento && (
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-3">
+              <span>
+                <span className="block text-sm font-medium text-ink">É cartão de crédito</span>
+                <span className="block text-xs text-muted">Tem limite e fatura mensal</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={form.ehCartao}
+                onChange={(e) => setForm({ ...form, ehCartao: e.target.checked })}
+                className="size-5 accent-[var(--accent)]"
+              />
+            </label>
+          )}
+
+          {ehPagamento && form.ehCartao && (
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-muted">Limite total (R$)</span>
+              <input
+                inputMode="decimal"
+                value={form.limite}
+                onChange={(e) => setForm({ ...form, limite: e.target.value })}
+                placeholder="0,00"
+                className={campo}
+              />
+            </label>
+          )}
+
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-muted">Cor</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {CORES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setForm({ ...form, cor: c })}
+                  aria-label={`Usar a cor ${c}`}
+                  className={`size-8 rounded-full ring-offset-2 ring-offset-background transition ${
+                    form.cor.toLowerCase() === c.toLowerCase() ? "scale-110 ring-2 ring-accent" : "hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+              <input
+                type="color"
+                value={form.cor}
+                onChange={(e) => setForm({ ...form, cor: e.target.value })}
+                aria-label="Escolher outra cor"
+                className="h-8 w-10 cursor-pointer rounded bg-transparent"
+              />
+            </div>
+          </div>
+        </div>
+
+        {erro && (
+          <p role="alert" className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+            {erro}
+          </p>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <button type="button" onClick={onCancelar} className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-ink hover:bg-surface">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={salvando}
+            className="flex-1 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition hover:opacity-90 disabled:opacity-60"
+          >
+            {salvando ? "Salvando…" : form.id ? "Salvar alterações" : "Adicionar"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

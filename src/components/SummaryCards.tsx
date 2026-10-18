@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { brl, parseValor, type Resumo } from "@/lib/finance";
 
-export default function SummaryCards({ resumo, salario, onConfig }: { resumo: Resumo; salario: number; onConfig: (salario: number) => void }) {
+export default function SummaryCards({ resumo, salario, onConfig, onAbrirExtrato }: { resumo: Resumo; salario: number; onConfig: (salario: number) => void; onAbrirExtrato?: (tipo: "gastos" | "disponivel") => void }) {
   const negativo = resumo.sobra < 0;
 
   return (
@@ -16,24 +16,36 @@ export default function SummaryCards({ resumo, salario, onConfig }: { resumo: Re
         <p className="mt-2 text-xs text-muted">Clique no valor para editar.</p>
       </div>
 
-      <div className="card-glass p-5 md:p-6">
-        <p className="text-sm font-medium text-muted">Gasto no mês</p>
+      <div
+        role={onAbrirExtrato ? "button" : undefined}
+        tabIndex={onAbrirExtrato ? 0 : undefined}
+        aria-label={onAbrirExtrato ? "Ver extrato dos gastos do mês" : undefined}
+        onClick={() => onAbrirExtrato?.("gastos")}
+        onKeyDown={(e) => { if (onAbrirExtrato && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrirExtrato("gastos"); } }}
+        className={`card-glass p-5 md:p-6 ${onAbrirExtrato ? "cursor-pointer transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-accent" : ""}`}
+      >
+        <p className="text-sm font-medium text-muted">Gastos do mês{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
         <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{brl(resumo.totalGasto)}</p>
         <p className="mt-2 text-xs text-muted">Lançamentos, parcelas e contas fixas</p>
         <dl className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-xs text-muted">
-          <div><dt className="inline">Lançamentos </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.extrato)}</dd></div>
+          <div><dt className="inline">Lançamentos do mês </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.extrato)}</dd></div>
           <div><dt className="inline">Parcelas </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.cartao)}</dd></div>
           <div><dt className="inline">Fixas </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.contas)}</dd></div>
         </dl>
       </div>
 
       <div
-        className={`relative overflow-hidden rounded-[1.25rem] p-5 shadow-xl md:p-6 ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent shadow-accent/25"}`}
+        role={onAbrirExtrato ? "button" : undefined}
+        tabIndex={onAbrirExtrato ? 0 : undefined}
+        aria-label={onAbrirExtrato ? "Ver extrato do valor disponível" : undefined}
+        onClick={() => onAbrirExtrato?.("disponivel")}
+        onKeyDown={(e) => { if (onAbrirExtrato && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrirExtrato("disponivel"); } }}
+        className={`relative overflow-hidden rounded-[1.25rem] p-5 shadow-xl md:p-6 ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent shadow-accent/25"} ${onAbrirExtrato ? "cursor-pointer transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-white" : ""}`}
         aria-live="polite"
       >
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-16 -left-10 size-40 rounded-full bg-white/10" />
-        <p className="relative text-xs font-semibold uppercase tracking-wider opacity-80">{negativo ? "Acima do salário" : "Disponível após os gastos"}</p>
+        <p className="relative text-xs font-semibold uppercase tracking-wider opacity-80">{negativo ? "Acima do salário" : "Disponível após os gastos"}{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
         <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">{brl(Math.abs(resumo.sobra))}</p>
         <p className="mt-2 text-xs opacity-80">
           Salário {brl(resumo.salario)} − seus gastos {brl(resumo.meusGastos)}

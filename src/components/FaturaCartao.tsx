@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useOpcoes } from '@/lib/useOpcoes';
 import { calcularFatura } from '@/lib/faturas';
 import { addMeses, brl, rotuloMes } from '@/lib/finance';
+import { gradienteCartao } from '@/lib/cartao';
 import type { Estado } from '@/lib/types';
 
 /** Mesmo visual da tela de Contas parceladas: carrossel de cartões + lista em painel. */
@@ -39,7 +40,7 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
             return (
               <button key={c.id} type="button" onClick={() => setId(c.id)} aria-pressed={ativo}
                 className={`min-w-[17rem] snap-start overflow-hidden rounded-3xl p-5 text-left text-white shadow-lg transition sm:min-w-[19rem] ${ativo ? 'ring-4 ring-accent ring-offset-2 ring-offset-background' : 'opacity-80 hover:opacity-100'}`}
-                style={{ background: `linear-gradient(135deg, ${cor}, #0f172a)` }}>
+                style={{ background: gradienteCartao(cor) }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-base font-semibold">{c.nome}</p>
@@ -85,34 +86,5 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
         {!fatura.itens.length && <p className="px-4 py-8 text-center text-sm text-muted">Nenhum lançamento neste período.</p>}
       </section>
     </div>
-  );
-}
-
-export function FaturasDoMes({ estado, mes, onAbrir }: { estado: Estado; mes: string; onAbrir: () => void }) {
-  const { pagamento, corPagamento } = useOpcoes();
-  const cartoes = pagamento.filter((c) => c.eh_cartao);
-  if (!cartoes.length) return null;
-  return (
-    <section className="card-glass space-y-4 p-5">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-        <div className="min-w-0"><h2 className="text-lg font-semibold">Faturas do mês</h2><p className="text-xs text-muted">Toque em um cartão para ver os detalhes.</p></div>
-        <button type="button" onClick={onAbrir} className="text-sm font-medium text-accent">Ver todas ›</button>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cartoes.map((c) => {
-          const f = calcularFatura(estado, c.nome, mes, Number(c.limite) || 0);
-          const limite = Number(c.limite) || 0;
-          const pct = limite > 0 ? Math.min(100, (f.total / limite) * 100) : 0;
-          return (
-            <button type="button" key={c.id} onClick={onAbrir} className="overflow-hidden rounded-2xl p-4 text-left text-white shadow-md transition hover:-translate-y-0.5" style={{ background: `linear-gradient(135deg, ${c.cor || corPagamento(c.nome)}, #0f172a)` }}>
-              <p className="truncate text-sm font-semibold">{c.nome}</p>
-              <p className="mt-3 text-xl font-bold tabular-nums">{brl(f.total)}</p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} /></div>
-              <p className="mt-1.5 text-[11px] text-white/70">{pct.toFixed(0)}% do limite</p>
-            </button>
-          );
-        })}
-      </div>
-    </section>
   );
 }

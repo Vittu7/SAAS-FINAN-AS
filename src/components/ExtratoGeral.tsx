@@ -1,125 +1,42 @@
 "use client";
 
-import MobileLista from "@/components/mobile/MobileLista";
+import { useMemo } from "react";
+import ExtratoLista from "@/components/ExtratoLista";
 import { brl } from "@/lib/finance";
+import { montarLinhas, ordenarPorValor, totalGastos, type Ordem } from "@/lib/extrato";
 
 type Props = {
-    mes: string;
-    extrato: any[];
-    cartao: any[];
-    contas: any[];
+  mes: string;
+  extrato: any[];
+  cartao: any[];
+  contas: any[];
+  /** Ordenação por valor escolhida nos filtros ("" = padrão). */
+  ordem?: Ordem;
 };
 
-export default function ExtratoGeral({
-    mes,
-    extrato,
-    cartao,
-    contas,
-}: Props) {
-    const linhas = [
-        ...extrato.map((item) => ({
-            id: `extrato-${item.id}`,
-            data: item.mes,
-            tipo: "Lançamento",
-            descricao: item.descricao || "—",
-            categoria: item.categoria || "—",
-            forma: item.pagamento || "—",
-            responsavel: item.responsavel || "—",
-            valor: Number(item.valor) || 0,
-            status: "Registrado",
-        })),
-        ...cartao.map((item) => ({
-            id: `cartao-${item.id}`,
-            data: item.mes,
-            tipo: "Parcelado",
-            descricao: item.descricao || item.nome || "—",
-            categoria: item.categoria || "—",
-            forma: item.cartao || "—",
-            responsavel: item.responsavel || "—",
-            valor: Number(item.valor) || 0,
-            status: `Parcela ${item.parcelaAtual ?? item.parcela_atual ?? 1}/${item.parcelaTotal ?? item.parcela_total ?? 1}`,
-        })),
-        ...contas.map((item) => ({
-            id: `conta-${item.id}`,
-            data: item.mes,
-            tipo: "Conta fixa",
-            descricao: item.nome || "—",
-            categoria: item.categoria || "—",
-            forma: item.forma_pagamento || "—",
-            responsavel: item.responsavel || "—",
-            valor: Number(item.valor) || 0,
-            status: item.pago ? "Paga" : "Pendente",
-        })),
-    ]
-        .filter((item) => item.data === mes)
-        .sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
+export default function ExtratoGeral({ mes, extrato, cartao, contas, ordem = "" }: Props) {
+  const linhas = useMemo(
+    () => ordenarPorValor(montarLinhas(extrato, cartao, contas, mes), ordem),
+    [extrato, cartao, contas, mes, ordem],
+  );
+  const total = totalGastos(linhas);
 
-    const total = linhas.reduce((soma, item) => soma + item.valor, 0);
+  return (
+    <section className="space-y-4 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
+      <header className="flex items-end justify-between gap-3 rounded-2xl bg-background px-4 py-3 md:bg-transparent md:px-0 md:py-0">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold">Extrato do mês</h2>
+          <p className="text-sm text-muted">Lançamentos do mês, parcelas e contas fixas.</p>
+        </div>
+        <p className="shrink-0 text-right">
+          <span className="block text-xs text-muted">
+            {linhas.length} {linhas.length === 1 ? "movimentação" : "movimentações"}
+          </span>
+          <span className="text-xl font-semibold tabular-nums">{brl(total)}</span>
+        </p>
+      </header>
 
-    return (
-        <section className="md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
-            <MobileLista
-                vazio="Não há movimentações neste mês."
-                itens={linhas.map((l) => ({
-                    id: l.id,
-                    titulo: l.descricao,
-                    subtitulo: `${l.tipo} · ${l.categoria !== "—" ? l.categoria : l.forma}`,
-                    valor: l.valor,
-                    icone: l.tipo === "Parcelado" ? "▤" : l.tipo === "Conta fixa" ? "▣" : "≡",
-                    tags: [l.forma, l.responsavel, l.categoria].filter((t) => t && t !== "—"),
-                    status: l.tipo === "Lançamento" ? undefined : { texto: l.status, tom: l.status === "Paga" ? "ok" as const : l.status === "Pendente" ? "alerta" as const : "neutro" as const },
-                }))}
-            />
-            <div className="hidden md:block">
-            <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                    <h2 className="text-lg font-semibold">Extrato do mês</h2>
-                    <p className="text-sm text-muted">
-                        Lançamentos normais, parcelas e contas fixas.
-                    </p>
-                </div>
-                <p className="text-sm font-semibold">
-                    Total: <span className="tabular-nums">{brl(total)}</span>
-                </p>
-            </header>
-
-            {linhas.length === 0 ? (
-                <p className="rounded-xl border border-line bg-background p-4 text-sm text-muted">
-                    Não há movimentações neste mês.
-                </p>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] text-left text-sm">
-                        <thead>
-                            <tr className="border-b border-line text-xs text-muted">
-                                <th className="py-3 pr-3">Tipo</th>
-                                <th className="py-3 pr-3">Descrição</th>
-                                <th className="py-3 pr-3">Categoria</th>
-                                <th className="py-3 pr-3">Forma de pagamento</th>
-                                <th className="py-3 pr-3">Responsável</th>
-                                <th className="py-3 pr-3">Status</th>
-                                <th className="py-3 text-right">Valor</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {linhas.map((item) => (
-                                <tr key={item.id} className="border-b border-line/50 last:border-0">
-                                    <td className="py-3 pr-3">{item.tipo}</td>
-                                    <td className="py-3 pr-3 font-medium">{item.descricao}</td>
-                                    <td className="py-3 pr-3">{item.categoria}</td>
-                                    <td className="py-3 pr-3">{item.forma}</td>
-                                    <td className="py-3 pr-3">{item.responsavel}</td>
-                                    <td className="py-3 pr-3 text-muted">{item.status}</td>
-                                    <td className="py-3 text-right font-semibold tabular-nums">
-                                        {brl(item.valor)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-            </div>
-        </section>
-    );
+      <ExtratoLista linhas={linhas} ordem={ordem} vazio="Não há movimentações neste mês." />
+    </section>
+  );
 }

@@ -19,7 +19,11 @@ export function MobileHeader({
   setMembroSelecionado,
   listaMembros,
   onAbrirMenu,
+  mostrarMes = true,
+  mostrarVisualizacao = true,
 }: {
+  mostrarMes?: boolean;
+  mostrarVisualizacao?: boolean;
   titulo: string;
   mes: string;
   setMes: (m: string) => void;
@@ -45,8 +49,8 @@ export function MobileHeader({
         </button>
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <div className="flex h-9 flex-1 items-center justify-between rounded-full bg-surface px-1 ring-1 ring-line">
+      {(mostrarMes || mostrarVisualizacao) && <div className="mt-3 flex items-center gap-2">
+        {mostrarMes && <div className="flex h-9 flex-1 items-center justify-between rounded-full bg-surface px-1 ring-1 ring-line">
           <button
             type="button"
             aria-label="Mês anterior"
@@ -66,8 +70,8 @@ export function MobileHeader({
           >
             ›
           </button>
-        </div>
-        <select
+        </div>}
+        {mostrarVisualizacao && <select
           aria-label="Visualização"
           value={membroSelecionado}
           onChange={(e) => setMembroSelecionado(e.target.value)}
@@ -80,8 +84,8 @@ export function MobileHeader({
               {m}
             </option>
           ))}
-        </select>
-      </div>
+        </select>}
+      </div>}
     </header>
   );
 }
@@ -91,10 +95,12 @@ export function MobileSaldo({
   resumo,
   salario,
   onConfig,
+  onAbrirExtrato,
 }: {
   resumo: Resumo;
   salario: number;
   onConfig: (salario: number) => void;
+  onAbrirExtrato?: (tipo: "gastos" | "disponivel") => void;
 }) {
   const [oculto, setOculto] = useState(false);
   const negativo = resumo.sobra < 0;
@@ -110,14 +116,21 @@ export function MobileSaldo({
 
   return (
     <section className="md:hidden">
-      <div className={`relative overflow-hidden rounded-3xl p-5 shadow-lg ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent"}`}>
+      <div
+        role={onAbrirExtrato ? "button" : undefined}
+        tabIndex={onAbrirExtrato ? 0 : undefined}
+        aria-label={onAbrirExtrato ? "Ver extrato do valor disponível" : undefined}
+        onClick={() => onAbrirExtrato?.("disponivel")}
+        onKeyDown={(e) => { if (onAbrirExtrato && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrirExtrato("disponivel"); } }}
+        className={`relative overflow-hidden rounded-3xl p-5 shadow-lg ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent"} ${onAbrirExtrato ? "cursor-pointer active:scale-[0.99]" : ""}`}
+      >
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-14 -left-8 size-36 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between">
-          <p className="text-xs font-medium opacity-80">{negativo ? "Acima do salário" : "Disponível no mês"}</p>
+          <p className="text-xs font-medium opacity-80">{negativo ? "Acima do salário" : "Disponível após os gastos"}{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
           <button
             type="button"
-            onClick={() => setOculto((o) => !o)}
+            onClick={(e) => { e.stopPropagation(); setOculto((o) => !o); }}
             aria-label={oculto ? "Mostrar valores" : "Ocultar valores"}
             className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium active:scale-95"
           >
@@ -136,15 +149,15 @@ export function MobileSaldo({
           <p className="text-xs text-muted">Salário ✎</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{v(salario)}</p>
         </button>
-        <div className="rounded-2xl bg-surface p-4 ring-1 ring-line">
-          <p className="text-xs text-muted">Gasto no mês</p>
+        <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className="rounded-2xl bg-surface p-4 text-left ring-1 ring-line active:scale-[0.98]">
+          <p className="text-xs text-muted">Gastos do mês{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{v(resumo.totalGasto)}</p>
-        </div>
+        </button>
       </div>
 
       <div className="mt-3 divide-y divide-line rounded-2xl bg-surface ring-1 ring-line">
         {[
-          { r: "Lançamentos", n: resumo.porOrigem.extrato, s: "≡" },
+          { r: "Lançamentos do mês", n: resumo.porOrigem.extrato, s: "≡" },
           { r: "Parcelas", n: resumo.porOrigem.cartao, s: "▤" },
           { r: "Contas fixas", n: resumo.porOrigem.contas, s: "▣" },
         ].map((i) => (
@@ -307,7 +320,7 @@ export function MobileMenu({
           <button type="button" className={linha} onClick={() => ir("cartao")}><span className={icone}>▤</span>Contas parceladas</button>
           <button type="button" className={linha} onClick={() => ir("fatura")}><span className={icone}>▭</span>Faturas do cartão</button>
           <button type="button" className={linha} onClick={() => ir("contas")}><span className={icone}>▣</span>Contas fixas</button>
-          <button type="button" className={linha} onClick={() => ir("lancamentos")}><span className={icone}>≡</span>Lançamentos</button>
+          <button type="button" className={linha} onClick={() => ir("lancamentos")}><span className={icone}>≡</span>Lançamentos do mês</button>
 
           <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Conta</p>
           <button type="button" className={linha} onClick={() => ir("ajustes")}><span className={icone}>⚙</span>Configurações e perfil</button>

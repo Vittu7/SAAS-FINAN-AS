@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import DialogResponsivo from "./DialogResponsivo";
 import { parseValor } from "@/lib/finance";
 import { type Opcao, useOpcoes } from "@/lib/useOpcoes";
+import { gradienteCartao } from "@/lib/cartao";
 
 type Aba = "cartoes" | "pagamentos" | "categorias";
 
@@ -323,20 +324,22 @@ function BotoesAcao({ nome, bloqueado, onEditar, onExcluir, claro }: { nome: str
 }
 
 function CartaoItem({ item, bloqueado, onEditar, onExcluir }: { item: Opcao; bloqueado: boolean; onEditar: () => void; onExcluir: () => void }) {
+  // Mesma aparência dos cartões da Home, das Contas parceladas e das Faturas: usa a cor cadastrada.
   return (
     <div
-      className="flex h-full min-w-0 flex-col justify-between gap-4 rounded-lg border border-line bg-surface p-4 text-ink"
+      className="flex h-full min-w-0 flex-col justify-between gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-md"
+      style={{ background: gradienteCartao(item.cor) }}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 truncate text-base font-semibold">{item.nome}</p>
-        <span className="shrink-0 rounded-full border border-line bg-background px-2 py-0.5 text-[11px]">Crédito</span>
+        <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[11px] font-semibold">Crédito</span>
       </div>
       <div className="grid min-w-0 gap-3">
         <div>
-          <p className="text-[11px] text-muted">Limite total</p>
+          <p className="text-[11px] text-white/70">Limite total</p>
           <p className="text-lg font-bold">{brl(Number(item.limite || 0))}</p>
         </div>
-        <BotoesAcao nome={item.nome} bloqueado={bloqueado} onEditar={onEditar} onExcluir={onExcluir} />
+        <BotoesAcao claro nome={item.nome} bloqueado={bloqueado} onEditar={onEditar} onExcluir={onExcluir} />
       </div>
     </div>
   );
@@ -383,10 +386,11 @@ function FormularioDialog({
     <DialogResponsivo titulo={titulo} onFechar={onCancelar}>
       <form onSubmit={onSalvar} className="min-w-0">
         {ehPagamento && form.ehCartao && (
-          <div className="mb-4 rounded-lg border border-line bg-surface p-4 text-ink">
-            <p className="text-[11px] text-muted">Prévia do cartão</p>
+          <div className="mb-4 overflow-hidden rounded-2xl p-4 text-white shadow-md" style={{ background: gradienteCartao(form.cor) }}>
+            <p className="text-[11px] text-white/70">Prévia do cartão</p>
             <p className="mt-4 truncate font-semibold">{form.nome.trim() || "Nome do cartão"}</p>
-            <p className="mt-2 text-lg font-bold">{brl(parseValor(form.limite))}</p>
+            <p className="text-[11px] text-white/70 mt-3">Limite total</p>
+            <p className="text-lg font-bold">{brl(parseValor(form.limite))}</p>
           </div>
         )}
 

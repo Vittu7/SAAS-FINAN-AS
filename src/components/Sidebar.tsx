@@ -24,7 +24,7 @@ const SECOES = [
     titulo: "Movimentações",
     itens: [
       { id: "extrato", rotulo: "Extrato", simbolo: "≡" },
-      { id: "lancamentos", rotulo: "Lançamentos", simbolo: "+" },
+      { id: "lancamentos", rotulo: "Lançamentos do mês", simbolo: "+" },
     ],
   },
   {
@@ -151,7 +151,7 @@ export default function Sidebar({
         </div>
 
         {/* FILTRO DE MEMBROS */}
-        {expandido && setMembroSelecionado && (
+        {expandido && setMembroSelecionado && abaAtiva !== "ajustes" && (
           <div className="border-b border-line py-4">
             <label
               htmlFor="filtro-membro"

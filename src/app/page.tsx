@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import CentralAjustes, { type SecaoAjustes } from "@/components/CentralAjustes";
-import FaturaCartao, { FaturasDoMes } from "@/components/FaturaCartao";
+import FaturaCartao from "@/components/FaturaCartao";
+import PilhaCartoes from "@/components/PilhaCartoes";
+import ExtratoDetalhe, { type TipoDetalhe } from "@/components/ExtratoDetalhe";
 import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
 import CartaoTable from "@/components/CartaoTable";
 import ContasFixasTable from "@/components/ContasFixasTable";
@@ -16,7 +18,8 @@ import AjudaEInstalacao from "@/components/AjudaEInstalacao";
 import InvestimentosReservaCard from "@/components/InvestimentosReservaCard";
 import GrupoModal from "@/components/GrupoModal";
 import Sidebar from "@/components/Sidebar";
-import FiltrosLancamentos, { type FiltrosLancamentoState } from "@/components/FiltrosLancamentos";
+import FiltrosLancamentos, { FILTROS_INICIAIS, type FiltrosLancamentoState } from "@/components/FiltrosLancamentos";
+import { ordenarPorValor } from "@/lib/extrato";
 import { useFinanceStore } from "@/hooks/useFinanceStore";
 import {
   addMeses,
@@ -43,6 +46,7 @@ export default function Home() {
   const [menuMobile, setMenuMobile] = useState(false);
   const [filtrosMobile, setFiltrosMobile] = useState(false);
   const [secaoAjustes, setSecaoAjustes] = useState<SecaoAjustes>("perfil");
+  const [detalheExtrato, setDetalheExtrato] = useState<TipoDetalhe | null>(null);
 
   // Permite abrir direto uma aba (ex.: /?aba=ajustes&secao=perfil, vindo da antiga página de perfil)
   useEffect(() => {
@@ -59,14 +63,7 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const [filtros, setFiltros] = useState<FiltrosLancamentoState>({
-    busca: "",
-    responsavel: "",
-    categoria: "",
-    pagamento: "",
-    tipo: "todos",
-    status: "todos",
-  });
+  const [filtros, setFiltros] = useState<FiltrosLancamentoState>(FILTROS_INICIAIS);
 
   useEffect(() => {
     setMes(mesAtual());
@@ -159,17 +156,19 @@ export default function Home() {
     [aba, filtros]
   );
 
+  // A ordenação por valor combina com todos os demais filtros e só vale nos módulos de listagem
+  const ordem = aba === "inicio" ? "" : filtros.ordem;
   const extrato = useMemo(
-    () => arraysMensais.extrato.filter((item) => correspondeFiltros(item, "extrato")),
-    [arraysMensais, correspondeFiltros]
+    () => ordenarPorValor(arraysMensais.extrato.filter((item) => correspondeFiltros(item, "extrato")), ordem),
+    [arraysMensais, correspondeFiltros, ordem]
   );
   const cartao = useMemo(
-    () => arraysMensais.cartao.filter((item) => correspondeFiltros(item, "cartao")),
-    [arraysMensais, correspondeFiltros]
+    () => ordenarPorValor(arraysMensais.cartao.filter((item) => correspondeFiltros(item, "cartao")), ordem),
+    [arraysMensais, correspondeFiltros, ordem]
   );
   const contas = useMemo(
-    () => arraysMensais.contas.filter((item) => correspondeFiltros(item, "contas")),
-    [arraysMensais, correspondeFiltros]
+    () => ordenarPorValor(arraysMensais.contas.filter((item) => correspondeFiltros(item, "contas")), ordem),
+    [arraysMensais, correspondeFiltros, ordem]
   );
 
   const estadoComFiltros = useMemo(
@@ -197,6 +196,11 @@ export default function Home() {
   }
 
   const mostrarPainel = aba === "inicio";
+  // Em Configurações nada depende de mês nem de visualização por pessoa; em Faturas o mês já tem seletor próprio
+  const mostrarVisualizacao = aba !== "ajustes";
+  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura";
+  const rotuloVisualizacao =
+    membroSelecionado === "EU" ? "Somente eu" : membroSelecionado === "TODOS" ? "Todo o grupo" : membroSelecionado;
   const mostrarFiltros = !mostrarPainel && aba !== "ajustes" && aba !== "fatura";
 
   return (
@@ -224,11 +228,13 @@ export default function Home() {
                 : aba === "extrato"
                 ? "Extrato"
                 : aba === "lancamentos"
-                ? "Lançamentos"
+                ? "Lançamentos do mês"
                 : aba === "cartao"
                 ? "Contas parceladas"
                 : "Contas fixas"
             }
+            mostrarMes={mostrarMesNoCabecalho}
+            mostrarVisualizacao={mostrarVisualizacao}
             mes={mes}
             setMes={setMes}
             membroSelecionado={membroSelecionado}
@@ -245,7 +251,7 @@ export default function Home() {
                   : aba === "extrato"
                   ? "Extrato"
                   : aba === "lancamentos"
-                  ? "Lançamentos"
+                  ? "Lançamentos do mês"
                   : aba === "cartao"
                   ? "Contas parceladas"
                   : "Contas fixas"}
@@ -264,7 +270,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2">
-              <select
+              {mostrarVisualizacao && <select
                 aria-label="Visualização"
                 value={membroSelecionado}
                 onChange={(e) => setMembroSelecionado(e.target.value)}
@@ -277,9 +283,9 @@ export default function Home() {
                     {m}
                   </option>
                 ))}
-              </select>
+              </select>}
 
-              <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
+              {mostrarMesNoCabecalho && <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
                 <button
                   type="button"
                   onClick={() => setMes(addMeses(mes, -1))}
@@ -301,7 +307,7 @@ export default function Home() {
                 >
                   ›
                 </button>
-              </div>
+              </div>}
 
               <AjudaEInstalacao mostrarConvite={mostrarPainel} />
               <ThemeToggle />
@@ -314,6 +320,7 @@ export default function Home() {
                 resumo={resumo}
                 salario={estado.config.salario}
                 onConfig={(salario) => loja.atualizarConfig({ salario })}
+                onAbrirExtrato={setDetalheExtrato}
               />}
               <MobileAtalhos
                 onAba={irPara}
@@ -324,9 +331,10 @@ export default function Home() {
                   resumo={resumo}
                   salario={estado.config.salario}
                   onConfig={(salario) => loja.atualizarConfig({ salario })}
+                  onAbrirExtrato={setDetalheExtrato}
                 />
               </div>}
-              {dashboard.preferencias.faturas && <FaturasDoMes estado={estadoFiltrado} mes={mes} onAbrir={() => irPara("fatura")} />}
+              {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 {dashboard.preferencias.graficos && <div id="graficos" className="min-w-0"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
                 {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0"><InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} /></div>}
@@ -367,9 +375,9 @@ export default function Home() {
           <div className="min-w-0">
             <section className="min-w-0">
               {aba === "ajustes" && <CentralAjustes key={secaoAjustes} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
-              {aba === "fatura" && <FaturaCartao estado={estadoFiltrado} mes={mes} setMes={setMes} />}
+              {aba === "fatura" && <FaturaCartao estado={estado} mes={mes} setMes={setMes} />}
               {aba === "extrato" && (
-                <ExtratoGeral mes={mes} extrato={extrato} cartao={cartao} contas={contas} />
+                <ExtratoGeral mes={mes} extrato={extrato} cartao={cartao} contas={contas} ordem={ordem} />
               )}
 
               {aba === "lancamentos" && (
@@ -384,6 +392,7 @@ export default function Home() {
 
               {aba === "cartao" && (
                 <CartaoTable
+                  estado={estado}
                   mes={mes}
                   itens={cartao}
                   onAdd={loja.adicionarCartao}
@@ -417,6 +426,19 @@ export default function Home() {
         onGrupo={() => setModalGrupoAberto(true)}
       />
       {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}
+      {detalheExtrato && (
+        <ExtratoDetalhe
+          tipo={detalheExtrato}
+          mes={mes}
+          extrato={extrato}
+          cartao={cartao}
+          contas={contas}
+          salario={estado.config.salario}
+          userId={userId}
+          visualizacao={rotuloVisualizacao}
+          onFechar={() => setDetalheExtrato(null)}
+        />
+      )}
     </div>
   );
 }

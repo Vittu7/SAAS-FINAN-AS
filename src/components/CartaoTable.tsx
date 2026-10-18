@@ -8,14 +8,19 @@ import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 import { useOpcoes, type Opcao } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 import EditarLancamentoModal from "@/components/EditarLancamentoModal";
+import { calcularFatura } from "@/lib/faturas";
+import type { Estado } from "@/lib/types";
 
 export default function CartaoTable({
+  estado,
   mes,
   itens,
   onAdd,
   onRemove,
   onEdit,
 }: {
+  /** Base completa do grupo: a fatura de cada cartão soma todos os lançamentos, sem filtros de tela. */
+  estado?: Estado;
   mes: string;
   itens: any[];
   onAdd: (item: any, gerarSeguintes: boolean) => void;
@@ -129,11 +134,12 @@ export default function CartaoTable({
   const cartoesComLimite = pagamento
     .filter((f: Opcao) => f.eh_cartao)
     .map((cartaoItem: Opcao) => {
-      const lancamentosDoCartao = itens.filter(
-        (c) => (c.cartao || "").toLowerCase() === cartaoItem.nome.toLowerCase()
-      );
-      const totalUtilizado = lancamentosDoCartao.reduce((acc, cur) => acc + (Number(cur.valor) || 0), 0);
       const limite = Number(cartaoItem.limite) || 0;
+      const totalUtilizado = estado
+        ? calcularFatura(estado, cartaoItem.nome, mes, limite).total
+        : itens
+            .filter((c) => (c.cartao || "").toLowerCase() === cartaoItem.nome.toLowerCase())
+            .reduce((acc, cur) => acc + (Number(cur.valor) || 0), 0);
       const disponivel = limite - totalUtilizado;
 
       return {

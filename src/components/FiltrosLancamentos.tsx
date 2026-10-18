@@ -9,6 +9,18 @@ export type FiltrosLancamentoState = {
   pagamento: string;
   tipo: string;
   status: string;
+  /** Ordenação por valor: "" (padrão) | "maior" (maior → menor) | "menor" (menor → maior). */
+  ordem: "" | "maior" | "menor";
+};
+
+export const FILTROS_INICIAIS: FiltrosLancamentoState = {
+  busca: "",
+  responsavel: "",
+  categoria: "",
+  pagamento: "",
+  tipo: "todos",
+  status: "todos",
+  ordem: "",
 };
 
 type Props = {
@@ -36,7 +48,7 @@ export default function FiltrosLancamentos({
   ).length;
 
   const atualizar = (campo: keyof FiltrosLancamentoState, valor: string) =>
-    setFiltros({ ...filtros, [campo]: valor });
+    setFiltros({ ...filtros, [campo]: valor } as FiltrosLancamentoState);
 
   const selectClass = "min-w-0 rounded-lg border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
 
@@ -45,7 +57,7 @@ export default function FiltrosLancamentos({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Filtros</h2>
-          <p className="text-xs text-muted">Encontre lançamentos por descrição, pessoa ou tipo.</p>
+          <p className="text-xs text-muted">Encontre lançamentos por descrição, pessoa ou tipo e ordene por valor.</p>
         </div>
         <button
           type="button"
@@ -80,7 +92,7 @@ export default function FiltrosLancamentos({
         {mostrarTipo && (
           <select aria-label="Filtrar tipo de lançamento" value={filtros.tipo} onChange={(event) => atualizar("tipo", event.target.value)} className={selectClass}>
             <option value="todos">Todos os tipos</option>
-            <option value="extrato">Lançamentos</option>
+            <option value="extrato">Lançamentos do mês</option>
             <option value="cartao">Contas parceladas</option>
             <option value="contas">Contas fixas</option>
           </select>
@@ -92,8 +104,13 @@ export default function FiltrosLancamentos({
             <option value="pendente">Pendentes</option>
           </select>
         )}
+        <select aria-label="Ordenar por valor" value={filtros.ordem} onChange={(event) => atualizar("ordem", event.target.value)} className={selectClass}>
+          <option value="">Ordenar: padrão</option>
+          <option value="maior">Valor: maior para menor</option>
+          <option value="menor">Valor: menor para maior</option>
+        </select>
         {ativos > 0 && (
-          <button type="button" onClick={() => setFiltros({ busca: "", responsavel: "", categoria: "", pagamento: "", tipo: "todos", status: "todos" })} className="rounded-lg px-3 py-2 text-left text-sm font-medium text-accent hover:bg-background">
+          <button type="button" onClick={() => setFiltros(FILTROS_INICIAIS)} className="rounded-lg px-3 py-2 text-left text-sm font-medium text-accent hover:bg-background">
             Limpar filtros
           </button>
         )}

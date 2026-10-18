@@ -34,59 +34,34 @@ export function useOpcoes() {
 
     if (!user) return;
 
-    const { data: perfil, error: erroPerfil } = await supabase
-      .from("perfis")
-      .select("grupo_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (erroPerfil) {
-      console.error("Erro ao carregar perfil:", erroPerfil);
-      return;
-    }
-
-    if (!perfil?.grupo_id) {
-      setPagamento([]);
-      setCategoria([]);
-      return;
-    }
-
     /*
-     * Esta função foi criada na migration SQL.
-     * É idempotente: pode ser chamada quantas vezes quiser sem duplicar
-     * Débito, Pix e Dinheiro.
+     * Cadastros são privados: cada usuário só enxerga e gerencia os seus
+     * (a regra também é imposta pelo RLS no banco — ver migração 02).
+     * A função cria Débito, Pix, Dinheiro e categorias genéricas uma única
+     * vez por usuário; não recria o que ele apagar nem duplica nada.
      */
-    const { error: erroPadroes } = await supabase.rpc(
-      "criar_formas_pagamento_padrao",
-      { p_grupo_id: perfil.grupo_id },
-    );
+    const { error: erroPadroes } = await supabase.rpc("criar_opcoes_padrao");
 
     if (erroPadroes) {
-      console.error(
-        "Erro ao garantir formas de pagamento padrão:",
-        erroPadroes,
-      );
+      console.error("Erro ao garantir cadastros padrão:", erroPadroes);
     }
 
     const [resPagamento, resCategoria] = await Promise.all([
       supabase
         .from("opcoes_pagamento")
         .select("*")
-        .eq("grupo_id", perfil.grupo_id)
+        .eq("user_id", user.id)
         .order("nome"),
 
       supabase
         .from("opcoes_categoria")
         .select("*")
-        .eq("grupo_id", perfil.grupo_id)
+        .eq("user_id", user.id)
         .order("nome"),
     ]);
 
     if (resPagamento.error) {
-      console.error(
-        "Erro ao carregar formas de pagamento:",
-        resPagamento.error,
-      );
+      console.error("Erro ao carregar formas de pagamento:", resPagamento.error);
     } else {
       setPagamento((resPagamento.data || []) as Opcao[]);
     }
@@ -108,7 +83,7 @@ export function useOpcoes() {
     };
   }, [recarregar]);
 
-  const obterGrupoAtual = async () => {
+  const obterContexto = async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -117,19 +92,14 @@ export function useOpcoes() {
       throw new Error("Faça login antes de alterar os cadastros.");
     }
 
-    const { data: perfil, error } = await supabase
+    // O grupo é só informativo; o dono do cadastro é sempre o usuário logado.
+    const { data: perfil } = await supabase
       .from("perfis")
       .select("grupo_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (error) throw error;
-
-    if (!perfil?.grupo_id) {
-      throw new Error("Crie ou entre em um grupo antes de cadastrar opções.");
-    }
-
-    return perfil.grupo_id as string;
+    return { userId: user.id, grupoId: (perfil?.grupo_id as string | null) ?? null };
   };
 
   const notificarAtualizacao = async () => {
@@ -147,9 +117,10 @@ export function useOpcoes() {
       throw new Error("Informe o nome da forma de pagamento.");
     }
 
-    const grupoId = await obterGrupoAtual();
+    const { userId, grupoId } = await obterContexto();
 
     const { error } = await supabase.from("opcoes_pagamento").insert({
+      user_id: userId,
       grupo_id: grupoId,
       nome,
       cor: dados.cor || COR_PADRAO,
@@ -188,10 +159,15 @@ export function useOpcoes() {
       dados.limite = Math.max(0, Number(dados.limite || 0));
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("opcoes_pagamento")
       .update(dados)
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
+
+    if (!error && (!data || data.length === 0)) {
+      throw new Error("Não foi possível alterar: este cadastro pertence a outro usuário.");
+    }
 
     if (error) {
       if (error.code === "23505") {
@@ -205,12 +181,17 @@ export function useOpcoes() {
   };
 
   const removerPagamento = async (id: string) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("opcoes_pagamento")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
 
     if (error) throw error;
+
+    if (!data || data.length === 0) {
+      throw new Error("Não foi possível excluir: este cadastro pertence a outro usuário.");
+    }
 
     await notificarAtualizacao();
   };
@@ -225,9 +206,10 @@ export function useOpcoes() {
       throw new Error("Informe o nome da categoria.");
     }
 
-    const grupoId = await obterGrupoAtual();
+    const { userId, grupoId } = await obterContexto();
 
     const { error } = await supabase.from("opcoes_categoria").insert({
+      user_id: userId,
       grupo_id: grupoId,
       nome,
       cor,
@@ -258,10 +240,15 @@ export function useOpcoes() {
       }
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("opcoes_categoria")
       .update(dados)
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
+
+    if (!error && (!data || data.length === 0)) {
+      throw new Error("Não foi possível alterar: este cadastro pertence a outro usuário.");
+    }
 
     if (error) {
       if (error.code === "23505") {
@@ -275,12 +262,17 @@ export function useOpcoes() {
   };
 
   const removerCategoria = async (id: string) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("opcoes_categoria")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
 
     if (error) throw error;
+
+    if (!data || data.length === 0) {
+      throw new Error("Não foi possível excluir: este cadastro pertence a outro usuário.");
+    }
 
     await notificarAtualizacao();
   };

@@ -30,6 +30,7 @@ import {
 } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
 import { MobileAtalhos, MobileBottomNav, MobileHeader, MobileMenu, MobileSaldo } from "@/components/mobile/MobileShell";
+import CaixinhasDestaque from "@/components/CaixinhasDestaque";
 
 type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
 
@@ -337,7 +338,7 @@ export default function Home() {
               {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 {dashboard.preferencias.graficos && <div id="graficos" className="min-w-0"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
-                {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0"><InvestimentosReservaCard config={estado.config} onConfig={loja.atualizarConfig} /></div>}
+                {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0">=<InvestimentosReservaCard /></div>}
               </div>
               <div className="flex justify-center pt-1">
                 <button type="button" onClick={() => { setSecaoAjustes("dashboard"); irPara("ajustes"); }} className="rounded-full bg-surface px-4 py-2 text-xs font-medium text-muted ring-1 ring-line transition hover:text-ink">

@@ -19,14 +19,11 @@ export const metadata: Metadata = {
   },
 };
 
+// ADICIONADO: Removemos themeColor daqui para não gerar conflito com o script dinâmico
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
-    { media: "(prefers-color-scheme: dark)", color: "#101722" },
-  ],
 };
 
 export default function RootLayout({
@@ -37,6 +34,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
+        {/* ADICIONADO: Tag estática de cor que será manipulada pelo script abaixo e pelo ThemeToggle */}
+        <meta name="theme-color" content="#f5f7fa" />
+
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -45,9 +45,17 @@ export default function RootLayout({
                 const t = localStorage.getItem('homecash-theme') || localStorage.getItem('tema') || 'system';
                 const a = localStorage.getItem('homecash-accent') || 'teal';
                 const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                
                 root.dataset.theme = t;
                 root.dataset.accent = a;
-                root.classList.toggle('dark', t === 'dark' || (t === 'system' && systemDark));
+                
+                const isDark = t === 'dark' || (t === 'system' && systemDark);
+                root.classList.toggle('dark', isDark);
+
+                // ADICIONADO: Atualiza a barra de status do Mobile (PWA) imediatamente no load
+                const metaTheme = document.querySelector('meta[name="theme-color"]');
+                if (metaTheme) metaTheme.setAttribute("content", isDark ? "#101722" : "#f5f7fa");
+
                 const bg = localStorage.getItem('homecash-bg') || 'none';
                 const img = localStorage.getItem('homecash-bg-img');
                 root.dataset.bg = bg === 'image' && !img ? 'none' : bg;

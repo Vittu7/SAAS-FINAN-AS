@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type React from "react";
+// IMPORTAÇÃO CORRIGIDA: usando a instância que você já exporta do seu arquivo
+import { supabase } from "@/lib/supabase";
 
 type Tema = "light" | "dark" | "system";
 type Fundo = "none" | "aurora" | "glow" | "dots" | "grid";
@@ -64,6 +66,7 @@ export function useAparencia() {
   const [destaque, setDestaque] = useState<Destaque>("teal");
 
   useEffect(() => {
+    // 1. Carrega primeiro o que está rápido no LocalStorage (evita ecrã a piscar)
     const temaSalvo = (localStorage.getItem("homecash-theme") || localStorage.getItem("tema")) as Tema | null;
     const destaqueSalvo = localStorage.getItem("homecash-accent") as Destaque | null;
     const temaInicial = temaSalvo && ["light", "dark", "system"].includes(temaSalvo) ? temaSalvo : "system";
@@ -71,11 +74,50 @@ export function useAparencia() {
     setTema(temaInicial);
     setDestaque(destaqueInicial);
     aplicarTema(temaInicial, destaqueInicial);
+
     const fundoSalvo = localStorage.getItem("homecash-bg") as Fundo | null;
     const fundoInicial = fundoSalvo && FUNDOS.some((f) => f.id === fundoSalvo) ? fundoSalvo : "none";
     setFundo(fundoInicial);
     aplicarFundo(fundoInicial);
-    // Mantém várias instâncias (menu, ajustes, cabeçalho) sincronizadas
+
+    // 2. Sincroniza com os dados do Supabase usando a sua instância direta
+    const syncSupabase = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user?.user_metadata) {
+          const { theme_color, theme_accent, theme_bg } = user.user_metadata;
+          let atualizado = false;
+
+          if (theme_color && theme_color !== temaInicial) {
+            setTema(theme_color);
+            localStorage.setItem("homecash-theme", theme_color);
+            atualizado = true;
+          }
+          if (theme_accent && theme_accent !== destaqueInicial) {
+            setDestaque(theme_accent);
+            localStorage.setItem("homecash-accent", theme_accent);
+            atualizado = true;
+          }
+          if (theme_bg && theme_bg !== fundoInicial) {
+            setFundo(theme_bg);
+            localStorage.setItem("homecash-bg", theme_bg);
+            atualizado = true;
+          }
+
+          if (atualizado) {
+            aplicarTema(theme_color || temaInicial, theme_accent || destaqueInicial);
+            aplicarFundo(theme_bg || fundoInicial);
+            avisar();
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao sincronizar aparência com Supabase:", error);
+      }
+    };
+
+    syncSupabase();
+
     const sync = () => {
       const t = (localStorage.getItem("homecash-theme") as Tema) || "system";
       const d = (localStorage.getItem("homecash-accent") as Destaque) || "teal";
@@ -95,30 +137,45 @@ export function useAparencia() {
   }, [tema, destaque]);
 
   const avisar = () => window.dispatchEvent(new Event("homecash-aparencia"));
+
+  // Função para atualizar preferências silenciosamente na nuvem
+  const salvarNoSupabase = async (dados: Record<string, string>) => {
+    try {
+      await supabase.auth.updateUser({ data: dados });
+    } catch (error) {
+      console.error("Erro ao salvar aparência no Supabase:", error);
+    }
+  };
+
   const mudarTema = (novo: Tema) => {
     setTema(novo);
     localStorage.setItem("homecash-theme", novo);
     aplicarTema(novo, destaque);
     avisar();
+    salvarNoSupabase({ theme_color: novo });
   };
+
   const mudarDestaque = (novo: Destaque) => {
     setDestaque(novo);
     localStorage.setItem("homecash-accent", novo);
     aplicarTema(tema, novo);
     avisar();
+    salvarNoSupabase({ theme_accent: novo });
   };
+
   const mudarFundo = (novo: Fundo) => {
     setFundo(novo);
     localStorage.setItem("homecash-bg", novo);
     aplicarFundo(novo);
     avisar();
+    salvarNoSupabase({ theme_bg: novo });
   };
+
   return { tema, destaque, fundo, mudarTema, mudarDestaque, mudarFundo };
 }
 
 const NOMES_TEMA: Record<Tema, string> = { light: "Claro", dark: "Escuro", system: "Sistema" };
 
-/** Prévia em miniatura de cada tema, para a pessoa ver antes/depois de escolher. */
 function MiniaturaTema({ t }: { t: Tema }) {
   const claro = { bg: "#f8fafc", card: "#ffffff", line: "#e7ebf0" };
   const escuro = { bg: "#101722", card: "#182230", line: "#29384a" };
@@ -137,7 +194,6 @@ function MiniaturaTema({ t }: { t: Tema }) {
   );
 }
 
-/** Conteúdo completo de aparência — usado no popover e embutido na Central de Ajustes. */
 export function PainelAparencia({ compacto = false }: { compacto?: boolean }) {
   const { tema, destaque, fundo, mudarTema, mudarDestaque, mudarFundo } = useAparencia();
   return (
@@ -184,7 +240,6 @@ export function PainelAparencia({ compacto = false }: { compacto?: boolean }) {
   );
 }
 
-/* Camadas: precisa ficar ACIMA dos diálogos (z 10010) e do menu lateral (z 10020). */
 const Z_FUNDO = 10040;
 const Z_PAINEL = 10041;
 

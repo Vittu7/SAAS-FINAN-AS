@@ -65,7 +65,7 @@ export default function Sidebar({
   const pathname = usePathname();
 
   useEffect(() => {
-    (async () => {
+    const carregarPerfil = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -80,7 +80,13 @@ export default function Sidebar({
         avatar: data?.avatar_url || null,
         email: user.email || "",
       });
-    })();
+    };
+
+    carregarPerfil();
+
+    // Atualiza nome/foto quando o perfil muda em Configurações.
+    window.addEventListener("homecash:perfil", carregarPerfil);
+    return () => window.removeEventListener("homecash:perfil", carregarPerfil);
   }, []);
 
   const alterarExpandido = (valor: boolean) => {

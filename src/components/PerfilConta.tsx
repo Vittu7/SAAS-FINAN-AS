@@ -42,6 +42,13 @@ export default function PerfilConta() {
     setCarregando(false);
   };
 
+  // Avisa o resto do app (Grupo Familiar, Sidebar) que o perfil mudou.
+  const avisarPerfilAtualizado = (avatarUrl: string | null) => {
+    window.dispatchEvent(
+      new CustomEvent("homecash:perfil", { detail: { id: userId, avatar_url: avatarUrl } })
+    );
+  };
+
   const enviarFoto = async (arquivo?: File) => {
     if (!arquivo || !userId) return;
     if (!arquivo.type.startsWith("image/")) return alert("Escolha uma imagem (JPG, PNG ou WEBP).");
@@ -60,7 +67,10 @@ export default function PerfilConta() {
     const { data } = supabase.storage.from("avatars").getPublicUrl(caminho);
     const { error } = await supabase.from("perfis").update({ avatar_url: data.publicUrl }).eq("id", userId);
     if (error) alert("Erro ao salvar a foto: " + error.message);
-    else setAvatar(data.publicUrl);
+    else {
+      setAvatar(data.publicUrl);
+      avisarPerfilAtualizado(data.publicUrl);
+    }
     setEnviandoFoto(false);
   };
 
@@ -69,6 +79,7 @@ export default function PerfilConta() {
     const { error } = await supabase.from("perfis").update({ avatar_url: null }).eq("id", userId);
     if (error) return alert("Erro ao remover: " + error.message);
     setAvatar(null);
+    avisarPerfilAtualizado(null);
   };
 
   const salvarPerfil = async (e: React.FormEvent) => {
@@ -76,7 +87,10 @@ export default function PerfilConta() {
     setSalvando(true);
     const { error } = await supabase.from("perfis").update({ nome_usuario: nomeUsuario }).eq("id", userId);
     if (error) alert("Erro ao atualizar nome: " + error.message);
-    else alert("Perfil atualizado com sucesso!");
+    else {
+      avisarPerfilAtualizado(avatar);
+      alert("Perfil atualizado com sucesso!");
+    }
     setSalvando(false);
   };
 

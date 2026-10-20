@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import Avatar from "./Avatar";
 
 const PALETA_CORES = [
   "#10B981", // Verde
@@ -26,6 +27,13 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     carregarPerfilEMembros();
+
+    // Atualiza a lista na hora quando a foto/nome é alterado em Configurações.
+    const aoAtualizarPerfil = () => {
+      carregarPerfilEMembros();
+    };
+    window.addEventListener("homecash:perfil", aoAtualizarPerfil);
+    return () => window.removeEventListener("homecash:perfil", aoAtualizarPerfil);
   }, []);
 
   const carregarPerfilEMembros = async () => {
@@ -54,7 +62,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
       if (perfil.grupo_id) {
         const { data: listaMembros } = await supabase
           .from("perfis")
-          .select("id, nome_usuario, cargo, eh_convidado, cor")
+          .select("id, nome_usuario, cargo, eh_convidado, cor, avatar_url")
           .eq("grupo_id", perfil.grupo_id);
 
         if (listaMembros) setMembros(listaMembros);
@@ -241,6 +249,9 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                 {membros.map((m) => (
                   <div key={m.id} className="flex justify-between items-center p-2.5 bg-surface rounded-xl border border-line text-sm">
                     <div className="flex items-center gap-3">
+                      {/* Foto do perfil ou inicial do nome */}
+                      <Avatar src={m.avatar_url} nome={m.nome_usuario} cor={m.cor} tamanho={36} />
+
                       {/* Seletor de cor circular */}
                       <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border border-line shadow-sm cursor-pointer">
                         <input

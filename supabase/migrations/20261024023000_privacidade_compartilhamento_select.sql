@@ -36,7 +36,6 @@ using (
     and privado is not true
     and (
       responsavel_id in (select public.meus_membros())
-      or grupo_id in (select public.meus_grupos())
     )
   )
   or (

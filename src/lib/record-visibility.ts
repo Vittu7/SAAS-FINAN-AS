@@ -21,10 +21,11 @@ export function registroVisivelParaUsuario(
   // O proprietário sempre pode ver seus próprios registros.
   if (registro.owner_id === usuarioId) return true;
 
-  // Nenhum registro de outra pessoa é mostrado por padrão.
-  if (registro.privado !== false) return false;
+  // Se a tabela possui o campo privado, um registro privado nunca é compartilhado.
+  // Algumas tabelas (como contas_fixas) não possuem esse campo.
+  if (registro.privado === true) return false;
 
-  // Compartilhamento individual explícito.
+  // Registros de terceiros exigem compartilhamento explícito.
   if (registro.compartilhado_com === usuarioId) return true;
 
   // Compartilhamento explícito com o grupo atual.

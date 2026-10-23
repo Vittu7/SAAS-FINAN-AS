@@ -364,6 +364,7 @@ export function useFinanceStore() {
         valor: conta.valor,
         forma_pagamento: conta.forma_pagamento || null,
         categoria: conta.categoria || null,
+        compartilhado_com: conta.compartilhado_com || null,
         vencimento: conta.vencimento
           ? Number(conta.vencimento)
           : null,

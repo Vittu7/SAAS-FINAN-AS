@@ -12,7 +12,7 @@ describe("registroVisivelParaUsuario", () => {
     ).toBe(true);
   });
 
-  it("preserva a visibilidade dos registros antigos durante a transição", () => {
+  it("preserva a visibilidade dos registros marcados como legados", () => {
     expect(
       registroVisivelParaUsuario(
         {
@@ -20,7 +20,7 @@ describe("registroVisivelParaUsuario", () => {
           grupo_id: "g1",
           privado: true,
           compartilhado_com: null,
-          created_at: "2026-10-20T12:00:00.000Z",
+          legado_privacidade_v1: true,
         },
         "u1",
         "g1",
@@ -119,3 +119,4 @@ describe("registroVisivelParaUsuario", () => {
     ).toBe(false);
   });
 });
+

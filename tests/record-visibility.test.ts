@@ -12,6 +12,22 @@ describe("registroVisivelParaUsuario", () => {
     ).toBe(true);
   });
 
+  it("preserva a visibilidade dos registros antigos durante a transição", () => {
+    expect(
+      registroVisivelParaUsuario(
+        {
+          owner_id: "u2",
+          grupo_id: "g1",
+          privado: true,
+          compartilhado_com: null,
+          created_at: "2026-10-20T12:00:00.000Z",
+        },
+        "u1",
+        "g1",
+      ),
+    ).toBe(true);
+  });
+
   it("nega por padrão registro de outra pessoa sem compartilhamento explícito", () => {
     expect(
       registroVisivelParaUsuario(

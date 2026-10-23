@@ -25,6 +25,7 @@ describe("registroVisivelParaUsuario", () => {
         },
         "u1",
         "g1",
+        "perfil-u1",
       ),
     ).toBe(true);
   });

@@ -93,28 +93,41 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         if (erroGrupo) throw erroGrupo;
 
         const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
-        await supabase.from("perfis").upsert({
-          id: user?.id,
-          user_id: user?.id,
+        if (!user) throw new Error("Faça login novamente para criar um grupo.");
+
+        const { error: erroPerfil } = await supabase.from("perfis").upsert({
+          id: user.id,
+          user_id: user.id,
           nome_usuario: nomePadrao,
           grupo_id: grupo.id,
           cargo: "gestor",
           cor: "#10B981",
         });
 
+        if (erroPerfil) throw erroPerfil;
+
         alert("Grupo criado com sucesso!");
       }
 
       if (modo === "entrar") {
         const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
-        await supabase.from("perfis").upsert({
-          id: user?.id,
-          user_id: user?.id,
+        if (!user) throw new Error("Faça login novamente para entrar em um grupo.");
+
+        const codigoGrupo = inputValor.trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(codigoGrupo)) {
+          throw new Error("Código do grupo inválido. Confira o código e tente novamente.");
+        }
+
+        const { error: erroEntrada } = await supabase.from("perfis").upsert({
+          id: user.id,
+          user_id: user.id,
           nome_usuario: nomePadrao,
-          grupo_id: inputValor,
+          grupo_id: codigoGrupo,
           cargo: "membro",
           cor: "#6366F1",
         });
+
+        if (erroEntrada) throw erroEntrada;
 
         alert("Você entrou no grupo!");
       }

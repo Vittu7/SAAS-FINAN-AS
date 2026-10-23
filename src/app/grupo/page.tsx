@@ -21,8 +21,8 @@ export default function FamiliaPage() {
     const { data, error } = await supabase
       .from("perfis")
       .select("*, grupos_familiares(nome)")
-      .eq("id", user.id)
-      .single();
+      .eq("user_id", user.id)
+      .maybeSingle();
 
     if (data) setMeuPerfil(data);
   };
@@ -33,23 +33,15 @@ export default function FamiliaPage() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // 1. Cria o grupo novo
-      const { data: grupo, error: erroGrupo } = await supabase
-        .from("grupos_familiares")
-        .insert([{ nome: nomeGrupo }])
-        .select()
-        .single();
+      if (!user) throw new Error("Faça login novamente para criar um grupo.");
 
-      if (erroGrupo) throw erroGrupo;
+      const nomePadrao = user.user_metadata?.full_name || user.email || "Usuário";
+      const { error } = await supabase.rpc("criar_grupo_familiar", {
+        p_nome: nomeGrupo.trim(),
+        p_nome_usuario: nomePadrao,
+      });
 
-      // 2. Atualiza o seu perfil para ser o Gestor deste grupo
-      const { error: erroPerfil } = await supabase
-        .from("perfis")
-        .update({ grupo_id: grupo.id, cargo: "gestor" })
-        .eq("id", user?.id);
-
-      if (erroPerfil) throw erroPerfil;
+      if (error) throw error;
 
       alert("Grupo familiar criado com sucesso!");
       carregarPerfil(); // Recarrega a tela

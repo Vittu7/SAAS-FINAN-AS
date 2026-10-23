@@ -1,5 +1,7 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useEffect, useState } from "react";
 import { parseValor } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
@@ -98,7 +100,7 @@ export function BotaoRemover({ onClick, rotulo }: { onClick: () => void; rotulo:
       aria-label={`Remover ${rotulo}`}
       className="rounded-md px-2 py-1 text-xs text-muted transition hover:bg-rose-500/10 hover:text-rose-500 focus-visible:ring-2 focus-visible:ring-rose-500"
     >
-      Remover
+      <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={13} />Remover</span>
     </button>
   );
 }

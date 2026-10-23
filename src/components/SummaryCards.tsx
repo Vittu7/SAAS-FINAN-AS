@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import { brl, parseValor, type Resumo } from "@/lib/finance";
+import { valoresOcultos } from "@/lib/privacidade";
 
-export default function SummaryCards({ resumo, salario, onConfig, onAbrirExtrato }: { resumo: Resumo; salario: number; onConfig: (salario: number) => void; onAbrirExtrato?: (tipo: "gastos" | "disponivel") => void }) {
+export default function SummaryCards({ resumo, salario, onConfig, onAbrirExtrato, onAbrirResumo }: { resumo: Resumo; salario: number; onConfig: (salario: number) => void; onAbrirExtrato?: (tipo: "gastos" | "disponivel") => void; onAbrirResumo?: (origem: "extrato" | "cartao" | "contas") => void }) {
   const negativo = resumo.sobra < 0;
 
   return (
@@ -27,11 +28,19 @@ export default function SummaryCards({ resumo, salario, onConfig, onAbrirExtrato
         <p className="text-sm font-medium text-muted">Gastos do mês{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
         <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{brl(resumo.totalGasto)}</p>
         <p className="mt-2 text-xs text-muted">Lançamentos, parcelas e contas fixas</p>
-        <dl className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-xs text-muted">
-          <div><dt className="inline">Lançamentos do mês </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.extrato)}</dd></div>
-          <div><dt className="inline">Parcelas </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.cartao)}</dd></div>
-          <div><dt className="inline">Fixas </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.contas)}</dd></div>
-        </dl>
+        <div role="group" aria-label="Gastos por origem" className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-xs text-muted">
+          {([["extrato", "Lançamentos do mês", resumo.porOrigem.extrato], ["cartao", "Parcelas", resumo.porOrigem.cartao], ["contas", "Fixas", resumo.porOrigem.contas]] as const).map(([origem, rotulo, valor]) => (
+            <div key={origem}>
+              {onAbrirResumo ? (
+                <button type="button" onClick={(e) => { e.stopPropagation(); onAbrirResumo(origem); }} aria-label={`Abrir ${rotulo}`} className="rounded px-0.5 text-left underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-accent">
+                  <span>{rotulo} </span><span className="font-medium text-ink">{brl(valor)}</span>
+                </button>
+              ) : (
+                <><span>{rotulo} </span><span className="font-medium text-ink">{brl(valor)}</span></>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div
@@ -62,7 +71,7 @@ function SalarioEditavel({ valor, onChange }: { valor: number; onChange: (n: num
 
   const iniciar = () => {
     cancelou.current = false;
-    setTexto(valor ? String(valor).replace(".", ",") : "");
+    setTexto(valor && !valoresOcultos() ? String(valor).replace(".", ",") : "");
     setEditando(true);
   };
 

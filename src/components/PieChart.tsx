@@ -1,3 +1,5 @@
+import { valoresOcultos } from "@/lib/privacidade";
+
 export type Fatia = { rotulo: string; valor: number; cor: string };
 
 /**
@@ -10,7 +12,7 @@ export default function PieChart({ fatias }: { fatias: Fatia[] }) {
   const C = 2 * Math.PI * R;
   let acumulado = 0;
 
-  const descricao = fatias.map((f) => `${f.rotulo}: ${f.valor.toFixed(2)} reais`).join("; ");
+  const descricao = valoresOcultos() ? "Valores ocultos" : fatias.map((f) => `${f.rotulo}: ${f.valor.toFixed(2)} reais`).join("; ");
 
   return (
     <svg

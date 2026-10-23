@@ -1,5 +1,6 @@
 "use client";
 
+import { larguraBarra, percentual, valoresOcultos } from "@/lib/privacidade";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl } from "@/lib/finance";
@@ -142,7 +143,7 @@ export default function ResponsavelPanel({
       <div className="relative my-2 flex items-center justify-center py-2">
         <svg viewBox="0 0 100 100" className="h-40 w-40 -rotate-90">
           <circle cx="50" cy="50" r={raio} fill="transparent" stroke="currentColor" strokeWidth="12" className="text-line/40" />
-          {total > 0 &&
+          {total > 0 && !valoresOcultos() &&
             fatias.map((f) => {
               if (f.valor <= 0) return null;
               const tramo = (f.valor / total) * circ;
@@ -180,13 +181,13 @@ export default function ResponsavelPanel({
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="font-bold tabular-nums">{brl(f.valor)}</span>
-                  <span className="w-8 text-right text-xs text-muted">{pct}%</span>
+                  <span className="w-8 text-right text-xs text-muted">{percentual(`${pct}%`)}</span>
                 </div>
               </div>
               {usoLimite !== null && (
                 <div className="mt-1.5 pl-5">
                   <div className="h-1.5 overflow-hidden rounded-full bg-line/60">
-                    <div className={`h-full rounded-full ${usoLimite >= 90 ? "bg-rose-500" : "bg-accent"}`} style={{ width: `${usoLimite}%` }} />
+                    <div className={`h-full rounded-full ${usoLimite >= 90 ? "bg-rose-500" : "bg-accent"}`} style={{ width: `${larguraBarra(usoLimite)}%` }} />
                   </div>
                   <p className="mt-1 text-[11px] text-muted">
                     {brl(f.valor)} de {brl(f.limite)} · livre {brl(Math.max(0, (f.limite || 0) - f.valor))}

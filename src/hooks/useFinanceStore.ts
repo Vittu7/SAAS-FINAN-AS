@@ -63,8 +63,10 @@ export function useFinanceStore() {
   const [userId, setUserId] = useState<string | null>(null);
   const [grupoId, setGrupoId] = useState<string | null>(null);
   const [membros, setMembros] = useState<Membro[]>([]);
+  /** Mensagem quando o carregamento falha (para não mostrar "sem registros" no lugar do erro). */
+  const [erroCarga, setErroCarga] = useState("");
 
-  const carregarDados = useCallback(async () => {
+  const carregarDadosInterno = useCallback(async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -120,6 +122,13 @@ export function useFinanceStore() {
       supabase.from("contas_fixas").select("*").or(filtro),
     ]);
 
+    if (resExtrato.error || resCartao.error || resContas.error) {
+      console.error("Erro ao carregar lançamentos:", resExtrato.error || resCartao.error || resContas.error);
+      setErroCarga("Não foi possível carregar seus lançamentos. Tente novamente em instantes.");
+      setPronto(true);
+      return;
+    }
+
     // Partilha seletiva: além da regra no banco, esconde o que foi partilhado com outra pessoa
     const visivel = (row: any) =>
       !row.compartilhado_com || row.owner_id === user.id || row.compartilhado_com === user.id;
@@ -144,6 +153,17 @@ export function useFinanceStore() {
 
     setPronto(true);
   }, []);
+
+  const carregarDados = useCallback(async () => {
+    setErroCarga("");
+    try {
+      await carregarDadosInterno();
+    } catch (e) {
+      console.error("Erro ao carregar dados:", e);
+      setErroCarga("Não foi possível carregar seus dados. Verifique a conexão e tente novamente.");
+      setPronto(true);
+    }
+  }, [carregarDadosInterno]);
 
   useEffect(() => {
     void carregarDados();
@@ -578,5 +598,6 @@ export function useFinanceStore() {
     alternarPago,
     atualizarConfig,
     carregarDados,
+    erroCarga,
   };
 }

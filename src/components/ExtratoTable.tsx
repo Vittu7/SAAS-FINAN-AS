@@ -1,5 +1,9 @@
 "use client";
 
+import { ordenarPagamentosPorFatura } from "@/lib/faturas";
+import type { Estado } from "@/lib/types";
+import { ChevronDown, Lock, Pencil, Plus, Settings2, Trash2, Users, X } from "lucide-react";
+import { ICONE_ABA, Ico } from "@/components/icons";
 import MobileLista from "@/components/mobile/MobileLista";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
@@ -15,7 +19,10 @@ export default function ExtratoTable({
   onAdd,
   onRemove,
   onEdit,
+  estado,
 }: {
+  /** Usado para ordenar os cartões do seletor pela maior fatura do mês. */
+  estado?: Estado;
   mes: string;
   itens: any[];
   onAdd: (item: any) => void;
@@ -136,7 +143,7 @@ export default function ExtratoTable({
     <div className="space-y-4 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
       <button type="button" onClick={() => setFormAberto((a) => !a)}
         className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-on-accent active:scale-[0.98] md:hidden">
-        {formAberto ? "Fechar formulário" : "＋ Adicionar novo"}
+        {formAberto ? <><Ico icon={X} size={18} />Fechar formulário</> : <><Ico icon={Plus} size={18} />Adicionar novo</>}
       </button>
       <form onSubmit={handleAdicionar} className={`${formAberto ? "grid" : "hidden"} rounded-2xl bg-surface p-4 ring-1 ring-line md:grid md:rounded-none md:bg-transparent md:p-0 md:ring-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 items-end`}>
         {/* Forma de Pagamento */}
@@ -148,10 +155,10 @@ export default function ExtratoTable({
               onClick={() => setModalOpcaoAberto("pagamento")}
               className="shrink-0 whitespace-nowrap text-[10px] text-accent hover:underline font-medium"
             >
-              ⚙️ Editar
+              <span className="inline-flex items-center gap-1"><Ico icon={Settings2} size={12} />Editar</span>
             </button>
           </div>
-          <SeletorOpcao opcoes={opcoesPagamento} valor={pagamento} onChange={setPagamento} />
+          <SeletorOpcao opcoes={ordenarPagamentosPorFatura(opcoesPagamento, estado, mes)} valor={pagamento} onChange={setPagamento} />
         </div>
 
         {/* Categoria */}
@@ -163,7 +170,7 @@ export default function ExtratoTable({
               onClick={() => setModalOpcaoAberto("categoria")}
               className="shrink-0 whitespace-nowrap text-[10px] text-accent hover:underline font-medium"
             >
-              ⚙️ Editar
+              <span className="inline-flex items-center gap-1"><Ico icon={Settings2} size={12} />Editar</span>
             </button>
           </div>
           <SeletorOpcao opcoes={opcoesCategoria} valor={categoria} onChange={setCategoria} />
@@ -206,7 +213,7 @@ export default function ExtratoTable({
                 ? responsaveisSelecionados[0]
                 : `${responsaveisSelecionados.length}`}
             </span>
-            <span className="text-xs text-muted">▾</span>
+            <Ico icon={ChevronDown} size={16} className="text-muted" />
           </button>
 
           {menuResponsavelAberto && (
@@ -217,7 +224,7 @@ export default function ExtratoTable({
                   onClick={selecionarTodos}
                   className="w-full text-left text-xs px-2 py-1.5 font-bold text-accent border-b border-line mb-1 hover:bg-background/50 rounded"
                 >
-                  {responsaveisSelecionados.length === membros.length ? "Desmarcar Todos" : "👥 Marcar Todos"}
+                  {responsaveisSelecionados.length === membros.length ? "Desmarcar Todos" : <span className="inline-flex items-center gap-1.5"><Ico icon={Users} size={14} />Marcar Todos</span>}
                 </button>
               )}
 
@@ -270,7 +277,7 @@ export default function ExtratoTable({
 
       <MobileLista vazio="Nenhum lançamento neste mês." itens={itens.map((item: any) => ({
         id: item.id, titulo: item.descricao || "Sem descrição", subtitulo: [item.categoria, item.pagamento].filter(Boolean).join(" · "),
-        valor: item.valor, icone: "≡", tags: [item.pagamento, item.categoria, item.responsavel],
+        valor: item.valor, icone: ICONE_ABA.lancamentos, tags: [item.pagamento, item.categoria, item.responsavel],
         onEditar: onEdit ? () => setEditando(item) : undefined, onRemover: () => onRemove(item.id),
       }))} />
 
@@ -307,7 +314,7 @@ export default function ExtratoTable({
                 <td className="py-3">
                   {item.descricao}
                   {item.compartilhado_com && (
-                    <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent" title="Visível só para você e uma pessoa">🔒 partilhado</span>
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent" title="Visível só para você e uma pessoa"><Ico icon={Lock} size={11} />partilhado</span>
                   )}
                 </td>
                 <td className="py-3">
@@ -317,11 +324,11 @@ export default function ExtratoTable({
                 <td className="py-3 text-center">
                   {onEdit && (
                     <button type="button" onClick={() => setEditando(item)} className="mr-3 text-xs text-accent hover:underline">
-                      Editar
+                      <span className="inline-flex items-center gap-1"><Ico icon={Pencil} size={13} />Editar</span>
                     </button>
                   )}
                   <button onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
-                    Remover
+                    <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={13} />Remover</span>
                   </button>
                 </td>
               </tr>

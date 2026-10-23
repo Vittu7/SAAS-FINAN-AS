@@ -1,5 +1,7 @@
 "use client";
 
+import { CircleHelp, House, Plus, ReceiptText, Sparkles, Users, X } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 type BeforeInstallPromptEvent = Event & {
@@ -11,22 +13,22 @@ const TUTORIAIS = [
   {
     titulo: "Acompanhe sua visão geral",
     texto: "Na Home, veja salário, gastos do mês, sobra e a divisão das despesas por pessoa. Use o seletor lateral para visualizar todo o grupo ou apenas alguém.",
-    simbolo: "⌂",
+    icone: House,
   },
   {
     titulo: "Registre uma movimentação",
     texto: "Use Novo lançamento para cadastrar uma compra normal, uma conta parcelada ou uma conta fixa. Os módulos também permitem editar e acompanhar os registros.",
-    simbolo: "+",
+    icone: Plus,
   },
   {
     titulo: "Consulte e filtre o extrato",
     texto: "O Extrato reúne os lançamentos normais, parcelas e contas fixas. Pesquise pela descrição ou filtre por pessoa, categoria, forma de pagamento, tipo e status.",
-    simbolo: "≡",
+    icone: ReceiptText,
   },
   {
     titulo: "Organize em família",
     texto: "Gerencie os membros do grupo e identifique quem é responsável por cada despesa. Os filtros ajudam a consultar os dados de cada pessoa.",
-    simbolo: "♧",
+    icone: Users,
   },
 ];
 
@@ -78,13 +80,13 @@ export default function AjudaEInstalacao({ mostrarConvite = false }: { mostrarCo
   return (
     <>
       <button type="button" onClick={abrirGuia} className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-sm transition hover:border-accent/50 hover:bg-background">
-        <span aria-hidden="true">?</span><span className="hidden sm:inline">Ajuda</span>
+        <Ico icon={CircleHelp} /><span className="hidden sm:inline">Ajuda</span>
       </button>
 
       {mostrarConvite && !conviteDispensado && !jaInstalado && (
         <section className="flex flex-col gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
           <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-lg text-accent" aria-hidden="true">✦</span>
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><Ico icon={Sparkles} /></span>
             <div>
               <h2 className="font-semibold text-ink">Seu dinheiro, mais organizado.</h2>
               <p className="mt-1 max-w-2xl text-sm text-muted">Comece pelo resumo do mês. Veja o guia rápido ou leve o HomeCash para a tela inicial do celular.</p>
@@ -93,7 +95,7 @@ export default function AjudaEInstalacao({ mostrarConvite = false }: { mostrarCo
           <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
             <button type="button" onClick={abrirGuia} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-background">Ver tutorial</button>
             <button type="button" onClick={abrirInstalacao} className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:opacity-90">{dispositivo === "outro" ? "Usar como app" : "Adicionar à tela inicial"}</button>
-            <button type="button" onClick={() => { setConviteDispensado(true); localStorage.setItem("homecash-install-invite-dismissed", "true"); }} aria-label="Dispensar dica de instalação" className="grid size-9 place-items-center rounded-lg text-muted hover:bg-background">×</button>
+            <button type="button" onClick={() => { setConviteDispensado(true); localStorage.setItem("homecash-install-invite-dismissed", "true"); }} aria-label="Dispensar dica de instalação" className="grid size-9 place-items-center rounded-lg text-muted hover:bg-background"><Ico icon={X} /></button>
           </div>
         </section>
       )}
@@ -106,7 +108,7 @@ export default function AjudaEInstalacao({ mostrarConvite = false }: { mostrarCo
                 <p className="text-xs font-semibold uppercase tracking-wider text-accent">Central de ajuda</p>
                 <h2 id="ajuda-titulo" className="mt-1 text-xl font-semibold text-ink">Conheça o HomeCash</h2>
               </div>
-              <button type="button" onClick={() => setAberto(false)} aria-label="Fechar ajuda" className="grid size-9 place-items-center rounded-lg text-muted hover:bg-background">×</button>
+              <button type="button" onClick={() => setAberto(false)} aria-label="Fechar ajuda" className="grid size-9 place-items-center rounded-lg text-muted hover:bg-background"><Ico icon={X} /></button>
             </header>
 
             <div className="flex gap-2 border-b border-line px-5 pt-3 md:px-6">
@@ -117,7 +119,7 @@ export default function AjudaEInstalacao({ mostrarConvite = false }: { mostrarCo
             {secao === "guia" ? (
               <div className="p-5 md:p-6">
                 <div className="flex min-h-40 items-start gap-4 rounded-xl bg-background p-4 md:p-5">
-                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent/10 text-xl font-semibold text-accent">{TUTORIAIS[passo].simbolo}</span>
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><Ico icon={TUTORIAIS[passo].icone} size={22} /></span>
                   <div>
                     <p className="text-xs font-medium text-muted">PASSO {passo + 1} DE {TUTORIAIS.length}</p>
                     <h3 className="mt-2 text-lg font-semibold text-ink">{TUTORIAIS[passo].titulo}</h3>

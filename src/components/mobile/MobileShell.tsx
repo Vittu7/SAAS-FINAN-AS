@@ -3,12 +3,32 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, Eye, EyeOff, Menu, Moon, Palette, Pencil, Sun, SunMoon, X, type LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
+import { useValoresOcultos } from "@/hooks/useValoresOcultos";
 import { addMeses, brl, rotuloMes, type Resumo } from "@/lib/finance";
 import { useAparencia } from "@/components/ThemeToggle";
 import DialogResponsivo from "@/components/DialogResponsivo";
 
 type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
+
+/* ---------- Botão compartilhado: ocultar/mostrar valores ---------- */
+export function BotaoOcultarValores({ className = "" }: { className?: string }) {
+  const { oculto, alternar } = useValoresOcultos();
+  return (
+    <button
+      type="button"
+      onClick={alternar}
+      aria-pressed={oculto}
+      aria-label={oculto ? "Mostrar valores" : "Ocultar valores"}
+      title={oculto ? "Mostrar valores" : "Ocultar valores"}
+      className={className}
+    >
+      <Ico icon={oculto ? EyeOff : Eye} />
+    </button>
+  );
+}
 
 /* ---------- Cabeçalho do app no celular ---------- */
 export function MobileHeader({
@@ -39,14 +59,17 @@ export function MobileHeader({
           <img src="/logo.png" alt="" className="h-7 w-auto" />
           <span className="min-w-0 truncate text-lg font-semibold">{titulo}</span>
         </div>
-        <button
-          type="button"
-          onClick={onAbrirMenu}
-          aria-label="Abrir menu"
-          className="grid size-10 place-items-center rounded-full bg-surface text-lg shadow-sm ring-1 ring-line active:scale-95"
-        >
-          ☰
-        </button>
+        <div className="flex items-center gap-2">
+          <BotaoOcultarValores className="grid size-10 place-items-center rounded-full bg-surface shadow-sm ring-1 ring-line active:scale-95" />
+          <button
+            type="button"
+            onClick={onAbrirMenu}
+            aria-label="Abrir menu"
+            className="grid size-10 place-items-center rounded-full bg-surface shadow-sm ring-1 ring-line active:scale-95"
+          >
+            <Ico icon={Menu} />
+          </button>
+        </div>
       </div>
 
       {(mostrarMes || mostrarVisualizacao) && <div className="mt-3 flex items-center gap-2">
@@ -57,7 +80,7 @@ export function MobileHeader({
             onClick={() => setMes(addMeses(mes, -1))}
             className="grid size-7 place-items-center rounded-full text-muted active:bg-background"
           >
-            ‹
+            <Ico icon={ChevronLeft} size={18} />
           </button>
           <span className="text-sm font-medium capitalize" aria-live="polite">
             {rotuloMes(mes)}
@@ -68,7 +91,7 @@ export function MobileHeader({
             onClick={() => setMes(addMeses(mes, 1))}
             className="grid size-7 place-items-center rounded-full text-muted active:bg-background"
           >
-            ›
+            <Ico icon={ChevronRight} size={18} />
           </button>
         </div>}
         {mostrarVisualizacao && <select
@@ -96,19 +119,22 @@ export function MobileSaldo({
   salario,
   onConfig,
   onAbrirExtrato,
+  onAbrirResumo,
 }: {
   resumo: Resumo;
   salario: number;
   onConfig: (salario: number) => void;
   onAbrirExtrato?: (tipo: "gastos" | "disponivel") => void;
+  /** Abre o módulo correspondente (com filtros) ao tocar numa linha do resumo por origem. */
+  onAbrirResumo?: (origem: "extrato" | "cartao" | "contas") => void;
 }) {
-  const [oculto, setOculto] = useState(false);
+  const { oculto, alternar } = useValoresOcultos();
   const negativo = resumo.sobra < 0;
   const pct = resumo.salario > 0 ? Math.min(100, (resumo.meusGastos / resumo.salario) * 100) : 0;
-  const v = (n: number) => (oculto ? "R$ ••••" : brl(n));
+  const v = (n: number) => brl(n);
 
   const editarSalario = () => {
-    const t = window.prompt("Salário mensal (R$)", salario ? String(salario).replace(".", ",") : "");
+    const t = window.prompt("Salário mensal (R$)", salario && !oculto ? String(salario).replace(".", ",") : "");
     if (t == null) return;
     const n = Number(t.replace(/\./g, "").replace(",", "."));
     if (!Number.isNaN(n) && n >= 0) onConfig(n);
@@ -127,14 +153,14 @@ export function MobileSaldo({
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-14 -left-8 size-36 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between">
-          <p className="text-xs font-medium opacity-80">{negativo ? "Acima do salário" : "Disponível após os gastos"}{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
+          <p className="text-xs font-medium opacity-80">{negativo ? "Acima do salário" : "Disponível após os gastos"}{onAbrirExtrato && <Ico icon={ChevronRight} size={14} className="ml-1 inline" />}</p>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setOculto((o) => !o); }}
+            onClick={(e) => { e.stopPropagation(); alternar(); }}
             aria-label={oculto ? "Mostrar valores" : "Ocultar valores"}
             className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium active:scale-95"
           >
-            {oculto ? "Mostrar" : "Ocultar"}
+            <span className="inline-flex items-center gap-1.5"><Ico icon={oculto ? Eye : EyeOff} size={14} />{oculto ? "Mostrar" : "Ocultar"}</span>
           </button>
         </div>
         <p className="relative mt-2 text-4xl font-semibold tracking-tight tabular-nums">{v(Math.abs(resumo.sobra))}</p>
@@ -146,78 +172,65 @@ export function MobileSaldo({
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <button type="button" onClick={editarSalario} className="rounded-2xl bg-surface p-4 text-left ring-1 ring-line active:scale-[0.98]">
-          <p className="text-xs text-muted">Salário ✎</p>
+          <p className="flex items-center gap-1 text-xs text-muted">Salário <Ico icon={Pencil} size={12} /></p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{v(salario)}</p>
         </button>
         <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className="rounded-2xl bg-surface p-4 text-left ring-1 ring-line active:scale-[0.98]">
-          <p className="text-xs text-muted">Gastos do mês{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
+          <p className="text-xs text-muted">Gastos do mês{onAbrirExtrato && <Ico icon={ChevronRight} size={14} className="ml-1 inline" />}</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{v(resumo.totalGasto)}</p>
         </button>
       </div>
 
       <div className="mt-3 divide-y divide-line rounded-2xl bg-surface ring-1 ring-line">
         {[
-          { r: "Lançamentos do mês", n: resumo.porOrigem.extrato, s: "≡" },
-          { r: "Parcelas", n: resumo.porOrigem.cartao, s: "▤" },
-          { r: "Contas fixas", n: resumo.porOrigem.contas, s: "▣" },
+          { id: "extrato" as const, r: "Lançamentos do mês", n: resumo.porOrigem.extrato, s: ICONE_ABA.lancamentos },
+          { id: "cartao" as const, r: "Parcelas", n: resumo.porOrigem.cartao, s: ICONE_ABA.cartao },
+          { id: "contas" as const, r: "Contas fixas", n: resumo.porOrigem.contas, s: ICONE_ABA.contas },
         ].map((i) => (
-          <div key={i.r} className="flex items-center gap-3 px-4 py-3">
-            <span className="grid size-9 place-items-center rounded-full bg-accent/10 text-accent">{i.s}</span>
-            <span className="flex-1 text-sm">{i.r}</span>
+          <button
+            key={i.r}
+            type="button"
+            onClick={() => onAbrirResumo?.(i.id)}
+            disabled={!onAbrirResumo}
+            aria-label={`Abrir ${i.r}`}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left first:rounded-t-2xl last:rounded-b-2xl enabled:active:bg-background"
+          >
+            <span className="grid size-9 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={i.s} /></span>
+            <span className="min-w-0 flex-1 truncate text-sm">{i.r}</span>
             <span className="text-sm font-semibold tabular-nums">{v(i.n)}</span>
-          </div>
+            {onAbrirResumo && <Ico icon={ChevronRight} size={16} className="text-muted" />}
+          </button>
         ))}
       </div>
     </section>
   );
 }
 
-/* ---------- Atalhos rápidos ---------- */
-export function MobileAtalhos({
+/* ---------- Barra de navegação inferior ---------- */
+export function MobileBottomNav({
+  aba,
   onAba,
   onGrupo,
+  onPerfil,
 }: {
+  aba: Aba;
   onAba: (a: Aba) => void;
   onGrupo: () => void;
-  onCadastros?: () => void;
+  onPerfil: () => void;
 }) {
-  const itens = [
-    { r: "Lançar", s: "＋", f: () => onAba("lancamentos") },
-    { r: "Parcelas", s: "▤", f: () => onAba("cartao") },
-    { r: "Faturas", s: "▭", f: () => onAba("fatura") },
-    { r: "Fixas", s: "▣", f: () => onAba("contas") },
-    { r: "Extrato", s: "≡", f: () => onAba("extrato") },
-    { r: "Gráficos", s: "◷", f: () => document.getElementById("graficos")?.scrollIntoView({ behavior: "smooth" }) },
-    { r: "Grupo", s: "◉", f: onGrupo },
-    { r: "Ajustes", s: "⚙", f: () => onAba("ajustes") },
-  ];
-  return (
-    <div className="grid grid-cols-4 gap-y-4 rounded-3xl bg-surface p-4 ring-1 ring-line md:hidden">
-      {itens.map((i) => (
-        <button key={i.r} type="button" onClick={i.f} className="flex min-w-0 flex-col items-center gap-1.5 active:scale-95">
-          <span className="grid size-12 place-items-center rounded-2xl bg-accent/10 text-xl text-accent">{i.s}</span>
-          <span className="truncate text-xs font-medium">{i.r}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ---------- Barra de navegação inferior ---------- */
-export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
   const [novoAberto, setNovoAberto] = useState(false);
-  const Item = ({ id, r, s }: { id: Aba; r: string; s: string }) => {
-    const ativo = aba === id;
+  const Item = ({ id, r, s, onClick, ativo: ativoForcado }: { id: string; r: string; s: LucideIcon; onClick?: () => void; ativo?: boolean }) => {
+    const ativo = ativoForcado ?? aba === id;
     return (
       <button
         type="button"
-        onClick={() => onAba(id)}
+        onClick={onClick ?? (() => onAba(id as Aba))}
         aria-current={ativo ? "page" : undefined}
         className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition ${
           ativo ? "text-accent" : "text-muted"
         }`}
       >
-        <span className={`grid h-7 w-12 place-items-center rounded-full text-lg ${ativo ? "bg-accent/15" : ""}`}>{s}</span>
+        <span className={`grid h-7 w-12 place-items-center rounded-full ${ativo ? "bg-accent/15" : ""}`}><Ico icon={s} size={22} /></span>
         {r}
       </button>
     );
@@ -227,28 +240,28 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
     <>
       <nav className="fixed inset-x-0 bottom-0 left-0 right-0 z-50 w-full border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
         <div className="mx-auto flex max-w-md items-end px-2">
-          <Item id="inicio" r="Início" s="⌂" />
-          <Item id="extrato" r="Extrato" s="≡" />
+          <Item id="inicio" r="Início" s={ICONE_ABA.inicio} />
+          <Item id="extrato" r="Extrato" s={ICONE_ABA.extrato} />
           <div className="flex flex-1 justify-center">
             <button
               type="button"
               onClick={() => setNovoAberto(true)}
               aria-label="Novo lançamento"
-              className="-mt-6 grid size-14 place-items-center rounded-full bg-accent text-2xl text-on-accent shadow-lg ring-4 ring-background active:scale-95"
+              className="-mt-6 grid size-14 place-items-center rounded-full bg-accent text-on-accent shadow-lg ring-4 ring-background active:scale-95"
             >
-              ＋
+              <Ico icon={ICONES.novo} size={26} />
             </button>
           </div>
-          <Item id="cartao" r="Parcelas" s="▤" />
-          <Item id="fatura" r="Faturas" s="▭" />
+          <Item id="grupo" r="Grupo" s={ICONES.grupo} onClick={onGrupo} ativo={false} />
+          <Item id="perfil" r="Perfil" s={ICONES.perfil} onClick={onPerfil} ativo={aba === "ajustes"} />
         </div>
       </nav>
 
       <Sheet aberto={novoAberto} onFechar={() => setNovoAberto(false)} titulo="Novo lançamento">
         {[
-          { id: "lancamentos" as Aba, r: "Lançamento normal", d: "Gasto ou entrada do dia a dia", s: "≡" },
-          { id: "cartao" as Aba, r: "Conta parcelada", d: "Compras divididas em parcelas", s: "▤" },
-          { id: "contas" as Aba, r: "Conta fixa", d: "Aluguel, internet, assinaturas", s: "▣" },
+          { id: "lancamentos" as Aba, r: "Lançamento normal", d: "Gasto ou entrada do dia a dia", s: ICONE_ABA.lancamentos },
+          { id: "cartao" as Aba, r: "Conta parcelada", d: "Compras divididas em parcelas", s: ICONE_ABA.cartao },
+          { id: "contas" as Aba, r: "Conta fixa", d: "Aluguel, internet, assinaturas", s: ICONE_ABA.contas },
         ].map((t) => (
           <button
             key={t.id}
@@ -259,12 +272,12 @@ export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => v
             }}
             className="flex w-full items-center gap-3 rounded-2xl p-3 text-left active:bg-background"
           >
-            <span className="grid size-11 place-items-center rounded-full bg-accent/10 text-lg text-accent">{t.s}</span>
+            <span className="grid size-11 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={t.s} /></span>
             <span className="flex-1">
               <span className="block text-sm font-semibold">{t.r}</span>
               <span className="block text-xs text-muted">{t.d}</span>
             </span>
-            <span className="text-muted">›</span>
+            <Ico icon={ChevronRight} size={18} className="text-muted" />
           </button>
         ))}
       </Sheet>
@@ -313,33 +326,33 @@ export function MobileMenu({
         <style>{`@keyframes hc-drawer-in{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
         <header className="flex items-center justify-between px-4 pb-3">
           <p className="text-lg font-semibold">Menu</p>
-          <button type="button" onClick={onFechar} aria-label="Fechar menu" className="grid size-10 place-items-center rounded-full text-muted active:bg-background">✕</button>
+          <button type="button" onClick={onFechar} aria-label="Fechar menu" className="grid size-10 place-items-center rounded-full text-muted active:bg-background"><Ico icon={X} /></button>
         </header>
         <div className="flex-1 space-y-1 overflow-y-auto px-3">
           <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Contas</p>
-          <button type="button" className={linha} onClick={() => ir("cartao")}><span className={icone}>▤</span>Contas parceladas</button>
-          <button type="button" className={linha} onClick={() => ir("fatura")}><span className={icone}>▭</span>Faturas do cartão</button>
-          <button type="button" className={linha} onClick={() => ir("contas")}><span className={icone}>▣</span>Contas fixas</button>
-          <button type="button" className={linha} onClick={() => ir("lancamentos")}><span className={icone}>≡</span>Lançamentos do mês</button>
+          <button type="button" className={linha} onClick={() => ir("cartao")}><span className={icone}><Ico icon={ICONE_ABA.cartao} /></span>Contas parceladas</button>
+          <button type="button" className={linha} onClick={() => ir("fatura")}><span className={icone}><Ico icon={ICONE_ABA.fatura} /></span>Faturas do cartão</button>
+          <button type="button" className={linha} onClick={() => ir("contas")}><span className={icone}><Ico icon={ICONE_ABA.contas} /></span>Contas fixas</button>
+          <button type="button" className={linha} onClick={() => ir("lancamentos")}><span className={icone}><Ico icon={ICONE_ABA.lancamentos} /></span>Lançamentos do mês</button>
 
           <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Conta</p>
-          <button type="button" className={linha} onClick={() => ir("ajustes")}><span className={icone}>⚙</span>Configurações e perfil</button>
-          <button type="button" className={linha} onClick={() => { onFechar(); onGrupo(); }}><span className={icone}>◉</span>Gerenciar grupo</button>
+          <button type="button" className={linha} onClick={() => ir("ajustes")}><span className={icone}><Ico icon={ICONE_ABA.ajustes} /></span>Configurações e perfil</button>
+          <button type="button" className={linha} onClick={() => { onFechar(); onGrupo(); }}><span className={icone}><Ico icon={ICONES.grupo} /></span>Gerenciar grupo</button>
 
           <p className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Tema</p>
           <div className="mx-1 grid grid-cols-3 gap-1 rounded-2xl bg-background p-1 ring-1 ring-line">
-            {([["light", "☀", "Claro"], ["dark", "☾", "Escuro"], ["system", "◐", "Sistema"]] as const).map(([id, s, r]) => (
+            {([["light", Sun, "Claro"], ["dark", Moon, "Escuro"], ["system", SunMoon, "Sistema"]] as const).map(([id, s, r]) => (
               <button key={id} type="button" aria-pressed={tema === id} onClick={() => mudarTema(id)}
                 className={`flex flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium ${tema === id ? "bg-accent text-on-accent" : "text-ink"}`}>
-                <span aria-hidden className="text-base">{s}</span>{r}
+                <Ico icon={s} size={18} />{r}
               </button>
             ))}
           </div>
-          <button type="button" className={`${linha} mt-1 text-muted`} onClick={() => ir("ajustes")}><span className={icone}>◐</span>Mais opções de aparência</button>
+          <button type="button" className={`${linha} mt-1 text-muted`} onClick={() => ir("ajustes")}><span className={icone}><Ico icon={Palette} /></span>Mais opções de aparência</button>
         </div>
         <div className="border-t border-line px-3 pt-2">
           <button type="button" className={`${linha} text-rose-500`} onClick={sair}>
-            <span className="grid size-10 place-items-center rounded-full bg-rose-500/10">↪</span>Sair da conta
+            <span className="grid size-10 place-items-center rounded-full bg-rose-500/10"><Ico icon={ICONES.sair} /></span>Sair da conta
           </button>
         </div>
       </aside>

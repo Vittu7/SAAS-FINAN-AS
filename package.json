@@ -6,13 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "test": "vitest run",
-    "test:rls": "vitest run --config vitest.rls.config.ts",
-    "seguranca:segredos": "node scripts/verificar-segredos.mjs --historico"
+    "lint": "eslint"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
+    "lucide-react": "^1.61.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

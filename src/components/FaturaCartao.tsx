@@ -1,7 +1,10 @@
 'use client';
+import { ReceiptText, CreditCard } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useState } from 'react';
 import { useOpcoes } from '@/lib/useOpcoes';
-import { calcularFatura } from '@/lib/faturas';
+import { calcularFatura, ordenarCartoesPorFatura } from '@/lib/faturas';
+import { larguraBarra, percentual } from '@/lib/privacidade';
 import { addMeses, brl, rotuloMes } from '@/lib/finance';
 import { gradienteCartao } from '@/lib/cartao';
 import type { Estado } from '@/lib/types';
@@ -9,7 +12,7 @@ import type { Estado } from '@/lib/types';
 /** Mesmo visual da tela de Contas parceladas: carrossel de cartões + lista em painel. */
 export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; mes: string; setMes: (mes: string) => void }) {
   const { pagamento, corPagamento } = useOpcoes();
-  const cartoes = pagamento.filter((i) => i.eh_cartao);
+  const cartoes = ordenarCartoesPorFatura(pagamento.filter((i) => i.eh_cartao), estado, mes);
   const [id, setId] = useState('');
   const escolhido = cartoes.find((i) => i.id === id) || cartoes[0];
   if (!escolhido) return <p className="py-6 text-muted">Nenhum cartão de crédito cadastrado. Acesse Configurações → Cadastros → Cartões.</p>;
@@ -46,7 +49,7 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
                     <p className="truncate text-base font-semibold">{c.nome}</p>
                     <p className="mt-1 text-xs text-white/70">Cartão de crédito</p>
                   </div>
-                  <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold">{pct.toFixed(0)}% usado</span>
+                  <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold">{percentual(`${pct.toFixed(0)}% usado`)}</span>
                 </div>
                 <p className="mt-6 text-xs font-medium text-white/70">Fatura de {rotuloMes(mes)}</p>
                 <p className="mt-1 text-3xl font-bold tracking-tight">{brl(f.total)}</p>
@@ -54,7 +57,7 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
                   <div><p className="text-xs text-white/70">Limite total</p><p className="mt-1 text-sm font-semibold">{brl(limite)}</p></div>
                   <div><p className="text-xs text-white/70">Disponível</p><p className="mt-1 text-sm font-semibold">{brl(Math.max(0, f.disponivel))}</p></div>
                 </div>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} /></div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-white" style={{ width: `${larguraBarra(pct)}%` }} /></div>
               </button>
             );
           })}
@@ -74,7 +77,7 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
         <ul className="divide-y divide-line">
           {fatura.itens.map((i) => (
             <li key={i.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 md:px-0">
-              <span aria-hidden className="grid size-10 place-items-center rounded-full bg-accent/10 text-sm text-accent">{i.detalhe === 'Compra' ? '≡' : '▤'}</span>
+              <span aria-hidden className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={i.detalhe === 'Compra' ? CreditCard : ReceiptText} size={18} /></span>
               <div className="min-w-0">
                 <p className="truncate font-medium">{i.descricao}</p>
                 <p className="truncate text-xs text-muted">{i.categoria} · {i.responsavel} · {i.detalhe}</p>

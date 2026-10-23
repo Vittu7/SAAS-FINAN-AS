@@ -1,8 +1,12 @@
 import type { Estado } from "./types";
+import { MASCARA_VALOR, valoresOcultos } from "./privacidade";
 
-/** Formata valores numéricos para BRL com proteção contra undefined, null e NaN */
+/** Formata valores numéricos para BRL com proteção contra undefined, null e NaN.
+ *  Com "ocultar valores" ativo, devolve a máscara em vez do número. */
 export const brl = (v?: number | null) =>
-  (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  valoresOcultos()
+    ? MASCARA_VALOR
+    : (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 /** Aceita "1.234,56", "1234,56" ou "1234.56". Retorna 0 se inválido. */
 export function parseValor(texto: string): number {

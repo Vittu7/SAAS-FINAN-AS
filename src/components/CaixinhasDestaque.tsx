@@ -1,5 +1,6 @@
 "use client";
 
+import { larguraBarra, percentual } from "@/lib/privacidade";
 import { useState } from "react";
 import { addMeses, brl, mesAtual, parseValor, rotuloMes } from "@/lib/finance";
 import { useCaixinhas } from "@/hooks/useCaixinhas";
@@ -100,15 +101,15 @@ export default function CaixinhasDestaque() {
                   className="mt-3 h-2 overflow-hidden rounded-full bg-line"
                   role="progressbar"
                   aria-label={`Progresso de ${c.nome}`}
-                  aria-valuenow={Math.round(progresso)}
+                  aria-valuenow={larguraBarra(Math.round(progresso))}
                   aria-valuemin={0}
                   aria-valuemax={100}
                 >
-                  <div className="h-full rounded-full transition-[width]" style={{ width: `${progresso}%`, backgroundColor: c.cor }} />
+                  <div className="h-full rounded-full transition-[width]" style={{ width: `${larguraBarra(progresso)}%`, backgroundColor: c.cor }} />
                 </div>
                 {rotuloLocal(c) && <p className="mt-1 truncate text-xs text-muted">{rotuloLocal(c)}</p>}
                 <p className="mt-1.5 text-xs text-muted">
-                  {c.meta > 0 ? (metaAtingida(c) ? `Meta de ${brl(c.meta)} atingida 🎉` : `${Math.round(progresso)}% de ${brl(c.meta)}`) : "Sem meta definida"}
+                  {c.meta > 0 ? (metaAtingida(c) ? `Meta de ${brl(c.meta)} atingida 🎉` : `${percentual(`${Math.round(progresso)}%`)} de ${brl(c.meta)}`) : "Sem meta definida"}
                 </p>
                 {totalRendimentos(movimentos, c.id) > 0 && (
                   <p className="text-xs font-medium text-emerald-500">Rendeu {brl(totalRendimentos(movimentos, c.id))}</p>

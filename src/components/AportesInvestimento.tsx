@@ -1,5 +1,7 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { brl, parseValor } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
@@ -208,7 +210,7 @@ export default function AportesInvestimento({ saldoAnterior }: Props) {
                                     className="shrink-0 text-xs text-red-400 hover:underline"
                                     aria-label={`Excluir aporte de ${brl(Number(aporte.valor))}`}
                                 >
-                                    Excluir
+                                    <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={13} />Excluir</span>
                                 </button>
                             </li>
                         ))}

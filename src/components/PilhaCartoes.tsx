@@ -1,8 +1,11 @@
 "use client";
 
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useMemo, useState } from "react";
 import { useOpcoes } from "@/lib/useOpcoes";
-import { calcularFatura } from "@/lib/faturas";
+import { calcularFatura, ordenarCartoesPorFatura } from "@/lib/faturas";
+import { larguraBarra, percentual } from "@/lib/privacidade";
 import { brl, rotuloMes } from "@/lib/finance";
 import { gradienteCartao } from "@/lib/cartao";
 import type { Estado } from "@/lib/types";
@@ -30,14 +33,15 @@ export default function PilhaCartoes({
 
   const cartoes = useMemo(
     () =>
-      pagamento
-        .filter((c) => c.eh_cartao)
-        .map((c) => {
-          const limite = Number(c.limite) || 0;
-          const fatura = calcularFatura(estado, c.nome, mes, limite);
-          return { c, limite, fatura, pct: limite > 0 ? Math.min(100, (fatura.total / limite) * 100) : 0 };
-        })
-        .sort((a, b) => b.fatura.total - a.fatura.total || a.c.nome.localeCompare(b.c.nome, "pt-BR")),
+      ordenarCartoesPorFatura(
+        pagamento.filter((c) => c.eh_cartao),
+        estado,
+        mes,
+      ).map((c) => {
+        const limite = Number(c.limite) || 0;
+        const fatura = calcularFatura(estado, c.nome, mes, limite);
+        return { c, limite, fatura, pct: limite > 0 ? Math.min(100, (fatura.total / limite) * 100) : 0 };
+      }),
     [pagamento, estado, mes],
   );
 
@@ -88,7 +92,7 @@ export default function PilhaCartoes({
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold leading-tight tabular-nums">{brl(fatura.total)}</p>
-                  <p className="text-[11px] text-white/70">{pct.toFixed(0)}% do limite</p>
+                  <p className="text-[11px] text-white/70">{percentual(`${pct.toFixed(0)}% do limite`)}</p>
                 </div>
                 <button
                   type="button"
@@ -97,7 +101,7 @@ export default function PilhaCartoes({
                   aria-label={`${aberto ? "Recolher" : "Expandir"} detalhes de ${c.nome}`}
                   className="grid size-8 place-items-center rounded-full bg-white/15 text-sm transition hover:bg-white/25 active:scale-95"
                 >
-                  {aberto ? "▴" : "▾"}
+                  <Ico icon={aberto ? ChevronUp : ChevronDown} size={18} />
                 </button>
               </div>
 
@@ -113,7 +117,7 @@ export default function PilhaCartoes({
                 </div>
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">
-                <div className="h-full rounded-full bg-white transition-[width] duration-300" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full bg-white transition-[width] duration-300" style={{ width: `${larguraBarra(pct)}%` }} />
               </div>
 
               {/* Detalhes (expandido) */}

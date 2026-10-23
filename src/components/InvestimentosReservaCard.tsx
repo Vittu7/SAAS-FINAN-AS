@@ -1,5 +1,6 @@
 "use client";
 
+import { larguraBarra, percentual } from "@/lib/privacidade";
 import { useState } from "react";
 import { brl } from "@/lib/finance";
 import { useCaixinhas } from "@/hooks/useCaixinhas";
@@ -111,7 +112,7 @@ export default function InvestimentosReservaCard() {
           <Resumo
             rotulo="Reserva de emergência"
             valor={reservas.length ? brl(reservaSaldo) : "—"}
-            detalhe={reservaMeta > 0 ? `${Math.round(progReserva)}% da meta` : reservas.length ? "Sem meta definida" : "Não criada"}
+            detalhe={reservaMeta > 0 ? `${percentual(`${Math.round(progReserva)}%`)} da meta` : reservas.length ? "Sem meta definida" : "Não criada"}
           />
           <Resumo rotulo="Metas atingidas" valor={comMeta.length ? `${atingidas} de ${comMeta.length}` : "—"} />
         </div>
@@ -230,14 +231,14 @@ function CartaoCaixinha({
         className="mt-3 h-2 overflow-hidden rounded-full bg-line"
         role="progressbar"
         aria-label={`Progresso de ${c.nome}`}
-        aria-valuenow={Math.round(progresso)}
+        aria-valuenow={larguraBarra(Math.round(progresso))}
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        <div className="h-full rounded-full transition-[width]" style={{ width: `${progresso}%`, backgroundColor: c.cor }} />
+        <div className="h-full rounded-full transition-[width]" style={{ width: `${larguraBarra(progresso)}%`, backgroundColor: c.cor }} />
       </div>
       <p className="mt-1.5 text-xs text-muted">
-        {c.meta > 0 ? `${Math.round(progresso)}% da meta` : "Defina uma meta para acompanhar"}
+        {c.meta > 0 ? `${percentual(`${Math.round(progresso)}%`)} da meta` : "Defina uma meta para acompanhar"}
         {c.aporteAutoAtivo && c.aporteAutoValor > 0 ? ` · Aporte automático ${brl(c.aporteAutoValor)}/mês` : ""}
       </p>
 

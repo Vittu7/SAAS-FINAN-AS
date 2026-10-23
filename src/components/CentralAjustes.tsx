@@ -1,4 +1,6 @@
 'use client';
+import { Check, Crown, LayoutDashboard, Palette, type LucideIcon } from 'lucide-react';
+import { ICONES, Ico } from '@/components/icons';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import GerenciarOpcoesModal from './GerenciarOpcoesModal';
@@ -10,12 +12,12 @@ import type { PreferenciasDashboard } from '@/lib/dashboardPreferences';
 export type SecaoAjustes = 'perfil' | 'plano' | 'aparencia' | 'cadastros' | 'dashboard';
 type Cadastro = 'cartoes' | 'pagamentos' | 'categorias';
 
-const SECOES: { id: SecaoAjustes; nome: string; desc: string; s: string }[] = [
-  { id: 'perfil', nome: 'Perfil e conta', desc: 'Foto, nome, e-mail e grupo', s: '◉' },
-  { id: 'plano', nome: 'Assinatura e plano', desc: 'Seu plano atual', s: '★' },
-  { id: 'aparencia', nome: 'Aparência', desc: 'Tema claro, escuro ou sistema', s: '◐' },
-  { id: 'cadastros', nome: 'Cadastros', desc: 'Cartões, contas e categorias', s: '▤' },
-  { id: 'dashboard', nome: 'Tela inicial', desc: 'O que aparece no painel', s: '⌂' },
+const SECOES: { id: SecaoAjustes; nome: string; desc: string; s: LucideIcon }[] = [
+  { id: 'perfil', nome: 'Perfil e conta', desc: 'Foto, nome, e-mail e grupo', s: ICONES.perfil },
+  { id: 'plano', nome: 'Assinatura e plano', desc: 'Seu plano atual', s: Crown },
+  { id: 'aparencia', nome: 'Aparência', desc: 'Tema claro, escuro ou sistema', s: Palette },
+  { id: 'cadastros', nome: 'Cadastros', desc: 'Cartões, contas e categorias', s: ICONES.cartoes },
+  { id: 'dashboard', nome: 'Tela inicial', desc: 'O que aparece no painel', s: LayoutDashboard },
 ];
 
 const ITENS_DASH: { id: keyof PreferenciasDashboard; nome: string; desc: string }[] = [
@@ -53,7 +55,7 @@ export default function CentralAjustes({ preferencias, pronto, salvando, erro, o
         {SECOES.map((s) => (
           <button key={s.id} type="button" aria-pressed={secao === s.id} onClick={() => setSecao(s.id)}
             className={`flex shrink-0 items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition md:w-full ${secao === s.id ? 'bg-accent text-on-accent shadow-sm' : 'bg-surface text-ink ring-1 ring-line hover:bg-background md:bg-transparent md:ring-0'}`}>
-            <span aria-hidden className={`grid size-8 shrink-0 place-items-center rounded-full ${secao === s.id ? 'bg-white/20' : 'bg-accent/10 text-accent'}`}>{s.s}</span>
+            <span aria-hidden className={`grid size-8 shrink-0 place-items-center rounded-full ${secao === s.id ? 'bg-white/20' : 'bg-accent/10 text-accent'}`}><Ico icon={s.s} size={18} /></span>
             <span className="min-w-0">
               <span className="block whitespace-nowrap">{s.nome}</span>
               <span className={`hidden truncate text-[11px] font-normal md:block ${secao === s.id ? 'opacity-80' : 'text-muted'}`}>{s.desc}</span>
@@ -61,7 +63,7 @@ export default function CentralAjustes({ preferencias, pronto, salvando, erro, o
           </button>
         ))}
         <button type="button" onClick={sair} className="hidden items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-rose-500 hover:bg-rose-500/10 md:mt-2 md:flex">
-          <span aria-hidden className="grid size-8 place-items-center rounded-full bg-rose-500/10">↪</span>Sair da conta
+          <span aria-hidden className="grid size-8 place-items-center rounded-full bg-rose-500/10"><Ico icon={ICONES.sair} size={18} /></span>Sair da conta
         </button>
       </nav>
 
@@ -94,7 +96,7 @@ export default function CentralAjustes({ preferencias, pronto, salvando, erro, o
             </div>
             <ul className="divide-y divide-line p-2 text-sm">
               {['Lançamentos, parcelas e contas fixas ilimitados', 'Faturas de cartão com controle de limite', 'Grupo financeiro compartilhado', 'Temas e personalização'].map((t) => (
-                <li key={t} className="flex items-center gap-3 px-3 py-3"><span className="text-accent">✓</span>{t}</li>
+                <li key={t} className="flex items-center gap-3 px-3 py-3"><Ico icon={Check} size={18} className="text-accent" />{t}</li>
               ))}
             </ul>
           </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronDown, ChevronUp, LoaderCircle, Pencil, RefreshCw, Search } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import CentralAjustes, { type SecaoAjustes } from "@/components/CentralAjustes";
@@ -29,7 +31,10 @@ import {
   rotuloMes,
 } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
-import { MobileAtalhos, MobileBottomNav, MobileHeader, MobileMenu, MobileSaldo } from "@/components/mobile/MobileShell";
+import { BotaoOcultarValores, MobileBottomNav, MobileHeader, MobileMenu, MobileSaldo } from "@/components/mobile/MobileShell";
+import ModulosRecentes from "@/components/ModulosRecentes";
+import { useModulosRecentes, type ModuloId } from "@/hooks/useModulosRecentes";
+import { useValoresOcultos } from "@/hooks/useValoresOcultos";
 import CaixinhasDestaque from "@/components/CaixinhasDestaque";
 
 type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
@@ -48,6 +53,9 @@ export default function Home() {
   const [filtrosMobile, setFiltrosMobile] = useState(false);
   const [secaoAjustes, setSecaoAjustes] = useState<SecaoAjustes>("perfil");
   const [detalheExtrato, setDetalheExtrato] = useState<TipoDetalhe | null>(null);
+  const [ajustesKey, setAjustesKey] = useState(0);
+  // Re-renderiza a tela inteira quando "ocultar valores" muda (brl() mascara os números)
+  useValoresOcultos();
 
   // Permite abrir direto uma aba (ex.: /?aba=ajustes&secao=perfil, vindo da antiga página de perfil)
   useEffect(() => {
@@ -58,11 +66,6 @@ export default function Home() {
     if (sec) setSecaoAjustes(sec);
     if (a) window.history.replaceState(null, "", "/");
   }, []);
-
-  const irPara = (a: AbaId) => {
-    setAba(a);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
 
   const [filtros, setFiltros] = useState<FiltrosLancamentoState>(FILTROS_INICIAIS);
 
@@ -96,6 +99,34 @@ export default function Home() {
 
   const { estado, userId, membros } = loja;
   const dashboard = useDashboardPreferences(userId);
+  const { recentes, registrar } = useModulosRecentes(userId);
+
+  /** Navegação única (menu lateral, barra inferior, gaveta, resumos e módulos recentes). */
+  const irPara = (a: AbaId, opcoes: { preservarFiltros?: boolean } = {}) => {
+    setAba(a);
+    registrar(a);
+    // O filtro por tipo só faz sentido ao chegar por um resumo; navegação comum volta para "todos"
+    if (!opcoes.preservarFiltros) setFiltros((f) => (f.tipo === "todos" ? f : { ...f, tipo: "todos" }));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const abrirPerfil = () => {
+    setSecaoAjustes("perfil");
+    setAjustesKey((k) => k + 1);
+    irPara("ajustes");
+  };
+
+  /** Resumo por origem → módulo correspondente, mantendo busca/categoria/etc. já aplicados. */
+  const abrirResumo = (origem: "extrato" | "cartao" | "contas") => {
+    if (origem === "extrato") {
+      setFiltros((f) => ({ ...f, tipo: "extrato" }));
+      irPara("extrato", { preservarFiltros: true });
+    } else {
+      irPara(origem, { preservarFiltros: true });
+    }
+  };
+
+  const abrirRecente = (id: ModuloId) => (id === "ajustes" ? abrirPerfil() : irPara(id));
 
   const passaFiltro = useCallback(
     (item: any) => {
@@ -190,8 +221,8 @@ export default function Home() {
 
   if (verificandoAuth || !loja.pronto || !mes) {
     return (
-      <main className="grid min-h-screen place-items-center text-sm text-muted">
-        Carregando painel...
+      <main role="status" aria-live="polite" className="grid min-h-screen place-items-center text-sm text-muted">
+        <span className="flex items-center gap-2"><LoaderCircle size={18} strokeWidth={1.75} className="animate-spin" aria-hidden="true" />Carregando painel...</span>
       </main>
     );
   }
@@ -212,7 +243,7 @@ export default function Home() {
         setMembroSelecionado={setMembroSelecionado}
         listaMembros={nomesOutrosMembros}
         abaAtiva={aba}
-        onSelecionarAba={(id) => setAba(id as AbaId)}
+        onSelecionarAba={(id) => irPara(id as AbaId)}
         onAlterarExpandido={setSidebarExpandida}
       />
 
@@ -310,10 +341,28 @@ export default function Home() {
                 </button>
               </div>}
 
+              <BotaoOcultarValores className="grid size-10 place-items-center rounded-xl border border-line bg-surface text-ink shadow-sm transition hover:border-accent/50 hover:bg-background" />
               <AjudaEInstalacao mostrarConvite={mostrarPainel} />
               <ThemeToggle />
             </div>
           </header>
+
+          {loja.erroCarga && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-500">
+              <span className="min-w-0 flex-1">{loja.erroCarga}</span>
+              <button type="button" onClick={() => void loja.carregarDados()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-rose-500 px-3 text-xs font-semibold text-white active:scale-95">
+                <RefreshCw size={14} strokeWidth={1.75} aria-hidden="true" />Tentar novamente
+              </button>
+            </div>
+          )}
+
+          {mostrarPainel && !loja.erroCarga && estado.extrato.length + estado.cartao.length + estado.contas.length === 0 && (
+            <section className="rounded-2xl bg-surface p-5 text-center ring-1 ring-line">
+              <p className="font-semibold">Comece registrando seu primeiro lançamento</p>
+              <p className="mt-1 text-sm text-muted">Seus gastos, parcelas e contas fixas aparecerão aqui, organizados por mês.</p>
+              <button type="button" onClick={() => irPara("lancamentos")} className="mt-3 inline-flex h-10 items-center rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent active:scale-95">Novo lançamento</button>
+            </section>
+          )}
 
           {mostrarPainel && (
             <>
@@ -322,19 +371,18 @@ export default function Home() {
                 salario={estado.config.salario}
                 onConfig={(salario) => loja.atualizarConfig({ salario })}
                 onAbrirExtrato={setDetalheExtrato}
+                onAbrirResumo={abrirResumo}
               />}
-              <MobileAtalhos
-                onAba={irPara}
-                onGrupo={() => setModalGrupoAberto(true)}
-              />
               {dashboard.preferencias.resumo && <div className="hidden md:block">
                 <SummaryCards
                   resumo={resumo}
                   salario={estado.config.salario}
                   onConfig={(salario) => loja.atualizarConfig({ salario })}
                   onAbrirExtrato={setDetalheExtrato}
+                  onAbrirResumo={abrirResumo}
                 />
               </div>}
+              <ModulosRecentes recentes={recentes} onAbrir={abrirRecente} />
               {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 {dashboard.preferencias.graficos && <div id="graficos" className="min-w-0"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
@@ -342,7 +390,7 @@ export default function Home() {
               </div>
               <div className="flex justify-center pt-1">
                 <button type="button" onClick={() => { setSecaoAjustes("dashboard"); irPara("ajustes"); }} className="rounded-full bg-surface px-4 py-2 text-xs font-medium text-muted ring-1 ring-line transition hover:text-ink">
-                  ✎ Personalizar tela inicial
+                  <span className="inline-flex items-center gap-1.5"><Ico icon={Pencil} size={14} />Personalizar tela inicial</span>
                 </button>
               </div>
             </>
@@ -354,8 +402,8 @@ export default function Home() {
               onClick={() => setFiltrosMobile((f) => !f)}
               className="flex h-10 w-full items-center justify-between rounded-full bg-surface px-4 text-sm font-medium ring-1 ring-line md:hidden"
             >
-              <span>⚲ Buscar e filtrar</span>
-              <span className="text-muted">{filtrosMobile ? "▴" : "▾"}</span>
+              <span className="inline-flex items-center gap-2"><Ico icon={Search} size={16} />Buscar e filtrar</span>
+              <Ico icon={filtrosMobile ? ChevronUp : ChevronDown} size={18} className="text-muted" />
             </button>
           )}
 
@@ -375,7 +423,7 @@ export default function Home() {
 
           <div className="min-w-0">
             <section className="min-w-0">
-              {aba === "ajustes" && <CentralAjustes key={secaoAjustes} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
+              {aba === "ajustes" && <CentralAjustes key={`${secaoAjustes}-${ajustesKey}`} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
               {aba === "fatura" && <FaturaCartao estado={estado} mes={mes} setMes={setMes} />}
               {aba === "extrato" && (
                 <ExtratoGeral mes={mes} extrato={extrato} cartao={cartao} contas={contas} ordem={ordem} />
@@ -383,6 +431,7 @@ export default function Home() {
 
               {aba === "lancamentos" && (
                 <ExtratoTable
+                  estado={estado}
                   mes={mes}
                   itens={extrato}
                   onAdd={loja.adicionarExtrato}
@@ -404,6 +453,7 @@ export default function Home() {
 
               {aba === "contas" && (
                 <ContasFixasTable
+                  estado={estado}
                   mes={mes}
                   itens={contas}
                   onAdd={loja.adicionarConta}
@@ -419,7 +469,7 @@ export default function Home() {
       </main>
 
       {/* Fora do container centralizado: barra fixa no rodapé e menu lateral */}
-      <MobileBottomNav aba={aba} onAba={irPara} />
+      <MobileBottomNav aba={aba} onAba={irPara} onGrupo={() => setModalGrupoAberto(true)} onPerfil={abrirPerfil} />
       <MobileMenu
         onAba={irPara}
         aberto={menuMobile}

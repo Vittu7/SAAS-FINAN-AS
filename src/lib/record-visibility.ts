@@ -27,8 +27,7 @@ export function registroVisivelParaUsuario(
   if (registro.legado_privacidade_v1 === true) {
     return Boolean(
       (perfilAtualId && registro.responsavel_id === perfilAtualId) ||
-      registro.responsavel_id === usuarioId ||
-      (grupoAtualId && registro.grupo_id === grupoAtualId),
+      registro.responsavel_id === usuarioId,
     );
   }
 

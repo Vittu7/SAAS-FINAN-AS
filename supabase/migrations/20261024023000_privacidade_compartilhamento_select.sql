@@ -1,12 +1,24 @@
--- RASCUNHO DE MIGRACAO: revisar no Supabase antes de executar.
--- Data de corte alinhada ao filtro de interface: 2026-10-24 02:30:00 UTC.
--- Preserva acesso legado antes do corte; exige compartilhamento explicito para registros novos.
--- Esta migracao altera SOMENTE politicas SELECT. Nao executa grants nem muda INSERT/UPDATE/DELETE.
+-- RASCUNHO DE MIGRACAO: revisar e testar em ambiente separado antes de executar.
+-- Usa marcador persistente para identificar registros existentes no momento da migracao.
+-- NAO usa data de corte: timestamps fixos podem deixar registros sem acesso ou mudar de classe com o tempo.
+-- Esta migracao altera colunas e politicas SELECT. Nao executar em producao sem revisar todas as politicas.
 
 begin;
 
--- Remove as politicas SELECT permissivas conhecidas para evitar que OR entre politicas
--- antigas continue liberando acesso por fora da regra nova.
+-- Registros que ja existem recebem legado_privacidade_v1=true.
+-- Novos registros recebem false pelo DEFAULT, sem depender de created_at.
+alter table public.cartao
+  add column if not exists legado_privacidade_v1 boolean not null default false;
+alter table public.contas_fixas
+  add column if not exists legado_privacidade_v1 boolean not null default false;
+alter table public.extrato
+  add column if not exists legado_privacidade_v1 boolean not null default false;
+
+update public.cartao set legado_privacidade_v1 = true where legado_privacidade_v1 = false;
+update public.contas_fixas set legado_privacidade_v1 = true where legado_privacidade_v1 = false;
+update public.extrato set legado_privacidade_v1 = true where legado_privacidade_v1 = false;
+
+-- Remove as politicas SELECT permissivas conhecidas para evitar OR com regras antigas.
 drop policy if exists "cartao_select" on public.cartao;
 drop policy if exists "partilha seletiva segura" on public.cartao;
 drop policy if exists "contas_fixas_select" on public.contas_fixas;
@@ -19,14 +31,14 @@ on public.cartao for select to authenticated
 using (
   owner_id = auth.uid()
   or (
-    created_at < timestamptz '2026-10-24 02:30:00+00'
+    legado_privacidade_v1 is true
     and (
       responsavel_id in (select public.meus_membros())
       or grupo_id in (select public.meus_grupos())
     )
   )
   or (
-    created_at >= timestamptz '2026-10-24 02:30:00+00'
+    legado_privacidade_v1 is false
     and privado is not true
     and grupo_id in (select public.meus_grupos())
     and (
@@ -42,14 +54,14 @@ on public.contas_fixas for select to authenticated
 using (
   owner_id = auth.uid()
   or (
-    created_at < timestamptz '2026-10-24 02:30:00+00'
+    legado_privacidade_v1 is true
     and (
       responsavel_id in (select public.meus_membros())
       or grupo_id in (select public.meus_grupos())
     )
   )
   or (
-    created_at >= timestamptz '2026-10-24 02:30:00+00'
+    legado_privacidade_v1 is false
     and grupo_id in (select public.meus_grupos())
     and (
       compartilhado_com = auth.uid()
@@ -64,14 +76,14 @@ on public.extrato for select to authenticated
 using (
   owner_id = auth.uid()
   or (
-    created_at < timestamptz '2026-10-24 02:30:00+00'
+    legado_privacidade_v1 is true
     and (
       responsavel_id in (select public.meus_membros())
       or grupo_id in (select public.meus_grupos())
     )
   )
   or (
-    created_at >= timestamptz '2026-10-24 02:30:00+00'
+    legado_privacidade_v1 is false
     and privado is not true
     and grupo_id in (select public.meus_grupos())
     and (
@@ -84,10 +96,11 @@ using (
 
 commit;
 
--- ANTES DE EXECUTAR:
--- 1. Confirme no SQL Editor os nomes de TODAS as politicas SELECT destas tabelas.
---    Qualquer outra politica permissiva SELECT pode somar permissao por OR.
--- 2. Confirme tipos/retornos de meus_membros() e meus_grupos().
--- 3. Revise se o app cria registros com created_at preenchido pelo banco.
--- 4. Teste com duas contas de usuarios diferentes: privado, pessoa especifica, grupo e registro legado.
--- 5. Audite grants para anon/authenticated e as politicas INSERT/UPDATE/DELETE separadamente.
+-- CHECKLIST OBRIGATORIO ANTES DE EXECUTAR:
+-- 1. Liste TODAS as politicas SELECT das tres tabelas. Politicas permissivas combinam por OR.
+--    Remova/revise qualquer politica adicional que possa reabrir acesso.
+-- 2. Confirme os retornos de public.meus_membros() e public.meus_grupos().
+-- 3. Confirme que o app grava compartilhado_com com o ID correto (perfil ou grupo).
+-- 4. Teste com duas contas separadas: dono, privado, pessoa especifica, grupo e registro legado.
+-- 5. Revise separadamente INSERT/UPDATE/DELETE e grants.
+-- 6. O marcador classifica como legado tudo que existir quando a migracao rodar; confirme se isso e desejado.

@@ -48,6 +48,17 @@ describe("registroVisivelParaUsuario", () => {
     ).toBe(false);
   });
 
+  it("permite compartilhamento individual usando o ID do perfil do destinatário", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", grupo_id: "g1", compartilhado_com: "perfil-u1" },
+        "u1",
+        "g1",
+        "perfil-u1",
+      ),
+    ).toBe(true);
+  });
+
   it("permite registro compartilhado explicitamente com o usuário", () => {
     expect(
       registroVisivelParaUsuario(

@@ -31,6 +31,7 @@ using (
     and grupo_id in (select public.meus_grupos())
     and (
       compartilhado_com = auth.uid()
+      or compartilhado_com in (select id from public.perfis where user_id = auth.uid())
       or compartilhado_com = grupo_id
     )
   )

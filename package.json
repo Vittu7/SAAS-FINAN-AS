@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:rls": "vitest run --config vitest.rls.config.ts",
+    "seguranca:segredos": "node scripts/verificar-segredos.mjs --historico"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",

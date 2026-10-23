@@ -1,5 +1,7 @@
 "use client";
 
+import { Pencil, Trash2, type LucideIcon } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useState } from "react";
 import { brl } from "@/lib/finance";
 
@@ -8,7 +10,7 @@ export type ItemMobile = {
   titulo: string;
   subtitulo?: string;
   valor: number;
-  icone: string;
+  icone: LucideIcon;
   tags?: string[];
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
   progresso?: number; // 0 a 100 (parcelas)
@@ -61,7 +63,7 @@ export default function MobileLista({
                   onClick={() => temAcoes && setAberto(exp ? null : i.id)}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-background"
                 >
-                  <span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent/10 text-lg text-accent">{i.icone}</span>
+                  <span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={i.icone} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{i.titulo}</span>
                     <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted">
@@ -98,13 +100,13 @@ export default function MobileLista({
                       )}
                       {i.onEditar && (
                         <button type="button" onClick={i.onEditar} className="h-10 flex-1 rounded-full bg-surface text-sm font-medium ring-1 ring-line active:scale-[0.98]">
-                          Editar
+                          <span className="inline-flex items-center justify-center gap-1.5"><Ico icon={Pencil} size={16} />Editar</span>
                         </button>
                       )}
                       {i.onRemover && (
                         <button type="button" onClick={() => { if (window.confirm("Remover este item?")) i.onRemover?.(); }}
                           className="h-10 flex-1 rounded-full bg-rose-500/10 text-sm font-medium text-rose-500 active:scale-[0.98]">
-                          Remover
+                          <span className="inline-flex items-center justify-center gap-1.5"><Ico icon={Trash2} size={16} />Remover</span>
                         </button>
                       )}
                     </div>

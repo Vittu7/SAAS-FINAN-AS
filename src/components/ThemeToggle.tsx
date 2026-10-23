@@ -1,5 +1,7 @@
 "use client";
 
+import { Check, Palette, X } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type React from "react";
@@ -217,7 +219,7 @@ export function PainelAparencia({ compacto = false }: { compacto?: boolean }) {
           {DESTAQUES.map((opcao) => (
             <button key={opcao.id} type="button" onClick={() => mudarDestaque(opcao.id)} aria-pressed={destaque === opcao.id} aria-label={opcao.nome} title={opcao.nome} className="flex flex-col items-center gap-1 rounded-xl py-1 text-[10px] text-muted transition">
               <span className={`grid size-9 place-items-center rounded-full text-sm font-bold text-white transition ${destaque === opcao.id ? "ring-2 ring-offset-2 ring-offset-surface scale-105" : "hover:scale-105"}`} style={{ backgroundColor: opcao.cor, ["--tw-ring-color" as string]: opcao.cor } as React.CSSProperties}>
-                {destaque === opcao.id ? "✓" : ""}
+                {destaque === opcao.id ? <Ico icon={Check} size={16} /> : null}
               </span>
               {!compacto && <span className={`w-full truncate text-center ${destaque === opcao.id ? "font-semibold text-ink" : ""}`}>{opcao.nome}</span>}
             </button>
@@ -286,7 +288,7 @@ export default function ThemeToggle({ rotulo = false }: { rotulo?: boolean }) {
         aria-haspopup="dialog"
         className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-sm transition hover:border-accent/50 hover:bg-background"
       >
-        <span aria-hidden="true">◐</span>
+        <Ico icon={Palette} />
         <span className={rotulo ? "inline" : "hidden sm:inline"}>Aparência</span>
       </button>
 
@@ -309,7 +311,7 @@ export default function ThemeToggle({ rotulo = false }: { rotulo?: boolean }) {
               <h2 className="font-semibold text-ink">Aparência</h2>
               <p className="mt-0.5 text-xs text-muted">A mudança aparece na hora.</p>
             </div>
-            <button type="button" onClick={() => setAberto(false)} aria-label="Fechar aparência" className="grid size-10 text-lg place-items-center rounded-lg text-muted hover:bg-background">×</button>
+            <button type="button" onClick={() => setAberto(false)} aria-label="Fechar aparência" className="grid size-10 place-items-center rounded-lg text-muted hover:bg-background"><Ico icon={X} /></button>
           </div>
           <PainelAparencia compacto />
         </div>

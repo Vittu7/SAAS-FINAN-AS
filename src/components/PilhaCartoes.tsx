@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useMemo, useState } from "react";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { calcularFatura } from "@/lib/faturas";
@@ -97,7 +99,7 @@ export default function PilhaCartoes({
                   aria-label={`${aberto ? "Recolher" : "Expandir"} detalhes de ${c.nome}`}
                   className="grid size-8 place-items-center rounded-full bg-white/15 text-sm transition hover:bg-white/25 active:scale-95"
                 >
-                  {aberto ? "▴" : "▾"}
+                  <Ico icon={aberto ? ChevronUp : ChevronDown} size={18} />
                 </button>
               </div>
 

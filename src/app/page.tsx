@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronDown, ChevronUp, Pencil, Search } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import CentralAjustes, { type SecaoAjustes } from "@/components/CentralAjustes";
@@ -342,7 +344,7 @@ export default function Home() {
               </div>
               <div className="flex justify-center pt-1">
                 <button type="button" onClick={() => { setSecaoAjustes("dashboard"); irPara("ajustes"); }} className="rounded-full bg-surface px-4 py-2 text-xs font-medium text-muted ring-1 ring-line transition hover:text-ink">
-                  ✎ Personalizar tela inicial
+                  <span className="inline-flex items-center gap-1.5"><Ico icon={Pencil} size={14} />Personalizar tela inicial</span>
                 </button>
               </div>
             </>
@@ -354,8 +356,8 @@ export default function Home() {
               onClick={() => setFiltrosMobile((f) => !f)}
               className="flex h-10 w-full items-center justify-between rounded-full bg-surface px-4 text-sm font-medium ring-1 ring-line md:hidden"
             >
-              <span>⚲ Buscar e filtrar</span>
-              <span className="text-muted">{filtrosMobile ? "▴" : "▾"}</span>
+              <span className="inline-flex items-center gap-2"><Ico icon={Search} size={16} />Buscar e filtrar</span>
+              <Ico icon={filtrosMobile ? ChevronUp : ChevronDown} size={18} className="text-muted" />
             </button>
           )}
 

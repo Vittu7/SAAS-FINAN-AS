@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useState } from "react";
 import { COR_PADRAO, type Opcao } from "@/lib/useOpcoes";
 
@@ -56,7 +58,7 @@ export function SeletorOpcao({
             <span className="text-muted">{placeholder}</span>
           )}
         </span>
-        <span className="text-xs text-muted">▾</span>
+        <Ico icon={ChevronDown} size={16} className="text-muted" />
       </button>
 
       {aberto && (

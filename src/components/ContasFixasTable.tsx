@@ -1,5 +1,7 @@
 "use client";
 
+import { Check, ChevronDown, Pencil, Trash2, TriangleAlert } from "lucide-react";
+import { ICONE_ABA, Ico } from "@/components/icons";
 import MobileLista from "@/components/mobile/MobileLista";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -294,7 +296,7 @@ export default function ContasFixasTable({
                   ? responsaveisSelecionados[0]
                   : `${responsaveisSelecionados.length} pessoas`}
               </span>
-              <span className="text-muted">⌄</span>
+              <Ico icon={ChevronDown} size={16} className="text-muted" />
             </button>
 
             {menuResponsavelAberto && (
@@ -354,7 +356,7 @@ export default function ContasFixasTable({
         }}
         itens={[...itens].sort((x: any, y: any) => Number(x.pago) - Number(y.pago)).map((item: any) => ({
           id: item.id, titulo: item.nome || "Sem nome", subtitulo: [item.categoria, item.formaPagamento || item.forma_pagamento].filter(Boolean).join(" · "),
-          valor: item.valor, icone: item.pago ? "✓" : "▣", tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
+          valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
           status: item.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
           onAlternar: () => onTogglePago(item.id), rotuloAlternar: item.pago ? "Desmarcar" : "Marcar como paga",
           onEditar: () => setEditando(item), onRemover: () => onRemove(item.id),
@@ -399,7 +401,7 @@ export default function ContasFixasTable({
                         : "bg-amber-500 text-white"
                         }`}
                     >
-                      {item.pago ? "✓" : "!"}
+                      <Ico icon={item.pago ? Check : TriangleAlert} size={10} />
                     </span>
                     {item.pago ? "Pago" : "Pendente"}
                   </button>
@@ -444,7 +446,7 @@ export default function ContasFixasTable({
                       onClick={() => setEditando(item)}
                       className="mr-3 text-xs text-accent hover:underline"
                     >
-                      Editar
+                      <span className="inline-flex items-center gap-1"><Ico icon={Pencil} size={13} />Editar</span>
                     </button>
                   )}
                   <button
@@ -452,7 +454,7 @@ export default function ContasFixasTable({
                     onClick={() => onRemove(item.id)}
                     className="text-xs text-red-400 hover:underline"
                   >
-                    Excluir
+                    <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={13} />Excluir</span>
                   </button>
                 </td>
               </tr>

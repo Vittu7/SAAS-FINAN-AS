@@ -1,5 +1,7 @@
 "use client";
 
+import { Pencil, Tags, Trash2, Wallet, X, CreditCard, type LucideIcon } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import DialogResponsivo from "./DialogResponsivo";
@@ -11,10 +13,10 @@ type Aba = "cartoes" | "pagamentos" | "categorias";
 
 const CORES = ["#0EA5E9", "#10B981", "#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#EF4444", "#64748B"];
 
-const ABAS: { id: Aba; nome: string; icone: string; singular: string }[] = [
-  { id: "cartoes", nome: "Cartões", icone: "💳", singular: "cartão" },
-  { id: "pagamentos", nome: "Formas de pagamento", icone: "💸", singular: "forma de pagamento" },
-  { id: "categorias", nome: "Categorias", icone: "🏷️", singular: "categoria" },
+const ABAS: { id: Aba; nome: string; icone: LucideIcon; singular: string }[] = [
+  { id: "cartoes", nome: "Cartões", icone: CreditCard, singular: "cartão" },
+  { id: "pagamentos", nome: "Formas de pagamento", icone: Wallet, singular: "forma de pagamento" },
+  { id: "categorias", nome: "Categorias", icone: Tags, singular: "categoria" },
 ];
 
 type Formulario = {
@@ -196,7 +198,7 @@ export default function GerenciarOpcoesModal({
             aria-label="Fechar"
             className="grid size-10 shrink-0 place-items-center rounded-xl text-muted transition hover:bg-background hover:text-ink"
           >
-            ✕
+            <Ico icon={X} />
           </button>
         </header>}
 
@@ -213,7 +215,7 @@ export default function GerenciarOpcoesModal({
                   aba === a.id ? "bg-accent text-on-accent shadow-sm" : "text-ink hover:bg-surface"
                 }`}
               >
-                <span aria-hidden="true">{a.icone}</span>
+                <Ico icon={a.icone} size={18} />
                 <span className="whitespace-nowrap">{a.nome}</span>
                 <span
                   className={`ml-auto rounded-full px-2 py-0.5 text-[11px] ${
@@ -306,7 +308,7 @@ function BotoesAcao({ nome, bloqueado, onEditar, onExcluir, claro }: { nome: str
           claro ? "border-white/30 bg-white/10 text-white hover:bg-white/20" : "border-line text-ink hover:bg-surface"
         }`}
       >
-        ✎ Editar
+        <span className="inline-flex items-center justify-center gap-1.5"><Ico icon={Pencil} size={14} />Editar</span>
       </button>
       <button
         type="button"
@@ -317,7 +319,7 @@ function BotoesAcao({ nome, bloqueado, onEditar, onExcluir, claro }: { nome: str
           claro ? "border-white/30 bg-white/10 text-white hover:bg-red-500/60" : "border-red-500/30 text-red-500 hover:bg-red-500/10"
         }`}
       >
-        🗑 Excluir
+        <span className="inline-flex items-center justify-center gap-1.5"><Ico icon={Trash2} size={14} />Excluir</span>
       </button>
     </div>
   );

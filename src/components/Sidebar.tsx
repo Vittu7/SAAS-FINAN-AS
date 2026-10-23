@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
 
 
 interface SidebarProps {
@@ -18,21 +20,21 @@ interface SidebarProps {
 const SECOES = [
   {
     titulo: "Visão geral",
-    itens: [{ id: "inicio", rotulo: "Início", simbolo: "⌂" }],
+    itens: [{ id: "inicio", rotulo: "Início" }],
   },
   {
     titulo: "Movimentações",
     itens: [
-      { id: "extrato", rotulo: "Extrato", simbolo: "≡" },
-      { id: "lancamentos", rotulo: "Lançamentos do mês", simbolo: "+" },
+      { id: "extrato", rotulo: "Extrato" },
+      { id: "lancamentos", rotulo: "Lançamentos do mês" },
     ],
   },
   {
     titulo: "Contas",
     itens: [
-      { id: "fatura", rotulo: "Fatura do cartão", simbolo: "▭" },
-      { id: "cartao", rotulo: "Contas parceladas", simbolo: "▤" },
-      { id: "contas", rotulo: "Contas fixas", simbolo: "▣" },
+      { id: "fatura", rotulo: "Fatura do cartão" },
+      { id: "cartao", rotulo: "Contas parceladas" },
+      { id: "contas", rotulo: "Contas fixas" },
     ],
   },
 ];
@@ -152,7 +154,7 @@ export default function Sidebar({
             aria-label={expandido ? "Recolher menu" : "Expandir menu"}
             className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-background hover:text-ink"
           >
-            {expandido ? "‹" : "›"}
+            <Ico icon={expandido ? PanelLeftClose : PanelLeftOpen} />
           </button>
         </div>
 
@@ -193,7 +195,7 @@ export default function Sidebar({
               expandido ? "gap-2" : ""
             }`}
           >
-            <span aria-hidden>＋</span>
+            <Ico icon={ICONES.novo} />
             {expandido && <span>Novo lançamento</span>}
           </button>
 
@@ -235,8 +237,8 @@ export default function Sidebar({
                   title={!expandido ? item.rotulo : undefined}
                   className={classeItem(abaAtiva === item.id)}
                 >
-                  <span className="grid w-5 place-items-center text-base" aria-hidden>
-                    {item.simbolo}
+                  <span className="grid w-5 place-items-center">
+                    <Ico icon={ICONE_ABA[item.id]} />
                   </span>
                   {expandido && <span>{item.rotulo}</span>}
                 </button>
@@ -266,8 +268,8 @@ export default function Sidebar({
               className={classeItem(false)}
               title={!expandido ? "Gráficos" : undefined}
             >
-              <span className="grid w-5 place-items-center text-base" aria-hidden>
-                ◷
+              <span className="grid w-5 place-items-center">
+                <Ico icon={ICONES.graficos} />
               </span>
               {expandido && <span>Gráficos</span>}
             </button>
@@ -286,8 +288,8 @@ export default function Sidebar({
               className={classeItem(false)}
               title={!expandido ? "Investimentos" : undefined}
             >
-              <span className="grid w-5 place-items-center text-base" aria-hidden>
-                $
+              <span className="grid w-5 place-items-center">
+                <Ico icon={ICONES.investimentos} />
               </span>
               {expandido && <span>Investimentos</span>}
             </button>
@@ -296,7 +298,7 @@ export default function Sidebar({
           <section className="space-y-1">
             {expandido && <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">AJUSTES</h2>}
             <button type="button" onClick={() => selecionarAba("ajustes")} className={classeItem(abaAtiva === "ajustes")} title="Configurações">
-              <span className="grid w-5 place-items-center" aria-hidden>⚙</span>{expandido && <span>Configurações</span>}
+              <span className="grid w-5 place-items-center"><Ico icon={ICONE_ABA.ajustes} /></span>{expandido && <span>Configurações</span>}
             </button>
           </section>
         </nav>
@@ -337,8 +339,8 @@ export default function Sidebar({
           className={classeItem(false)}
           title={!expandido ? "Gerenciar grupo" : undefined}
         >
-          <span className="grid w-5 place-items-center" aria-hidden>
-            ◉
+          <span className="grid w-5 place-items-center">
+            <Ico icon={ICONES.grupo} />
           </span>
           {expandido && <span>Gerenciar grupo</span>}
         </button>
@@ -352,8 +354,8 @@ export default function Sidebar({
           }`}
           title={!expandido ? "Sair da conta" : undefined}
         >
-          <span className="grid w-5 place-items-center" aria-hidden>
-            ↪
+          <span className="grid w-5 place-items-center">
+            <Ico icon={ICONES.sair} />
           </span>
           {expandido && <span>Sair da conta</span>}
         </button>

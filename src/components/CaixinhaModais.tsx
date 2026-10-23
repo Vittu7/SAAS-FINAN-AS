@@ -1,5 +1,7 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useState } from "react";
 import DialogResponsivo from "./DialogResponsivo";
 import { botaoPrimario, campo } from "./ui";
@@ -249,7 +251,7 @@ export function FormularioCaixinha({
         <div className="flex items-center gap-2 pt-1">
           {onExcluir && (
             <button type="button" onClick={excluir} className="h-9 rounded-lg px-3 text-sm text-red-400 hover:underline">
-              Excluir
+              <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={14} />Excluir</span>
             </button>
           )}
           <div className="ml-auto flex gap-2">
@@ -444,7 +446,7 @@ export function HistoricoDialog({
                       {entrada ? "+" : "−"} {brl(m.valor)}
                     </span>
                     <button type="button" onClick={() => excluir(m)} className="text-xs text-red-400 hover:underline">
-                      Excluir
+                      <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={13} />Excluir</span>
                     </button>
                   </div>
                 </li>

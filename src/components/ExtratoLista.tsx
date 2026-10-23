@@ -1,8 +1,10 @@
 "use client";
 
+import { ArrowDownLeft } from "lucide-react";
+import { ICONE_ORIGEM_LINHA, Ico } from "@/components/icons";
 import { Selo } from "@/components/SeletorOpcao";
 import { brl } from "@/lib/finance";
-import { agruparPorOrigem, ICONE_ORIGEM, type LinhaExtrato, type Ordem } from "@/lib/extrato";
+import { agruparPorOrigem, type LinhaExtrato, type Ordem } from "@/lib/extrato";
 import { COR_PADRAO, useOpcoes } from "@/lib/useOpcoes";
 
 const TOM = {
@@ -76,10 +78,10 @@ function Linha({ linha: l, cor }: { linha: LinhaExtrato; cor: string }) {
     <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
       <span
         aria-hidden
-        className="grid size-11 place-items-center rounded-full text-lg"
+        className="grid size-11 place-items-center rounded-full"
         style={{ backgroundColor: `${corIcone}26`, color: corIcone }}
       >
-        {l.entrada ? "↓" : ICONE_ORIGEM[l.origem]}
+        <Ico icon={l.entrada ? ArrowDownLeft : ICONE_ORIGEM_LINHA[l.origem]} />
       </span>
 
       <div className="min-w-0">

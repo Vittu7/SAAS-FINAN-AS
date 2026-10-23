@@ -1,4 +1,6 @@
 'use client';
+import { ReceiptText, CreditCard } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useState } from 'react';
 import { useOpcoes } from '@/lib/useOpcoes';
 import { calcularFatura } from '@/lib/faturas';
@@ -74,7 +76,7 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
         <ul className="divide-y divide-line">
           {fatura.itens.map((i) => (
             <li key={i.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 md:px-0">
-              <span aria-hidden className="grid size-10 place-items-center rounded-full bg-accent/10 text-sm text-accent">{i.detalhe === 'Compra' ? '≡' : '▤'}</span>
+              <span aria-hidden className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={i.detalhe === 'Compra' ? CreditCard : ReceiptText} size={18} /></span>
               <div className="min-w-0">
                 <p className="truncate font-medium">{i.descricao}</p>
                 <p className="truncate text-xs text-muted">{i.categoria} · {i.responsavel} · {i.detalhe}</p>

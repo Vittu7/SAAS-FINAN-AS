@@ -1,5 +1,7 @@
 "use client";
 
+import { Plus, Trash2, X } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Avatar from "./Avatar";
@@ -161,8 +163,8 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[10030] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-line relative">
-        <button onClick={onClose} className="absolute right-4 top-4 text-muted hover:text-ink">
-          ✕
+        <button onClick={onClose} aria-label="Fechar" className="absolute right-4 top-4 text-muted hover:text-ink">
+          <Ico icon={X} />
         </button>
 
         <h2 className="text-2xl font-bold mb-6">Gerenciar Grupo</h2>
@@ -190,7 +192,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                   onClick={() => setAdicionandoConvidado(true)}
                   className="w-full py-2 px-3 rounded-xl border border-dashed border-accent text-accent hover:bg-accent/10 text-sm font-medium transition flex items-center justify-center gap-2"
                 >
-                  ➕ Adicionar Convidado sem Conta
+                  <Ico icon={Plus} size={16} />Adicionar Convidado sem Conta
                 </button>
               ) : (
                 <form onSubmit={adicionarConvidado} className="space-y-3 bg-surface p-3 rounded-xl border border-line">
@@ -278,9 +280,9 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                     {m.id !== meuPerfil.id && (
                       <button
                         onClick={() => removerMembro(m.id)}
-                        className="text-xs text-red-400 hover:underline"
+                        className="inline-flex items-center gap-1 text-xs text-red-400 hover:underline"
                       >
-                        Remover
+                        <Ico icon={Trash2} size={13} />Remover
                       </button>
                     )}
                   </div>

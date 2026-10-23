@@ -1,5 +1,7 @@
 "use client";
 
+import { Trash2, UserRound } from "lucide-react";
+import { Ico } from "@/components/icons";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -112,7 +114,7 @@ export default function PerfilConta() {
               className="group relative grid size-24 place-items-center overflow-hidden rounded-3xl bg-accent text-3xl font-bold text-on-accent ring-4 ring-surface shadow-lg"
               aria-label="Alterar foto de perfil"
             >
-              {avatar ? <img src={avatar} alt="Sua foto" className="h-full w-full object-cover" /> : nomeUsuario ? nomeUsuario[0].toUpperCase() : "👤"}
+              {avatar ? <img src={avatar} alt="Sua foto" className="h-full w-full object-cover" /> : nomeUsuario ? nomeUsuario[0].toUpperCase() : <Ico icon={UserRound} size={40} />}
               <span className="absolute inset-0 grid place-items-center bg-black/50 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
                 {enviandoFoto ? "Enviando..." : "Alterar foto"}
               </span>
@@ -129,7 +131,7 @@ export default function PerfilConta() {
             </button>
             {avatar && (
               <button type="button" onClick={removerFoto} className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink">
-                Remover
+                <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={14} />Remover</span>
               </button>
             )}
           </div>

@@ -111,9 +111,12 @@ export function useFinanceStore() {
 
     setMembros(listaMembros);
 
+    const compartilhamento = perfil?.id
+      ? `,compartilhado_com.eq.${user.id},compartilhado_com.eq.${perfil.id}`
+      : `,compartilhado_com.eq.${user.id}`;
     const filtro = gId
-      ? `owner_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}`
-      : `owner_id.eq.${user.id},responsavel_id.eq.${user.id}`;
+      ? `owner_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}${compartilhamento}`
+      : `owner_id.eq.${user.id},responsavel_id.eq.${user.id}${compartilhamento}`;
 
     const [resExtrato, resCartao, resContas] = await Promise.all([
       supabase.from("extrato").select("*").or(filtro),

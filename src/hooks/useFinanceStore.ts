@@ -11,6 +11,7 @@ import type {
   Tabela,
 } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
+import { registroVisivelParaUsuario } from "@/lib/record-visibility";
 
 const VAZIO: Estado = {
   extrato: [],
@@ -120,9 +121,9 @@ export function useFinanceStore() {
       supabase.from("contas_fixas").select("*").or(filtro),
     ]);
 
-    // Partilha seletiva: além da regra no banco, esconde o que foi partilhado com outra pessoa
+    // Filtro visual de defesa em profundidade. A autorização real precisa estar nas políticas RLS.
     const visivel = (row: any) =>
-      !row.compartilhado_com || row.owner_id === user.id || row.compartilhado_com === user.id;
+      registroVisivelParaUsuario(row, user.id, gId);
 
     setEstado({
       extrato: (resExtrato.data || []).filter(visivel).map((row: any) =>

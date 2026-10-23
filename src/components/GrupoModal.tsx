@@ -73,8 +73,19 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   };
 
   const alterarCorMembro = async (membroId: string, novaCor: string) => {
-    await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
-    carregarPerfilEMembros();
+    const { error } = await supabase
+      .from("perfis")
+      .update({ cor: novaCor })
+      .eq("id", membroId);
+
+    if (error) {
+      alert("Não foi possível alterar a cor. Verifique se você tem permissão para gerenciar este perfil.");
+      console.error("Erro ao alterar cor do perfil:", error);
+      await carregarPerfilEMembros();
+      return;
+    }
+
+    await carregarPerfilEMembros();
   };
 
   const gerenciarGrupo = async (e: React.FormEvent) => {
@@ -169,8 +180,19 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
   const removerMembro = async (membroId: string) => {
     if (!confirm("Deseja remover esta pessoa do grupo?")) return;
-    await supabase.from("perfis").delete().eq("id", membroId);
-    carregarPerfilEMembros();
+
+    const { error } = await supabase
+      .from("perfis")
+      .delete()
+      .eq("id", membroId);
+
+    if (error) {
+      alert("Não foi possível remover esta pessoa. Verifique se você tem permissão para gerenciar o grupo.");
+      console.error("Erro ao remover perfil do grupo:", error);
+      return;
+    }
+
+    await carregarPerfilEMembros();
   };
 
   return (

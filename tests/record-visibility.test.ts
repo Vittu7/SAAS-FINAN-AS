@@ -42,6 +42,26 @@ describe("registroVisivelParaUsuario", () => {
     ).toBe(true);
   });
 
+  it("permite compartilhamento individual em tabela sem coluna privado", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", grupo_id: "g1", compartilhado_com: "u1" },
+        "u1",
+        "g1",
+      ),
+    ).toBe(true);
+  });
+
+  it("nega registro de tabela sem coluna privado quando não há compartilhamento", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", grupo_id: "g1", compartilhado_com: null },
+        "u1",
+        "g1",
+      ),
+    ).toBe(false);
+  });
+
   it("permite registro compartilhado explicitamente com o grupo atual", () => {
     expect(
       registroVisivelParaUsuario(

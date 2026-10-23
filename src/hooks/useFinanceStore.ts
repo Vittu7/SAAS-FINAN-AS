@@ -123,7 +123,7 @@ export function useFinanceStore() {
 
     // Filtro visual de defesa em profundidade. A autorização real precisa estar nas políticas RLS.
     const visivel = (row: any) =>
-      registroVisivelParaUsuario(row, user.id, gId);
+      registroVisivelParaUsuario(row, user.id, gId, perfil?.id);
 
     setEstado({
       extrato: (resExtrato.data || []).filter(visivel).map((row: any) =>

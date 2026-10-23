@@ -89,7 +89,7 @@ export default function ContasFixasTable({
         .filter(Boolean);
 
       setMembros(nomes.length > 0 ? nomes : [nomeReal]);
-      setMembrosCompartilhamento((data || []).filter((membro) => membro.id !== perfil.id && membro.nome_usuario).map((membro) => ({ id: membro.id, nome: membro.nome_usuario })));
+      setMembrosCompartilhamento((data || []).filter((membro) => membro.id !== perfil.id && membro.nome_usuario).map((membro) => ({ id: membro.id, nome: membro.nome_usuario || "Membro" })));
     } else {
       setMembros([nomeReal]);
     }

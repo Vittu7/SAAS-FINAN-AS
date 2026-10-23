@@ -178,8 +178,25 @@ declare
   v_grupo_id uuid;
   v_cargo text;
 begin
-  if auth.uid() is null then raise exception 'É necessário estar autenticado.'; end if;
-  if p_cor !~ '^#[0-9A-Fa-f]{6}
+  if auth.uid() is null then
+    raise exception 'É necessário estar autenticado.';
+  end if;
+
+  if p_cor is null or p_cor !~ '^#[0-9A-Fa-f]{6}$' then
+    raise exception 'Cor inválida.';
+  end if;
+
+  select grupo_id, cargo into v_grupo_id, v_cargo
+  from public.perfis
+  where user_id = auth.uid()
+  order by criado_em
+  limit 1;
+
+  if coalesce(v_cargo, '') <> 'gestor' then
+    raise exception 'Somente o gestor pode alterar cores dos perfis do grupo.';
+  end if;
+
+  if v_grupo_id is null or not exists (
     select 1 from public.perfis
     where id = p_perfil_id and grupo_id = v_grupo_id
   ) then

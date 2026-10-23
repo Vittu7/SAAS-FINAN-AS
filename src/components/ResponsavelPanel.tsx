@@ -65,8 +65,19 @@ export default function ResponsavelPanel({
   };
 
   const alterarCor = async (membroId: string, novaCor: string) => {
+    const anteriores = membros;
     setMembros((prev) => prev.map((m) => (m.id === membroId ? { ...m, cor: novaCor } : m)));
-    await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
+
+    const { error } = await supabase.rpc("alterar_cor_perfil_grupo", {
+      p_perfil_id: membroId,
+      p_cor: novaCor,
+    });
+
+    if (error) {
+      console.error("Erro ao alterar cor do perfil:", error);
+      setMembros(anteriores);
+      alert("Não foi possível alterar a cor: " + error.message);
+    }
   };
 
   const fatias: Fatia[] = useMemo(() => {

@@ -5,18 +5,19 @@
 
 begin;
 
--- Registros que ja existem recebem legado_privacidade_v1=true.
--- Novos registros recebem false pelo DEFAULT, sem depender de created_at.
+-- Ao adicionar a coluna com DEFAULT true, linhas existentes recebem true.
+-- Em seguida o DEFAULT passa a false para novos registros. Não reclassifica linhas
+-- novas em reexecuções acidentais; revise, ainda assim, antes de executar.
 alter table public.cartao
-  add column if not exists legado_privacidade_v1 boolean not null default false;
+  add column if not exists legado_privacidade_v1 boolean not null default true;
 alter table public.contas_fixas
-  add column if not exists legado_privacidade_v1 boolean not null default false;
+  add column if not exists legado_privacidade_v1 boolean not null default true;
 alter table public.extrato
-  add column if not exists legado_privacidade_v1 boolean not null default false;
+  add column if not exists legado_privacidade_v1 boolean not null default true;
 
-update public.cartao set legado_privacidade_v1 = true where legado_privacidade_v1 = false;
-update public.contas_fixas set legado_privacidade_v1 = true where legado_privacidade_v1 = false;
-update public.extrato set legado_privacidade_v1 = true where legado_privacidade_v1 = false;
+alter table public.cartao alter column legado_privacidade_v1 set default false;
+alter table public.contas_fixas alter column legado_privacidade_v1 set default false;
+alter table public.extrato alter column legado_privacidade_v1 set default false;
 
 -- Remove as politicas SELECT permissivas conhecidas para evitar OR com regras antigas.
 drop policy if exists "cartao_select" on public.cartao;

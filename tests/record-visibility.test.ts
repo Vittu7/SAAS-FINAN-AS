@@ -18,6 +18,7 @@ describe("registroVisivelParaUsuario", () => {
         {
           owner_id: "u2",
           grupo_id: "g1",
+          responsavel_id: "perfil-u1",
           privado: false,
           compartilhado_com: null,
           legado_privacidade_v1: true,
@@ -34,6 +35,23 @@ describe("registroVisivelParaUsuario", () => {
         { owner_id: "u2", grupo_id: "g1", privado: false, compartilhado_com: null },
         "u1",
         "g1",
+      ),
+    ).toBe(false);
+  });
+
+  it("não libera registro legado apenas por pertencer ao mesmo grupo", () => {
+    expect(
+      registroVisivelParaUsuario(
+        {
+          owner_id: "u2",
+          grupo_id: "g1",
+          responsavel_id: "perfil-u2",
+          privado: false,
+          legado_privacidade_v1: true,
+        },
+        "u1",
+        "g1",
+        "perfil-u1",
       ),
     ).toBe(false);
   });

@@ -20,6 +20,7 @@ jobs:
           cache: npm
 
       - name: Instalar dependencias
+        id: install
         run: npm ci
 
       - name: Executar testes
@@ -29,6 +30,7 @@ jobs:
         run: npm run lint
 
       - name: Validar build
+        if: always() && steps.install.outcome == 'success'
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co

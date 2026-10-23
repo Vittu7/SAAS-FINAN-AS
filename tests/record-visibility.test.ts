@@ -1,0 +1,74 @@
+import { describe, expect, it } from "vitest";
+import { registroVisivelParaUsuario } from "../src/lib/record-visibility";
+
+describe("registroVisivelParaUsuario", () => {
+  it("permite ao proprietário ver seu próprio registro privado", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u1", privado: true },
+        "u1",
+        "g1",
+      ),
+    ).toBe(true);
+  });
+
+  it("nega por padrão registro de outra pessoa sem compartilhamento explícito", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", grupo_id: "g1", privado: false, compartilhado_com: null },
+        "u1",
+        "g1",
+      ),
+    ).toBe(false);
+  });
+
+  it("nega registro marcado como privado mesmo que exista destinatário", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", privado: true, compartilhado_com: "u1" },
+        "u1",
+        "g1",
+      ),
+    ).toBe(false);
+  });
+
+  it("permite registro compartilhado explicitamente com o usuário", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", privado: false, compartilhado_com: "u1" },
+        "u1",
+        "g1",
+      ),
+    ).toBe(true);
+  });
+
+  it("permite registro compartilhado explicitamente com o grupo atual", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", grupo_id: "g1", privado: false, compartilhado_com: "g1" },
+        "u1",
+        "g1",
+      ),
+    ).toBe(true);
+  });
+
+  it("nega compartilhamento com outro grupo", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u2", grupo_id: "g2", privado: false, compartilhado_com: "g2" },
+        "u1",
+        "g1",
+      ),
+    ).toBe(false);
+  });
+
+  it("nega acesso quando não há usuário autenticado", () => {
+    expect(
+      registroVisivelParaUsuario(
+        { owner_id: "u1", privado: true },
+        null,
+        null,
+      ),
+    ).toBe(false);
+  });
+});

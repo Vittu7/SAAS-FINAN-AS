@@ -21,6 +21,7 @@ export function registroVisivelParaUsuario(
   registro: RegistroCompartilhavel,
   usuarioId: string | null | undefined,
   grupoAtualId: string | null | undefined,
+  perfilAtualId?: string | null,
 ): boolean {
   if (!usuarioId) return false;
 
@@ -40,7 +41,7 @@ export function registroVisivelParaUsuario(
   if (registro.privado === true) return false;
 
   // Registros novos de terceiros exigem compartilhamento explícito.
-  if (registro.compartilhado_com === usuarioId) return true;
+  if (registro.compartilhado_com === usuarioId || (perfilAtualId && registro.compartilhado_com === perfilAtualId)) return true;
 
   // Compartilhamento explícito com o grupo atual.
   return Boolean(

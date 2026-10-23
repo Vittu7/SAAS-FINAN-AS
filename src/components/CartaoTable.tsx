@@ -80,7 +80,7 @@ export default function CartaoTable({
       if (data) {
         const nomes = data.map((m) => m.nome_usuario).filter(Boolean);
         setMembros(nomes.length > 0 ? nomes : [nomeReal]);
-        setMembrosCompartilhamento(data.filter((m) => m.id !== perfil.id && m.nome_usuario).map((m) => ({ id: m.id, nome: m.nome_usuario })));
+        setMembrosCompartilhamento(data.filter((m) => m.id !== perfil.id && m.nome_usuario).map((m) => ({ id: m.id, nome: m.nome_usuario || "Membro" })));
       }
     }
   }, []);

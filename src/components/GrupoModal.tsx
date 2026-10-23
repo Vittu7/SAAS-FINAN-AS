@@ -50,12 +50,20 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     if (!perfil) {
       const nomePadrao = user.user_metadata?.full_name || user.email || "Usuário";
-      const { data: novoPerfil } = await supabase
+      const { error: erroCriacaoPerfil } = await supabase.rpc("garantir_meu_perfil", {
+        p_nome_usuario: nomePadrao,
+      });
+      if (erroCriacaoPerfil) {
+        console.error("Erro ao criar perfil:", erroCriacaoPerfil);
+        return;
+      }
+
+      const { data: perfilCriado } = await supabase
         .from("perfis")
-        .upsert([{ id: user.id, user_id: user.id, nome_usuario: nomePadrao, cargo: "membro", cor: "#10B981" }])
         .select("*, grupos_familiares(nome)")
-        .single();
-      perfil = novoPerfil;
+        .eq("user_id", user.id)
+        .maybeSingle();
+      perfil = perfilCriado;
     }
 
     if (perfil) {
@@ -73,14 +81,13 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   };
 
   const alterarCorMembro = async (membroId: string, novaCor: string) => {
-    const { error } = await supabase
-      .from("perfis")
-      .update({ cor: novaCor })
-      .eq("id", membroId);
+    const { error } = await supabase.rpc("alterar_cor_perfil_grupo", {
+      p_perfil_id: membroId,
+      p_cor: novaCor,
+    });
 
     if (error) {
-      alert("Não foi possível alterar a cor. Verifique se você tem permissão para gerenciar este perfil.");
-      console.error("Erro ao alterar cor do perfil:", error);
+      alert("Não foi possível alterar a cor: " + error.message);
       await carregarPerfilEMembros();
       return;
     }
@@ -95,27 +102,14 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     try {
       if (modo === "criar") {
-        const { data: grupo, error: erroGrupo } = await supabase
-          .from("grupos_familiares")
-          .insert([{ nome: inputValor }])
-          .select()
-          .single();
-
-        if (erroGrupo) throw erroGrupo;
-
         const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
         if (!user) throw new Error("Faça login novamente para criar um grupo.");
 
-        const { error: erroPerfil } = await supabase.from("perfis").upsert({
-          id: user.id,
-          user_id: user.id,
-          nome_usuario: nomePadrao,
-          grupo_id: grupo.id,
-          cargo: "gestor",
-          cor: "#10B981",
+        const { error: erroGrupo } = await supabase.rpc("criar_grupo_familiar", {
+          p_nome: inputValor.trim(),
+          p_nome_usuario: nomePadrao,
         });
-
-        if (erroPerfil) throw erroPerfil;
+        if (erroGrupo) throw erroGrupo;
 
         alert("Grupo criado com sucesso!");
       }
@@ -129,13 +123,9 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
           throw new Error("Código do grupo inválido. Confira o código e tente novamente.");
         }
 
-        const { error: erroEntrada } = await supabase.from("perfis").upsert({
-          id: user.id,
-          user_id: user.id,
-          nome_usuario: nomePadrao,
-          grupo_id: codigoGrupo,
-          cargo: "membro",
-          cor: "#6366F1",
+        const { error: erroEntrada } = await supabase.rpc("entrar_grupo_por_convite", {
+          p_grupo_id: codigoGrupo,
+          p_nome_usuario: nomePadrao,
         });
 
         if (erroEntrada) throw erroEntrada;
@@ -158,15 +148,10 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     if (!nomeConvidado.trim() || !meuPerfil?.grupo_id) return;
     setCarregando(true);
 
-    const { error } = await supabase.from("perfis").insert([
-      {
-        nome_usuario: nomeConvidado.trim(),
-        grupo_id: meuPerfil.grupo_id,
-        cargo: "membro",
-        eh_convidado: true,
-        cor: corConvidado,
-      },
-    ]);
+    const { error } = await supabase.rpc("adicionar_convidado_grupo", {
+      p_nome: nomeConvidado.trim(),
+      p_cor: corConvidado,
+    });
 
     if (error) {
       alert("Erro ao adicionar convidado: " + error.message);
@@ -181,10 +166,9 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   const removerMembro = async (membroId: string) => {
     if (!confirm("Deseja remover esta pessoa do grupo?")) return;
 
-    const { error } = await supabase
-      .from("perfis")
-      .delete()
-      .eq("id", membroId);
+    const { error } = await supabase.rpc("remover_perfil_grupo", {
+      p_perfil_id: membroId,
+    });
 
     if (error) {
       alert("Não foi possível remover esta pessoa. Verifique se você tem permissão para gerenciar o grupo.");

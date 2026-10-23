@@ -157,7 +157,7 @@ begin
   limit 1;
 
   if v_grupo_id is null then raise exception 'Você precisa participar de um grupo.'; end if;
-  if v_cargo <> 'gestor' then raise exception 'Somente o gestor pode adicionar convidados.'; end if;
+  if coalesce(v_cargo, '') <> 'gestor' then raise exception 'Somente o gestor pode adicionar convidados.'; end if;
 
   insert into public.perfis (nome_usuario, grupo_id, cargo, eh_convidado, cor)
   values (trim(p_nome), v_grupo_id, 'membro', true,
@@ -211,7 +211,7 @@ begin
   order by criado_em
   limit 1;
 
-  if v_cargo <> 'gestor' then raise exception 'Somente o gestor pode remover perfis do grupo.'; end if;
+  if coalesce(v_cargo, '') <> 'gestor' then raise exception 'Somente o gestor pode remover perfis do grupo.'; end if;
 
   select user_id into v_alvo_user_id
   from public.perfis
@@ -284,7 +284,7 @@ commit;
   order by criado_em
   limit 1;
 
-  if v_cargo <> 'gestor' then raise exception 'Somente o gestor pode alterar cores dos perfis do grupo.'; end if;
+  if coalesce(v_cargo, '') <> 'gestor' then raise exception 'Somente o gestor pode alterar cores dos perfis do grupo.'; end if;
 
   if v_grupo_id is null or not exists (
     select 1 from public.perfis

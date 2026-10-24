@@ -44,7 +44,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     let { data: perfil } = await supabase
       .from("perfis")
-      .select("*, grupos_familiares(nome)")
+      .select("*, grupos_familiares(nome, convite_codigo)")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -118,13 +118,13 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
         if (!user) throw new Error("Faça login novamente para entrar em um grupo.");
 
-        const codigoGrupo = inputValor.trim();
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(codigoGrupo)) {
+        const codigoConvite = inputValor.trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(codigoConvite)) {
           throw new Error("Código do grupo inválido. Confira o código e tente novamente.");
         }
 
         const { error: erroEntrada } = await supabase.rpc("entrar_grupo_por_convite", {
-          p_grupo_id: codigoGrupo,
+          p_codigo_convite: codigoConvite,
           p_nome_usuario: nomePadrao,
         });
 

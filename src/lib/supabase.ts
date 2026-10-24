@@ -1,7 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Chaves injetadas diretamente para garantir o funcionamento local do SaaS
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://iitgqormevgnxikwyvu.supabase.co";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpdGdxb3JtZXZnbnhpa3d5dnUiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTcyMzg1NjI5NSwiZXhwIjoyMDM5NDMyMjk1fQ.exemplo_chave_padrao";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nas variáveis de ambiente."
+  );
+}
+
+// Apenas a chave anon/public deve ser usada no navegador. Nunca coloque service_role aqui.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

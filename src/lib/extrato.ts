@@ -1,3 +1,5 @@
+import { ehEntrada, semDuplicados } from "./calculos";
+
 export type Ordem = "" | "maior" | "menor";
 export type OrigemLinha = "extrato" | "cartao" | "contas";
 
@@ -34,6 +36,9 @@ export function ordenarPorValor<T extends { valor: number | string }>(itens: T[]
 
 /** Junta lançamentos, parcelas e contas fixas do mês numa lista única e padronizada. */
 export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?: string): LinhaExtrato[] {
+  extrato = semDuplicados(extrato, "extrato");
+  cartao = semDuplicados(cartao, "cartao");
+  contas = semDuplicados(contas, "contas");
   const linhas: (LinhaExtrato & { mes: string })[] = [
     ...extrato.map((i) => ({
       id: `extrato-${i.id}`,
@@ -45,6 +50,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       responsavel: i.responsavel || "",
       responsavelCor: i.responsavelCor,
       valor: num(i.valor),
+      entrada: ehEntrada(i),
     })),
     ...cartao.map((i) => ({
       id: `cartao-${i.id}`,

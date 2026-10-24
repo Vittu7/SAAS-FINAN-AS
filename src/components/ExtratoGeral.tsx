@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 import ExtratoLista from "@/components/ExtratoLista";
 import { brl } from "@/lib/finance";
-import { montarLinhas, ordenarPorValor, totalGastos, type Ordem } from "@/lib/extrato";
+import { montarLinhas, ordenarPorValor, totalGastos, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
 
 type Props = {
   mes: string;
@@ -12,9 +13,22 @@ type Props = {
   contas: any[];
   /** Ordenação por valor escolhida nos filtros ("" = padrão). */
   ordem?: Ordem;
+  membros?: string[];
+  onEdit?: (origem: OrigemLinha, id: string, patch: Record<string, any>) => Promise<boolean | void>;
+  onRemove?: (origem: OrigemLinha, id: string) => void;
 };
 
-export default function ExtratoGeral({ mes, extrato, cartao, contas, ordem = "" }: Props) {
+export default function ExtratoGeral({ mes, extrato, cartao, contas, ordem = "", membros = [], onEdit, onRemove }: Props) {
+  const [editando, setEditando] = useState<{ origem: OrigemLinha; item: any } | null>(null);
+  const fontes: Record<OrigemLinha, any[]> = { extrato, cartao, contas };
+  const rawId = (l: LinhaExtrato) => l.id.slice(l.origem.length + 1);
+  const abrirEdicao = (l: LinhaExtrato) => {
+    const item = fontes[l.origem].find((i) => String(i.id) === rawId(l));
+    if (item) setEditando({ origem: l.origem, item });
+  };
+  const remover = (l: LinhaExtrato) => {
+    if (window.confirm(`Remover "${l.descricao}"? Essa ação não pode ser desfeita.`)) onRemove?.(l.origem, rawId(l));
+  };
   const linhas = useMemo(
     () => ordenarPorValor(montarLinhas(extrato, cartao, contas, mes), ordem),
     [extrato, cartao, contas, mes, ordem],
@@ -36,7 +50,17 @@ export default function ExtratoGeral({ mes, extrato, cartao, contas, ordem = "" 
         </p>
       </header>
 
-      <ExtratoLista linhas={linhas} ordem={ordem} vazio="Não há movimentações neste mês." />
+      <ExtratoLista linhas={linhas} ordem={ordem} vazio="Não há movimentações neste mês." onEditar={onEdit ? abrirEdicao : undefined} onRemover={onRemove ? remover : undefined} />
+
+      {editando && onEdit && (
+        <EditarLancamentoModal
+          tipo={editando.origem}
+          item={editando.item}
+          membros={membros}
+          onSalvar={(patch) => onEdit(editando.origem, String(editando.item.id), patch)}
+          onClose={() => setEditando(null)}
+        />
+      )}
     </section>
   );
 }

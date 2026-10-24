@@ -174,6 +174,8 @@ export function useFinanceStore() {
       categoria: item.categoria,
       valor: item.valor,
       descricao: item.descricao,
+      // só envia "tipo" para entradas: saídas continuam funcionando mesmo antes da migração 02 do Supabase
+      ...(item.tipo === "entrada" ? { tipo: "entrada" } : {}),
       privado: (item as any).privado ?? false,
       compartilhado_com: (item as any).compartilhado_com || null,
     };

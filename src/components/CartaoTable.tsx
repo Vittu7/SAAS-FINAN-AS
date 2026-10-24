@@ -5,13 +5,18 @@ import { ICONE_ABA, Ico } from "@/components/icons";
 import MobileLista from "@/components/mobile/MobileLista";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { brl, parseValor } from "@/lib/finance";
+import { brl, parseValor, pct } from "@/lib/finance";
 import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 import { useOpcoes, type Opcao } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 import { calcularFatura } from "@/lib/faturas";
 import type { Estado } from "@/lib/types";
+
+// O cadastro foi centralizado em "Nova transação" (botão +). O formulário antigo fica oculto aqui.
+const ESCONDER_CADASTRO = true;
+// Cartões e limites agora ficam só em "Cartões e Faturas".
+const ESCONDER_CARTOES = true;
 
 export default function CartaoTable({
   estado,
@@ -154,7 +159,7 @@ export default function CartaoTable({
   return (
     <div className="space-y-6 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
       {/* CARROSSEL DE CARTÕES */}
-      {cartoesComLimite.length > 0 && (
+      {!ESCONDER_CARTOES && cartoesComLimite.length > 0 && (
         <section aria-label="Resumo dos cartões">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -207,7 +212,7 @@ export default function CartaoTable({
                     </div>
 
                     <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold">
-                      {porcentagemUso.toFixed(0)}% usado
+                      {pct(porcentagemUso, 0)} usado
                     </span>
                   </div>
 
@@ -246,7 +251,7 @@ export default function CartaoTable({
 
                     <div className="mt-2 flex justify-between text-xs text-white/75">
                       <span>Uso do limite</span>
-                      <span>{porcentagemUso.toFixed(1)}%</span>
+                      <span>{pct(porcentagemUso, 1)}</span>
                     </div>
                   </div>
                 </article>
@@ -255,6 +260,7 @@ export default function CartaoTable({
           </div>
         </section>
       )}
+{!ESCONDER_CADASTRO && (<>
       <button
         type="button"
         onClick={() => setFormAberto((a) => !a)}
@@ -398,6 +404,8 @@ export default function CartaoTable({
           </button>
         </div>
       </form>
+</>)}
+
 
       {/* EXIBIÇÃO MOBILE */}
       <MobileLista

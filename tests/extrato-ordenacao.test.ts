@@ -37,8 +37,8 @@ describe('Ordenação por valor', () => {
   it('agrupa por origem com subtotal e ignora entradas', () => {
     const comSalario = [{ id: 's', origem: 'extrato' as const, descricao: 'Salário', categoria: '', forma: '', responsavel: '', valor: 5000, entrada: true }, ...linhas];
     const grupos = agruparPorOrigem(comSalario);
-    expect(grupos.map((g) => [g.origem, g.total])).toEqual([['extrato', 162.5], ['cartao', 300], ['contas', 100]]);
-    expect(totalGastos(comSalario)).toBe(562.5);
+    expect(grupos.map((g) => [g.origem, g.total])).toEqual([['extrato', 162.5], ['cartao', 300], ['contas', 0]]); // conta pendente não é gasto pago
+    expect(totalGastos(comSalario)).toBe(462.5);
   });
 });
 

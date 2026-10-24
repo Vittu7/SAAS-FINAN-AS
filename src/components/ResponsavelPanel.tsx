@@ -75,7 +75,7 @@ export default function ResponsavelPanel({
       return lista.map((m) => ({ id: m.id, nome: m.nome, cor: m.cor, valor: resumo?.porResponsavel?.[m.nome] || 0, editavel: true }));
     }
 
-    const extrato = itens?.extrato || [];
+    const extrato = (itens?.extrato || []).filter((i: any) => i.tipo !== "entrada");
     const cartao = itens?.cartao || [];
     const contas = itens?.contas || [];
     const mapa = new Map<string, number>();

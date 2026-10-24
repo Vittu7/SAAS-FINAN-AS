@@ -5,7 +5,7 @@ import { Ico } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import DialogResponsivo from "./DialogResponsivo";
-import { parseValor } from "@/lib/finance";
+import { brl, parseValor } from "@/lib/finance";
 import { type Opcao, useOpcoes } from "@/lib/useOpcoes";
 import { gradienteCartao } from "@/lib/cartao";
 
@@ -27,7 +27,6 @@ type Formulario = {
   limite: string;
 };
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 function formularioVazio(aba: Aba): Formulario {
   return { id: null, nome: "", cor: aba === "cartoes" ? "#6366F1" : "#64748B", ehCartao: aba === "cartoes", limite: "" };

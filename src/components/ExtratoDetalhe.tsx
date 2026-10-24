@@ -6,7 +6,7 @@ import ExtratoLista from "@/components/ExtratoLista";
 import { brl, rotuloMes } from "@/lib/finance";
 import { montarLinhas, ordenarPorValor, totalGastos, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
 
-export type TipoDetalhe = "gastos" | "disponivel";
+export type TipoDetalhe = "gastos" | "disponivel" | "entradas";
 
 const ORDENS: { id: Ordem; rotulo: string }[] = [
   { id: "", rotulo: "Padrão" },
@@ -37,7 +37,6 @@ export default function ExtratoDetalhe({
   cartao,
   contas,
   salario,
-  userId,
   visualizacao,
   onFechar,
 }: {
@@ -47,7 +46,6 @@ export default function ExtratoDetalhe({
   cartao: any[];
   contas: any[];
   salario: number;
-  userId: string | null;
   visualizacao: string;
   onFechar: () => void;
 }) {
@@ -55,39 +53,37 @@ export default function ExtratoDetalhe({
   const [origem, setOrigem] = useState<"" | OrigemLinha>("");
   const [responsavel, setResponsavel] = useState("");
 
-  // "Disponível" considera só os gastos do próprio usuário (mesma regra do indicador).
-  const doEscopo = useMemo(() => {
-    const meu = (i: any) => tipo === "gastos" || i.responsavel_id === userId;
-    return { extrato: extrato.filter(meu), cartao: cartao.filter(meu), contas: contas.filter(meu) };
-  }, [tipo, extrato, cartao, contas, userId]);
-
-  const base = useMemo(
-    () => montarLinhas(doEscopo.extrato, doEscopo.cartao, doEscopo.contas, mes),
-    [doEscopo, mes],
-  );
+  // Os dados já chegam filtrados pela visualização escolhida (somente eu, grupo ou pessoa),
+  // então este extrato bate sempre com os cards do resumo.
+  const base = useMemo(() => montarLinhas(extrato, cartao, contas, mes), [extrato, cartao, contas, mes]);
 
   const responsaveis = useMemo(() => [...new Set(base.map((l) => l.responsavel).filter(Boolean))].sort(), [base]);
 
+  const entradasLinhas = useMemo(() => base.filter((l) => l.entrada), [base]);
+  const usandoSalario = entradasLinhas.length === 0 && salario > 0;
+  const entradasTotal = usandoSalario ? salario : entradasLinhas.reduce((t, l) => t + l.valor, 0);
+
   const gastosLinhas = useMemo(
-    () => base.filter((l) => (!origem || l.origem === origem) && (!responsavel || l.responsavel === responsavel)),
+    () => base.filter((l) => !l.entrada && (!origem || l.origem === origem) && (!responsavel || l.responsavel === responsavel)),
     [base, origem, responsavel],
   );
 
   const totalMes = totalGastos(base); // indicador completo do mês, independente dos filtros do detalhe
   const totalFiltrado = totalGastos(gastosLinhas);
   const filtrado = Boolean(origem || responsavel);
-  const sobra = salario - totalMes;
+  const sobra = entradasTotal - totalMes;
 
   const linhas: LinhaExtrato[] = useMemo(() => {
     const ordenadas = ordenarPorValor(gastosLinhas, ordem);
+    const entradas: LinhaExtrato[] = usandoSalario
+      ? [{ id: "salario", origem: "extrato", descricao: "Salário configurado", categoria: "", forma: "", responsavel: "", valor: salario, entrada: true }]
+      : entradasLinhas;
+    if (tipo === "entradas") return entradas;
     if (tipo !== "disponivel" || filtrado) return ordenadas;
-    return [
-      { id: "salario", origem: "extrato", descricao: "Salário do mês", categoria: "", forma: "", responsavel: "", valor: salario, entrada: true },
-      ...ordenadas,
-    ];
-  }, [gastosLinhas, ordem, tipo, filtrado, salario]);
+    return [...entradas, ...ordenadas];
+  }, [gastosLinhas, ordem, tipo, filtrado, salario, usandoSalario, entradasLinhas]);
 
-  const titulo = tipo === "gastos" ? "Gastos do mês" : "Disponível após os gastos";
+  const titulo = tipo === "gastos" ? "Saídas do mês" : tipo === "entradas" ? "Entradas do mês" : "Saldo restante";
   const negativo = tipo === "disponivel" && sobra < 0;
 
   return (
@@ -96,24 +92,26 @@ export default function ExtratoDetalhe({
         {/* Cabeçalho do extrato */}
         <div
           className={`relative overflow-hidden rounded-3xl p-5 ${
-            tipo === "gastos" ? "bg-background ring-1 ring-line" : negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent"
+            tipo === "gastos" ? "bg-background ring-1 ring-line" : tipo === "entradas" ? "bg-emerald-600 text-white" : negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent"
           }`}
         >
           <p className={`text-xs font-medium ${tipo === "gastos" ? "text-muted" : "opacity-80"}`}>
             {rotuloMes(mes)} · {visualizacao}
           </p>
           <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
-            {tipo === "gastos" ? brl(totalMes) : `${negativo ? "− " : ""}${brl(Math.abs(sobra))}`}
+            {tipo === "gastos" ? brl(totalMes) : tipo === "entradas" ? brl(entradasTotal) : `${negativo ? "− " : ""}${brl(Math.abs(sobra))}`}
           </p>
           <p className={`mt-1 text-xs ${tipo === "gastos" ? "text-muted" : "opacity-80"}`}>
             {tipo === "gastos"
               ? `${base.length} ${base.length === 1 ? "movimentação" : "movimentações"} no mês`
-              : `Salário ${brl(salario)} − seus gastos ${brl(totalMes)}`}
+              : tipo === "entradas"
+              ? `${entradasLinhas.length || (usandoSalario ? 1 : 0)} ${entradasLinhas.length === 1 ? "entrada" : "entradas"} no mês`
+              : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}`}
           </p>
         </div>
 
         {/* Filtros do detalhe */}
-        <div className="space-y-2">
+        {tipo !== "entradas" && <div className="space-y-2">
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="group" aria-label="Filtrar por tipo">
             {ORIGENS.map((o) => (
               <button key={o.id || "tudo"} type="button" aria-pressed={origem === o.id} onClick={() => setOrigem(o.id)} className={chip(origem === o.id)}>
@@ -151,7 +149,7 @@ export default function ExtratoDetalhe({
               Mostrando {gastosLinhas.length} de {base.length} · {brl(totalFiltrado)}
             </p>
           )}
-        </div>
+        </div>}
 
         <ExtratoLista linhas={linhas} ordem={ordem} vazio="Nenhuma movimentação encontrada neste mês." />
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft } from "lucide-react";
+import { ArrowDownLeft, Pencil, Trash2 } from "lucide-react";
 import { ICONE_ORIGEM_LINHA, Ico } from "@/components/icons";
 import { Selo } from "@/components/SeletorOpcao";
 import { brl } from "@/lib/finance";
@@ -22,10 +22,14 @@ export default function ExtratoLista({
   linhas,
   ordem,
   vazio,
+  onEditar,
+  onRemover,
 }: {
   linhas: LinhaExtrato[];
   ordem: Ordem;
   vazio: string;
+  onEditar?: (l: LinhaExtrato) => void;
+  onRemover?: (l: LinhaExtrato) => void;
 }) {
   const { corCategoria } = useOpcoes();
 
@@ -42,7 +46,7 @@ export default function ExtratoLista({
       {entradas.length > 0 && (
         <ul className="divide-y divide-line">
           {entradas.map((l) => (
-            <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} />
+            <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} onEditar={onEditar} onRemover={onRemover} />
           ))}
         </ul>
       )}
@@ -50,7 +54,7 @@ export default function ExtratoLista({
       {ordem ? (
         <ul className="divide-y divide-line">
           {gastos.map((l) => (
-            <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} />
+            <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} onEditar={onEditar} onRemover={onRemover} />
           ))}
         </ul>
       ) : (
@@ -62,7 +66,7 @@ export default function ExtratoLista({
             </header>
             <ul className="divide-y divide-line">
               {g.linhas.map((l) => (
-                <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} />
+                <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} onEditar={onEditar} onRemover={onRemover} />
               ))}
             </ul>
           </section>
@@ -72,7 +76,7 @@ export default function ExtratoLista({
   );
 }
 
-function Linha({ linha: l, cor }: { linha: LinhaExtrato; cor: string }) {
+function Linha({ linha: l, cor, onEditar, onRemover }: { linha: LinhaExtrato; cor: string; onEditar?: (l: LinhaExtrato) => void; onRemover?: (l: LinhaExtrato) => void }) {
   const corIcone = l.entrada ? "#10B981" : cor || COR_PADRAO;
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
@@ -98,6 +102,12 @@ function Linha({ linha: l, cor }: { linha: LinhaExtrato; cor: string }) {
           {brl(l.valor)}
         </span>
         {l.status && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TOM[l.status.tom]}`}>{l.status.texto}</span>}
+        {(onEditar || onRemover) && (
+          <div className="mt-0.5 flex items-center gap-1">
+            {onEditar && <button type="button" onClick={() => onEditar(l)} aria-label={`Editar ${l.descricao}`} title="Editar" className="grid size-9 place-items-center rounded-lg text-muted transition hover:bg-background hover:text-accent active:scale-95"><Ico icon={Pencil} size={16} /></button>}
+            {onRemover && <button type="button" onClick={() => onRemover(l)} aria-label={`Remover ${l.descricao}`} title="Remover" className="grid size-9 place-items-center rounded-lg text-muted transition hover:bg-background hover:text-rose-600 active:scale-95"><Ico icon={Trash2} size={16} /></button>}
+          </div>
+        )}
       </div>
     </li>
   );

@@ -22,6 +22,7 @@ import {
   UserRound,
   Users,
   Wallet,
+  WalletCards,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,10 +50,12 @@ export const ICONE_ABA: Record<string, LucideIcon> = {
   inicio: House,
   extrato: ArrowLeftRight,
   lancamentos: ListPlus,
-  fatura: ReceiptText,
+  fatura: WalletCards,
   cartao: CalendarDays, // contas parceladas
   contas: CalendarClock, // contas fixas
   ajustes: Settings,
+  graficos: ChartPie,
+  investimentos: ChartNoAxesCombined,
 };
 
 /** Ícone por origem da linha no extrato (lançamento, parcela, conta fixa). */

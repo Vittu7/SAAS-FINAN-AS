@@ -9,11 +9,11 @@
 :root {
   color-scheme: light;
 
-  --bg: #f4f6fa;
+  --bg: #e6ebf2;
   --surface: #ffffff;
-  --line: #e2e8f0;
-  --ink: #1e293b;
-  --muted: #64748b;
+  --line: #c5d0dd;
+  --ink: #0f172a;
+  --muted: #4f5f73;
 
   --accent: #0f766e;
   --on-accent: #ffffff;
@@ -21,11 +21,11 @@
   --selo-escurecer: 25%;
 
   --shadow-card:
-    0 1px 2px rgb(15 23 42 / 0.03),
-    0 6px 18px -10px rgb(15 23 42 / 0.12);
+    0 1px 2px rgb(15 23 42 / 0.08),
+    0 6px 18px -10px rgb(15 23 42 / 0.22);
 
   --shadow-hover:
-    0 8px 24px -12px rgb(15 23 42 / 0.16);
+    0 10px 26px -12px rgb(15 23 42 / 0.28);
 }
 
 /* =========================================
@@ -159,7 +159,7 @@ html {
 
 body {
   margin: 0;
-  background-color: var(--bg);
+  background-color: transparent; /* o fundo vem do <html>, assim a decoração fica atrás dos cartões */
   color: var(--ink);
   font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -220,19 +220,19 @@ textarea {
 /* =========================================
    FUNDO DECORATIVO
    ========================================= */
-body::after {
+body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: -1;
   pointer-events: none;
   opacity: 0;
   transition: opacity 250ms ease;
 }
 
 /* Aurora */
-:root[data-bg="aurora"] body::after {
-  opacity: 0.035;
+:root[data-bg="aurora"] body::before {
+  opacity: 0.10;
   background:
     radial-gradient(55% 45% at 10% 0%,
       var(--accent),
@@ -246,24 +246,24 @@ body::after {
 }
 
 /* Glow */
-:root[data-bg="glow"] body::after {
-  opacity: 0.035;
+:root[data-bg="glow"] body::before {
+  opacity: 0.10;
   background: radial-gradient(80% 60% at 50% -10%,
       var(--accent),
       transparent 70%);
 }
 
 /* Pontos */
-:root[data-bg="dots"] body::after {
-  opacity: 0.035;
+:root[data-bg="dots"] body::before {
+  opacity: 0.10;
   background-image: radial-gradient(var(--accent) 1px,
       transparent 1.4px);
   background-size: 22px 22px;
 }
 
 /* Grade */
-:root[data-bg="grid"] body::after {
-  opacity: 0.025;
+:root[data-bg="grid"] body::before {
+  opacity: 0.07;
   background-image:
     linear-gradient(var(--accent) 1px, transparent 1px),
     linear-gradient(90deg, var(--accent) 1px, transparent 1px);
@@ -271,21 +271,21 @@ body::after {
 }
 
 /* Intensidade um pouco maior no tema escuro */
-:root[data-theme="dark"][data-bg="aurora"] body::after,
-:root[data-theme="system"][data-bg="aurora"] body::after {
+:root[data-theme="dark"][data-bg="aurora"] body::before,
+:root[data-theme="system"][data-bg="aurora"] body::before {
   opacity: 0.07;
 }
 
-:root[data-theme="dark"][data-bg="glow"] body::after,
-:root[data-theme="system"][data-bg="glow"] body::after {
+:root[data-theme="dark"][data-bg="glow"] body::before,
+:root[data-theme="system"][data-bg="glow"] body::before {
   opacity: 0.06;
 }
 
-:root[data-theme="dark"][data-bg="dots"] body::after {
+:root[data-theme="dark"][data-bg="dots"] body::before {
   opacity: 0.07;
 }
 
-:root[data-theme="dark"][data-bg="grid"] body::after {
+:root[data-theme="dark"][data-bg="grid"] body::before {
   opacity: 0.05;
 }
 

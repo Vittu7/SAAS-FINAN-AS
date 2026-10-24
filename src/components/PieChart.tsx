@@ -1,3 +1,4 @@
+import { brl } from "@/lib/finance";
 export type Fatia = { rotulo: string; valor: number; cor: string };
 
 /**
@@ -10,7 +11,7 @@ export default function PieChart({ fatias }: { fatias: Fatia[] }) {
   const C = 2 * Math.PI * R;
   let acumulado = 0;
 
-  const descricao = fatias.map((f) => `${f.rotulo}: ${f.valor.toFixed(2)} reais`).join("; ");
+  const descricao = fatias.map((f) => `${f.rotulo}: ${brl(f.valor)}`).join("; ");
 
   return (
     <svg

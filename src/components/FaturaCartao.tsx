@@ -4,14 +4,19 @@ import { Ico } from "@/components/icons";
 import { useState } from 'react';
 import { useOpcoes } from '@/lib/useOpcoes';
 import { calcularFatura } from '@/lib/faturas';
-import { addMeses, brl, rotuloMes } from '@/lib/finance';
+import { addMeses, brl, pct as porc, rotuloMes } from '@/lib/finance';
 import { gradienteCartao } from '@/lib/cartao';
 import type { Estado } from '@/lib/types';
 
 /** Mesmo visual da tela de Contas parceladas: carrossel de cartões + lista em painel. */
 export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; mes: string; setMes: (mes: string) => void }) {
   const { pagamento, corPagamento } = useOpcoes();
-  const cartoes = pagamento.filter((i) => i.eh_cartao);
+  // Cartões com a maior fatura do mês aparecem primeiro
+  const cartoes = pagamento
+    .filter((i) => i.eh_cartao)
+    .map((c) => ({ c, total: calcularFatura(estado, c.nome, mes, Number(c.limite) || 0).total }))
+    .sort((a, b) => b.total - a.total || a.c.nome.localeCompare(b.c.nome, 'pt-BR'))
+    .map((x) => x.c);
   const [id, setId] = useState('');
   const escolhido = cartoes.find((i) => i.id === id) || cartoes[0];
   if (!escolhido) return <p className="py-6 text-muted">Nenhum cartão de crédito cadastrado. Acesse Configurações → Cadastros → Cartões.</p>;
@@ -48,7 +53,7 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
                     <p className="truncate text-base font-semibold">{c.nome}</p>
                     <p className="mt-1 text-xs text-white/70">Cartão de crédito</p>
                   </div>
-                  <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold">{pct.toFixed(0)}% usado</span>
+                  <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold">{porc(pct)} usado</span>
                 </div>
                 <p className="mt-6 text-xs font-medium text-white/70">Fatura de {rotuloMes(mes)}</p>
                 <p className="mt-1 text-3xl font-bold tracking-tight">{brl(f.total)}</p>

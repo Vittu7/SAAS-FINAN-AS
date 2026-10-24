@@ -1,8 +1,44 @@
+import { useEffect, useSyncExternalStore } from "react";
 import type { Estado } from "./types";
+import { calcularMes } from "./calculos";
 
 /** Formata valores numéricos para BRL com proteção contra undefined, null e NaN */
+/* ---------- Ocultar valores (vale para o sistema inteiro) ---------- */
+const CHAVE_OCULTAR = "valores-ocultos";
+let ocultos = false;
+const ouvintes = new Set<() => void>();
+
+export const valoresOcultos = () => ocultos;
+
+export function definirValoresOcultos(v: boolean) {
+  ocultos = v;
+  try { localStorage.setItem(CHAVE_OCULTAR, v ? "1" : "0"); } catch { /* sem armazenamento */ }
+  ouvintes.forEach((f) => f());
+}
+
+/** Use em qualquer componente que precise reagir ao botão de ocultar valores. */
+export function useValoresOcultos(): [boolean, (v: boolean) => void] {
+  const valor = useSyncExternalStore(
+    (f) => { ouvintes.add(f); return () => { ouvintes.delete(f); }; },
+    () => ocultos,
+    () => false,
+  );
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CHAVE_OCULTAR) === "1" && !ocultos) { ocultos = true; ouvintes.forEach((f) => f()); }
+    } catch { /* ignora */ }
+  }, []);
+  return [valor, definirValoresOcultos];
+}
+
+export const MASCARA = "R$ ••••";
+
+/** Formata dinheiro; com "ocultar valores" ligado mostra só a máscara. */
 export const brl = (v?: number | null) =>
-  (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  ocultos ? MASCARA : (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** Porcentagem (também some quando os valores estão ocultos). */
+export const pct = (v: number, casas = 0) => (ocultos ? "••%" : `${v.toFixed(casas)}%`);
 
 /** Aceita "1.234,56", "1234,56" ou "1234.56". Retorna 0 se inválido. */
 export function parseValor(texto: string): number {
@@ -30,52 +66,30 @@ export function rotuloMes(mes: string): string {
 }
 
 export type Resumo = {
-  salario: number;
+  /** Entradas do mês (lançadas; se não houver, o salário configurado) */
+  entradas: number;
+  /** Saídas do mês: à vista + parcelas + contas fixas */
   totalGasto: number;
   totalGeral: number;
+  /** Saldo restante = entradas − saídas */
+  sobra: number;
+  /** Contas fixas ainda não pagas (informativo) */
+  faltaPagar: number;
+  usandoSalarioConfigurado: boolean;
   porResponsavel: Record<string, number>;
   porOrigem: { extrato: number; cartao: number; contas: number };
-  /** Gastos do mês em que o usuário logado é o responsável */
-  meusGastos: number;
-  /** Salário menos os gastos do próprio usuário */
-  sobra: number;
 };
 
-const soma = (itens: { valor: number }[]) =>
-  (itens || []).reduce((s, i) => s + (i?.valor || 0), 0);
-
-/** Soma o que o usuário logado (pelo id do perfil) gastou no mês, em todas as origens. */
-export function gastosDoUsuario(e: Estado, mes: string, meuId?: string | null): number {
-  if (!meuId) return 0;
-  const todos: any[] = [...(e?.extrato || []), ...(e?.cartao || []), ...(e?.contas || [])];
-  return soma(todos.filter((i) => i?.mes === mes && i?.responsavel_id === meuId));
-}
-
-export function resumoDoMes(e: Estado, mes: string, meuId?: string | null): Resumo {
-  const porResponsavel: Record<string, number> = {};
-
-  const extrato = (e?.extrato || []).filter((i) => i.mes === mes);
-  const cartao = (e?.cartao || []).filter((i) => i.mes === mes);
-  const contas = (e?.contas || []).filter((i) => i.mes === mes);
-
-  for (const i of [...extrato, ...cartao, ...contas]) {
-    const resp = i?.responsavel || "Membro";
-    porResponsavel[resp] = (porResponsavel[resp] || 0) + (i?.valor || 0);
-  }
-
-  const porOrigem = { extrato: soma(extrato), cartao: soma(cartao), contas: soma(contas) };
-  const totalGasto = porOrigem.extrato + porOrigem.cartao + porOrigem.contas;
-
-  const salario = e?.config?.salario ?? 0;
-  const meusGastos = gastosDoUsuario(e, mes, meuId);
-
+export function resumoDoMes(e: Estado, mes: string): Resumo {
+  const r = calcularMes(e, { mes, salarioConfig: e?.config?.salario ?? 0 });
   return {
-    salario,
-    totalGasto,
-    totalGeral: totalGasto,
-    porResponsavel,
-    porOrigem,
-    meusGastos,
-    sobra: salario - meusGastos,
+    entradas: r.entradas,
+    totalGasto: r.saidas,
+    totalGeral: r.saidas,
+    sobra: r.saldoRestante,
+    faltaPagar: r.faltaPagar,
+    usandoSalarioConfigurado: r.fallbackSalario,
+    porResponsavel: r.porResponsavel,
+    porOrigem: r.porOrigem,
   };
 }

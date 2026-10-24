@@ -11,6 +11,9 @@ import { useOpcoes } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 
+// O cadastro foi centralizado em "Nova transação" (botão +). O formulário antigo fica oculto aqui.
+const ESCONDER_CADASTRO = true;
+
 export default function ExtratoTable({
   mes,
   itens,
@@ -136,6 +139,7 @@ export default function ExtratoTable({
 
   return (
     <div className="space-y-4 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
+{!ESCONDER_CADASTRO && (<>
       <button type="button" onClick={() => setFormAberto((a) => !a)}
         className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-on-accent active:scale-[0.98] md:hidden">
         {formAberto ? <><Ico icon={X} size={18} />Fechar formulário</> : <><Ico icon={Plus} size={18} />Adicionar novo</>}
@@ -269,6 +273,8 @@ export default function ExtratoTable({
           </button>
         </div>
       </form>
+</>)}
+
 
       <MobileLista vazio="Nenhum lançamento neste mês." itens={itens.map((item: any) => ({
         id: item.id, titulo: item.descricao || "Sem descrição", subtitulo: [item.categoria, item.pagamento].filter(Boolean).join(" · "),

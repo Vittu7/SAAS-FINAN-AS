@@ -9,6 +9,7 @@ import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
 
 interface SidebarProps {
   onAbrirGrupo: () => void;
+  onNova: () => void;
   membroSelecionado?: string;
   setMembroSelecionado?: (membro: string) => void;
   listaMembros?: string[];
@@ -26,27 +27,22 @@ const SECOES = [
     titulo: "Movimentações",
     itens: [
       { id: "extrato", rotulo: "Extrato" },
-      { id: "lancamentos", rotulo: "Lançamentos do mês" },
+      { id: "lancamentos", rotulo: "Lançamentos (editar)" },
     ],
   },
   {
     titulo: "Contas",
     itens: [
-      { id: "fatura", rotulo: "Fatura do cartão" },
+      { id: "fatura", rotulo: "Cartões e Faturas" },
       { id: "cartao", rotulo: "Contas parceladas" },
       { id: "contas", rotulo: "Contas fixas" },
     ],
   },
 ];
 
-const TIPOS_NOVO_LANCAMENTO = [
-  { id: "lancamentos", rotulo: "Lançamento normal" },
-  { id: "cartao", rotulo: "Conta parcelada" },
-  { id: "contas", rotulo: "Conta fixa" },
-];
-
 export default function Sidebar({
   onAbrirGrupo,
+  onNova,
   membroSelecionado = "TODOS",
   setMembroSelecionado,
   listaMembros = [],
@@ -55,7 +51,6 @@ export default function Sidebar({
   onAlterarExpandido,
 }: SidebarProps) {
   const [expandido, setExpandido] = useState(true);
-  const [menuNovoAberto, setMenuNovoAberto] = useState(false);
 
   const [perfil, setPerfil] = useState<{ nome: string; avatar: string | null; email: string }>({
     nome: "",
@@ -103,7 +98,6 @@ export default function Sidebar({
 
   const selecionarAba = (id: string) => {
     onSelecionarAba?.(id);
-    setMenuNovoAberto(false);
 
     if (pathname !== "/") router.push("/");
   };
@@ -188,34 +182,16 @@ export default function Sidebar({
         <div className="relative py-4">
           <button
             type="button"
-            onClick={() => setMenuNovoAberto((aberto) => !aberto)}
-            aria-expanded={menuNovoAberto}
-            title={!expandido ? "Novo lançamento" : undefined}
+            onClick={onNova}
+            title={!expandido ? "Nova transação" : undefined}
             className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:opacity-95 ${
               expandido ? "gap-2" : ""
             }`}
           >
             <Ico icon={ICONES.novo} />
-            {expandido && <span>Novo lançamento</span>}
+            {expandido && <span>Nova transação</span>}
           </button>
 
-          {menuNovoAberto && (
-            <div className="absolute left-0 right-0 top-[calc(100%-8px)] z-50 rounded-xl border border-line bg-surface p-1.5 shadow-xl">
-              <p className="px-2 py-1.5 text-[11px] font-medium text-muted">
-                Escolha o tipo
-              </p>
-              {TIPOS_NOVO_LANCAMENTO.map((tipo) => (
-                <button
-                  key={tipo.id}
-                  type="button"
-                  onClick={() => selecionarAba(tipo.id)}
-                  className="w-full rounded-lg px-2 py-2 text-left text-sm text-ink transition hover:bg-background"
-                >
-                  {tipo.rotulo}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* NAVEGAÇÃO */}
@@ -253,44 +229,12 @@ export default function Sidebar({
                 Análises
               </h2>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                selecionarAba("inicio");
-                window.setTimeout(
-                  () =>
-                    document
-                      .getElementById("graficos")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                  50
-                );
-              }}
-              className={classeItem(false)}
-              title={!expandido ? "Gráficos" : undefined}
-            >
-              <span className="grid w-5 place-items-center">
-                <Ico icon={ICONES.graficos} />
-              </span>
-              {expandido && <span>Gráficos</span>}
+            <button type="button" onClick={() => selecionarAba("graficos")} aria-current={abaAtiva === "graficos" ? "page" : undefined} className={classeItem(abaAtiva === "graficos")} title={!expandido ? "Gráficos e relatórios" : undefined}>
+              <span className="grid w-5 place-items-center"><Ico icon={ICONES.graficos} /></span>
+              {expandido && <span>Gráficos e relatórios</span>}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                selecionarAba("inicio");
-                window.setTimeout(
-                  () =>
-                    document
-                      .getElementById("investimentos")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                  50
-                );
-              }}
-              className={classeItem(false)}
-              title={!expandido ? "Investimentos" : undefined}
-            >
-              <span className="grid w-5 place-items-center">
-                <Ico icon={ICONES.investimentos} />
-              </span>
+            <button type="button" onClick={() => selecionarAba("investimentos")} aria-current={abaAtiva === "investimentos" ? "page" : undefined} className={classeItem(abaAtiva === "investimentos")} title={!expandido ? "Investimentos" : undefined}>
+              <span className="grid w-5 place-items-center"><Ico icon={ICONES.investimentos} /></span>
               {expandido && <span>Investimentos</span>}
             </button>
           </section>

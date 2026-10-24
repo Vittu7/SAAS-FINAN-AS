@@ -14,6 +14,8 @@ export type Extrato = {
   valor: number;
   descricao: string;
   responsavel: Responsavel;
+  /** "entrada" = dinheiro recebido; ausente ou "saida" = gasto */
+  tipo?: "saida" | "entrada";
 };
 
 export type Cartao = {

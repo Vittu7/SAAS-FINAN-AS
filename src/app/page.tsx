@@ -15,6 +15,11 @@ import ExtratoTable from "@/components/ExtratoTable";
 import ExtratoGeral from "@/components/ExtratoGeral";
 import ResponsavelPanel from "@/components/ResponsavelPanel";
 import SummaryCards from "@/components/SummaryCards";
+import TelaGraficos from "@/components/TelaGraficos";
+import TelaInvestimentos from "@/components/TelaInvestimentos";
+import NovaTransacao from "@/components/NovaTransacao";
+import MovimentacoesRecentes from "@/components/MovimentacoesRecentes";
+import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import ThemeToggle from "@/components/ThemeToggle";
 import AjudaEInstalacao from "@/components/AjudaEInstalacao";
 import InvestimentosReservaCard from "@/components/InvestimentosReservaCard";
@@ -25,20 +30,21 @@ import { ordenarPorValor } from "@/lib/extrato";
 import { useFinanceStore } from "@/hooks/useFinanceStore";
 import {
   addMeses,
-  gastosDoUsuario,
   mesAtual,
+  useValoresOcultos,
   resumoDoMes,
   rotuloMes,
 } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
-import { MobileAtalhos, MobileBottomNav, MobileHeader, MobileMenu, MobileSaldo } from "@/components/mobile/MobileShell";
+import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes, MobileSaldo } from "@/components/mobile/MobileShell";
 import CaixinhasDestaque from "@/components/CaixinhasDestaque";
 
-type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
+type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajustes";
 
 export default function Home() {
   const router = useRouter();
   const loja = useFinanceStore();
+  useValoresOcultos(); // re-renderiza a tela inteira quando "ocultar valores" muda
 
   const [verificandoAuth, setVerificandoAuth] = useState(true);
   const [modalGrupoAberto, setModalGrupoAberto] = useState(false);
@@ -49,19 +55,30 @@ export default function Home() {
   const [menuMobile, setMenuMobile] = useState(false);
   const [filtrosMobile, setFiltrosMobile] = useState(false);
   const [secaoAjustes, setSecaoAjustes] = useState<SecaoAjustes>("perfil");
+  const [novaAberta, setNovaAberta] = useState(false);
+  const [recentes, setRecentes] = useState<string[]>([]);
   const [detalheExtrato, setDetalheExtrato] = useState<TipoDetalhe | null>(null);
 
   // Permite abrir direto uma aba (ex.: /?aba=ajustes&secao=perfil, vindo da antiga página de perfil)
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const a = p.get("aba") as AbaId | null;
-    if (a && ["inicio", "extrato", "lancamentos", "cartao", "contas", "fatura", "ajustes"].includes(a)) setAba(a);
+    if (a && ["inicio", "extrato", "lancamentos", "cartao", "contas", "fatura", "graficos", "investimentos", "ajustes"].includes(a)) setAba(a);
     const sec = p.get("secao") as SecaoAjustes | null;
     if (sec) setSecaoAjustes(sec);
     if (a) window.history.replaceState(null, "", "/");
   }, []);
 
+  useEffect(() => {
+    try { setRecentes(JSON.parse(localStorage.getItem("modulos-recentes") || "[]")); } catch { /* sem histórico */ }
+  }, []);
+
   const irPara = (a: AbaId) => {
+    if (["fatura", "cartao", "contas", "lancamentos", "graficos", "investimentos"].includes(a)) {
+      const novos = [a, ...recentes.filter((r) => r !== a)].slice(0, 6);
+      setRecentes(novos);
+      try { localStorage.setItem("modulos-recentes", JSON.stringify(novos)); } catch { /* ignora */ }
+    }
     setAba(a);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -143,7 +160,7 @@ export default function Home() {
 
   const correspondeFiltros = useCallback(
     (item: any, origem: "extrato" | "cartao" | "contas") => {
-      if (aba === "inicio") return true;
+      if (aba === "inicio" || aba === "graficos") return true;
       if (aba === "extrato" && filtros.tipo !== "todos" && filtros.tipo !== origem) return false;
       const descricao = String(item.descricao || item.nome || "").toLocaleLowerCase("pt-BR");
       if (filtros.busca && !descricao.includes(filtros.busca.trim().toLocaleLowerCase("pt-BR"))) return false;
@@ -160,7 +177,7 @@ export default function Home() {
   );
 
   // A ordenação por valor combina com todos os demais filtros e só vale nos módulos de listagem
-  const ordem = aba === "inicio" ? "" : filtros.ordem;
+  const ordem = aba === "inicio" || aba === "graficos" ? "" : filtros.ordem;
   const extrato = useMemo(
     () => ordenarPorValor(arraysMensais.extrato.filter((item) => correspondeFiltros(item, "extrato")), ordem),
     [arraysMensais, correspondeFiltros, ordem]
@@ -179,16 +196,7 @@ export default function Home() {
     [estadoFiltrado, extrato, cartao, contas]
   );
 
-  const resumo = useMemo(() => {
-    const base = resumoDoMes(estadoComFiltros, mes);
-    const meusGastos = gastosDoUsuario(estadoComFiltros, mes, userId);
-
-    return {
-      ...base,
-      meusGastos,
-      sobra: base.salario - meusGastos,
-    };
-  }, [estadoComFiltros, mes, userId]);
+  const resumo = useMemo(() => resumoDoMes(estadoComFiltros, mes), [estadoComFiltros, mes]);
 
   if (verificandoAuth || !loja.pronto || !mes) {
     return (
@@ -200,16 +208,17 @@ export default function Home() {
 
   const mostrarPainel = aba === "inicio";
   // Em Configurações nada depende de mês nem de visualização por pessoa; em Faturas o mês já tem seletor próprio
-  const mostrarVisualizacao = aba !== "ajustes";
-  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura";
+  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos";
+  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos";
   const rotuloVisualizacao =
     membroSelecionado === "EU" ? "Somente eu" : membroSelecionado === "TODOS" ? "Todo o grupo" : membroSelecionado;
-  const mostrarFiltros = !mostrarPainel && aba !== "ajustes" && aba !== "fatura";
+  const mostrarFiltros = !mostrarPainel && aba !== "ajustes" && aba !== "fatura" && aba !== "graficos" && aba !== "investimentos";
 
   return (
     <div className="min-h-screen bg-background text-ink">
       <Sidebar
         onAbrirGrupo={() => setModalGrupoAberto(true)}
+        onNova={() => setNovaAberta(true)}
         membroSelecionado={membroSelecionado}
         setMembroSelecionado={setMembroSelecionado}
         listaMembros={nomesOutrosMembros}
@@ -226,7 +235,7 @@ export default function Home() {
         <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
             titulo={
-              aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Faturas do cartão" : mostrarPainel
+              aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
                 ? "Extrato"
@@ -249,7 +258,7 @@ export default function Home() {
           <header className="hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line py-5 md:flex">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight">
-                {aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Faturas do cartão" : mostrarPainel
+                {aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                   ? "Olá 👋 Visão geral"
                   : aba === "extrato"
                   ? "Extrato"
@@ -264,6 +273,10 @@ export default function Home() {
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
                   ? "Todas as movimentações do mês em um só lugar."
+                  : aba === "graficos"
+                  ? "Veja para onde o dinheiro vai e gere relatórios por período."
+                  : aba === "investimentos"
+                  ? "Caixinhas, reserva de emergência, aportes e rendimentos."
                   : aba === "ajustes"
                   ? "Perfil, plano, aparência, cadastros e tela inicial."
                   : aba === "fatura"
@@ -312,6 +325,7 @@ export default function Home() {
                 </button>
               </div>}
 
+              <div className="hidden md:block"><BotaoOcultarValores /></div>
               <AjudaEInstalacao mostrarConvite={mostrarPainel} />
               <ThemeToggle />
             </div>
@@ -319,29 +333,15 @@ export default function Home() {
 
           {mostrarPainel && (
             <>
-              {dashboard.preferencias.resumo && <MobileSaldo
-                resumo={resumo}
-                salario={estado.config.salario}
-                onConfig={(salario) => loja.atualizarConfig({ salario })}
-                onAbrirExtrato={setDetalheExtrato}
-              />}
-              <MobileAtalhos
-                onAba={irPara}
-                onGrupo={() => setModalGrupoAberto(true)}
-              />
-              {dashboard.preferencias.resumo && <div className="hidden md:block">
-                <SummaryCards
-                  resumo={resumo}
-                  salario={estado.config.salario}
-                  onConfig={(salario) => loja.atualizarConfig({ salario })}
-                  onAbrirExtrato={setDetalheExtrato}
-                />
-              </div>}
+              {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} onAbrirExtrato={setDetalheExtrato} />}
+              {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} onAbrirExtrato={setDetalheExtrato} /></div>}
+              <MobileRecentes recentes={recentes} onAba={irPara} />
               {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 {dashboard.preferencias.graficos && <div id="graficos" className="min-w-0"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
-                {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0">=<InvestimentosReservaCard /></div>}
+                {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0"><InvestimentosReservaCard /></div>}
               </div>
+              <MovimentacoesRecentes extrato={extrato} cartao={cartao} contas={contas} mes={mes} onVerTudo={() => irPara("extrato")} />
               <div className="flex justify-center pt-1">
                 <button type="button" onClick={() => { setSecaoAjustes("dashboard"); irPara("ajustes"); }} className="rounded-full bg-surface px-4 py-2 text-xs font-medium text-muted ring-1 ring-line transition hover:text-ink">
                   <span className="inline-flex items-center gap-1.5"><Ico icon={Pencil} size={14} />Personalizar tela inicial</span>
@@ -378,9 +378,28 @@ export default function Home() {
           <div className="min-w-0">
             <section className="min-w-0">
               {aba === "ajustes" && <CentralAjustes key={secaoAjustes} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
+              {aba === "graficos" && (
+                <TelaGraficos
+                  estadoCompleto={estadoFiltrado}
+                  mes={mes}
+                  resumo={resumo}
+                  itens={{ extrato, cartao, contas }}
+                  onAbrirExtrato={setDetalheExtrato}
+                />
+              )}
+              {aba === "investimentos" && <TelaInvestimentos />}
               {aba === "fatura" && <FaturaCartao estado={estado} mes={mes} setMes={setMes} />}
               {aba === "extrato" && (
-                <ExtratoGeral mes={mes} extrato={extrato} cartao={cartao} contas={contas} ordem={ordem} />
+                <ExtratoGeral
+                  mes={mes}
+                  extrato={extrato}
+                  cartao={cartao}
+                  contas={contas}
+                  ordem={ordem}
+                  membros={membros.map((m) => m.nome)}
+                  onEdit={(origem, id, patch) => loja.atualizar(origem, id, patch)}
+                  onRemove={(origem, id) => loja.remover(origem, id)}
+                />
               )}
 
               {aba === "lancamentos" && (
@@ -421,13 +440,24 @@ export default function Home() {
       </main>
 
       {/* Fora do container centralizado: barra fixa no rodapé e menu lateral */}
-      <MobileBottomNav aba={aba} onAba={irPara} />
+      <MobileBottomNav aba={aba} onAba={irPara} onNova={() => setNovaAberta(true)} onGrupo={() => setModalGrupoAberto(true)} />
       <MobileMenu
         onAba={irPara}
         aberto={menuMobile}
         onFechar={() => setMenuMobile(false)}
         onGrupo={() => setModalGrupoAberto(true)}
       />
+      {novaAberta && (
+        <NovaTransacao
+          mes={mes}
+          membros={membros}
+          userId={userId}
+          onFechar={() => setNovaAberta(false)}
+          onAdicionarExtrato={loja.adicionarExtrato}
+          onAdicionarCartao={loja.adicionarCartao}
+          onAdicionarConta={loja.adicionarConta}
+        />
+      )}
       {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}
       {detalheExtrato && (
         <ExtratoDetalhe
@@ -437,7 +467,6 @@ export default function Home() {
           cartao={cartao}
           contas={contas}
           salario={estado.config.salario}
-          userId={userId}
           visualizacao={rotuloVisualizacao}
           onFechar={() => setDetalheExtrato(null)}
         />

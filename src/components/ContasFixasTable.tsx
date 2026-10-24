@@ -21,6 +21,9 @@ type Props = {
   onTogglePago: (id: string) => void;
 };
 
+// O cadastro foi centralizado em "Nova transação" (botão +). O formulário antigo fica oculto aqui.
+const ESCONDER_CADASTRO = true;
+
 export default function ContasFixasTable({
   mes,
   itens,
@@ -180,17 +183,9 @@ export default function ContasFixasTable({
           </p>
         </div>
 
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setNovoAberto(true)}
-            className="min-h-11 w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition hover:opacity-90 sm:w-auto"
-          >
-            + Nova conta fixa
-          </button>
-        </div>
       </header>
 
+      {!ESCONDER_CADASTRO && (
       <ModalFormulario
         aberto={novoAberto}
         titulo="Cadastrar conta fixa"
@@ -346,6 +341,7 @@ export default function ContasFixasTable({
           </div>
         </form>
       </ModalFormulario>
+      )}
 
       <MobileLista
         vazio="Nenhuma conta fixa cadastrada neste mês."

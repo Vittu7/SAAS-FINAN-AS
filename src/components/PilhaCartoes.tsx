@@ -5,7 +5,7 @@ import { Ico } from "@/components/icons";
 import { useMemo, useState } from "react";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { calcularFatura } from "@/lib/faturas";
-import { brl, rotuloMes } from "@/lib/finance";
+import { brl, pct as porc, rotuloMes } from "@/lib/finance";
 import { gradienteCartao } from "@/lib/cartao";
 import type { Estado } from "@/lib/types";
 
@@ -90,7 +90,7 @@ export default function PilhaCartoes({
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold leading-tight tabular-nums">{brl(fatura.total)}</p>
-                  <p className="text-[11px] text-white/70">{pct.toFixed(0)}% do limite</p>
+                  <p className="text-[11px] text-white/70">{porc(pct)} do limite</p>
                 </div>
                 <button
                   type="button"

@@ -1,112 +1,48 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { brl, parseValor, type Resumo } from "@/lib/finance";
+import { ArrowDownLeft, ArrowUpRight, Scale } from "lucide-react";
+import { Ico } from "@/components/icons";
+import { brl, type Resumo } from "@/lib/finance";
+import type { TipoResumo } from "@/components/mobile/MobileShell";
 
-export default function SummaryCards({ resumo, salario, onConfig, onAbrirExtrato }: { resumo: Resumo; salario: number; onConfig: (salario: number) => void; onAbrirExtrato?: (tipo: "gastos" | "disponivel") => void }) {
+/** Entradas (verde), saídas (vermelho) e saldo restante, em destaque no desktop. */
+export default function SummaryCards({ resumo, onAbrirExtrato }: { resumo: Resumo; onAbrirExtrato?: (tipo: TipoResumo) => void }) {
   const negativo = resumo.sobra < 0;
+  const base = "card-glass p-5 text-left transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-accent md:p-6";
 
   return (
-    <section aria-label="Resumo do mês" className="grid gap-3 md:grid-cols-3">
-      <div className="card-glass p-5 md:p-6">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted">Salário mensal</p>
-        <div className="mt-3">
-          <SalarioEditavel valor={salario} onChange={onConfig} />
-        </div>
-        <p className="mt-2 text-xs text-muted">Clique no valor para editar.</p>
-      </div>
+    <section aria-label="Resumo do mês" className="grid gap-4 md:grid-cols-3">
+      <button type="button" onClick={() => onAbrirExtrato?.("entradas")} className={base} aria-label="Ver entradas do mês">
+        <p className="flex items-center gap-2 text-sm font-medium text-muted">
+          <span className="grid size-7 place-items-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"><Ico icon={ArrowDownLeft} size={16} /></span>Entradas
+        </p>
+        <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400">{brl(resumo.entradas)}</p>
+        <p className="mt-2 text-xs text-muted">{resumo.usandoSalarioConfigurado ? "Usando o salário configurado. Lance uma entrada para substituir." : "Dinheiro recebido no mês"}</p>
+      </button>
 
-      <div
-        role={onAbrirExtrato ? "button" : undefined}
-        tabIndex={onAbrirExtrato ? 0 : undefined}
-        aria-label={onAbrirExtrato ? "Ver extrato dos gastos do mês" : undefined}
-        onClick={() => onAbrirExtrato?.("gastos")}
-        onKeyDown={(e) => { if (onAbrirExtrato && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrirExtrato("gastos"); } }}
-        className={`card-glass p-5 md:p-6 ${onAbrirExtrato ? "cursor-pointer transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-accent" : ""}`}
-      >
-        <p className="text-sm font-medium text-muted">Gastos do mês{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
-        <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{brl(resumo.totalGasto)}</p>
-        <p className="mt-2 text-xs text-muted">Lançamentos, parcelas e contas fixas</p>
-        <dl className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-xs text-muted">
-          <div><dt className="inline">Lançamentos do mês </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.extrato)}</dd></div>
-          <div><dt className="inline">Parcelas </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.cartao)}</dd></div>
-          <div><dt className="inline">Fixas </dt><dd className="inline font-medium text-ink">{brl(resumo.porOrigem.contas)}</dd></div>
-        </dl>
-      </div>
+      <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className={base} aria-label="Ver saídas do mês">
+        <p className="flex items-center gap-2 text-sm font-medium text-muted">
+          <span className="grid size-7 place-items-center rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-400"><Ico icon={ArrowUpRight} size={16} /></span>Saídas
+        </p>
+        <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums text-rose-700 dark:text-rose-400">{brl(resumo.totalGasto)}</p>
+        <p className="mt-2 text-xs text-muted">
+          À vista {brl(resumo.porOrigem.extrato)} · Parcelas {brl(resumo.porOrigem.cartao)} · Fixas {brl(resumo.porOrigem.contas)}
+          {resumo.faltaPagar > 0 && <> · Falta pagar {brl(resumo.faltaPagar)}</>}
+        </p>
+      </button>
 
-      <div
-        role={onAbrirExtrato ? "button" : undefined}
-        tabIndex={onAbrirExtrato ? 0 : undefined}
-        aria-label={onAbrirExtrato ? "Ver extrato do valor disponível" : undefined}
+      <button
+        type="button"
         onClick={() => onAbrirExtrato?.("disponivel")}
-        onKeyDown={(e) => { if (onAbrirExtrato && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrirExtrato("disponivel"); } }}
-        className={`relative overflow-hidden rounded-[1.25rem] p-5 shadow-xl md:p-6 ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent shadow-accent/25"} ${onAbrirExtrato ? "cursor-pointer transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-white" : ""}`}
+        aria-label="Ver detalhes do saldo restante"
         aria-live="polite"
+        className={`relative overflow-hidden rounded-[1.25rem] p-5 text-left shadow-xl transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-white md:p-6 ${negativo ? "bg-rose-700 text-white" : "bg-gradient-to-br from-accent to-[color-mix(in_srgb,var(--accent),black_28%)] text-on-accent shadow-accent/25"}`}
       >
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-white/10" />
-        <div className="pointer-events-none absolute -bottom-16 -left-10 size-40 rounded-full bg-white/10" />
-        <p className="relative text-xs font-semibold uppercase tracking-wider opacity-80">{negativo ? "Acima do salário" : "Disponível após os gastos"}{onAbrirExtrato && <span aria-hidden className="ml-1">›</span>}</p>
-        <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">{brl(Math.abs(resumo.sobra))}</p>
-        <p className="mt-2 text-xs opacity-80">
-          Salário {brl(resumo.salario)} − seus gastos {brl(resumo.meusGastos)}
-        </p>
-      </div>
+        <p className="relative flex items-center gap-2 text-sm font-medium opacity-90"><Ico icon={Scale} size={18} />{negativo ? "Saldo negativo" : "Saldo restante"}</p>
+        <p className="relative mt-3 text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">{negativo ? "− " : ""}{brl(Math.abs(resumo.sobra))}</p>
+        <p className="relative mt-2 text-xs opacity-80">Entradas {brl(resumo.entradas)} − saídas {brl(resumo.totalGasto)}</p>
+      </button>
     </section>
-  );
-}
-// Valor do salário grande, formatado em reais; ao clicar vira um campo para digitar
-function SalarioEditavel({ valor, onChange }: { valor: number; onChange: (n: number) => void }) {
-  const [editando, setEditando] = useState(false);
-  const [texto, setTexto] = useState("");
-  const cancelou = useRef(false);
-
-  const iniciar = () => {
-    cancelou.current = false;
-    setTexto(valor ? String(valor).replace(".", ",") : "");
-    setEditando(true);
-  };
-
-  const finalizar = () => {
-    if (!cancelou.current) {
-      const n = parseValor(texto);
-      if (n > 0 || texto.trim() === "0") onChange(n);
-    }
-    setEditando(false);
-  };
-
-  if (editando) {
-    return (
-      <div className="flex items-baseline gap-2">
-        <span className="text-2xl font-semibold text-muted">R$</span>
-        <input
-          autoFocus
-          inputMode="decimal"
-          aria-label="Salário"
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          onBlur={finalizar}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") finalizar();
-            if (e.key === "Escape") {
-              cancelou.current = true;
-              setEditando(false);
-            }
-          }}
-          className="w-full min-w-0 border-b-2 border-accent bg-transparent text-4xl font-semibold tabular-nums text-ink outline-none"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={iniciar}
-      aria-label="Editar salário"
-      title="Clique para editar"
-      className="text-left text-4xl font-semibold tabular-nums text-ink transition hover:text-accent"
-    >
-      {brl(valor)}
-    </button>
   );
 }

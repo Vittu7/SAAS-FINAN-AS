@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Eye, EyeOff, Menu, Moon, Palette, Pencil, Sun, SunMoon, X, type LucideIcon } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Eye, EyeOff, Menu, Moon, Palette, Sun, SunMoon, X, type LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
-import { addMeses, brl, rotuloMes, type Resumo } from "@/lib/finance";
+import { addMeses, brl, pct as porc, rotuloMes, useValoresOcultos, type Resumo } from "@/lib/finance";
 import { useAparencia } from "@/components/ThemeToggle";
+import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import DialogResponsivo from "@/components/DialogResponsivo";
 
-type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "ajustes";
+type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajustes";
 
 /* ---------- Cabeçalho do app no celular ---------- */
 export function MobileHeader({
@@ -41,6 +42,8 @@ export function MobileHeader({
           <img src="/logo.png" alt="" className="h-7 w-auto" />
           <span className="min-w-0 truncate text-lg font-semibold">{titulo}</span>
         </div>
+        <div className="flex items-center gap-2">
+        <BotaoOcultarValores className="!size-10 !rounded-full !border-0 shadow-sm ring-1 ring-line" />
         <button
           type="button"
           onClick={onAbrirMenu}
@@ -49,6 +52,7 @@ export function MobileHeader({
         >
           <Ico icon={Menu} />
         </button>
+        </div>
       </div>
 
       {(mostrarMes || mostrarVisualizacao) && <div className="mt-3 flex items-center gap-2">
@@ -92,185 +96,125 @@ export function MobileHeader({
   );
 }
 
-/* ---------- Cartão de saldo estilo banco digital ---------- */
+/* ---------- Resumo do mês: saldo em destaque + entradas (verde) e saídas (vermelho) ---------- */
+export type TipoResumo = "gastos" | "disponivel" | "entradas";
+
 export function MobileSaldo({
   resumo,
-  salario,
-  onConfig,
   onAbrirExtrato,
 }: {
   resumo: Resumo;
-  salario: number;
-  onConfig: (salario: number) => void;
-  onAbrirExtrato?: (tipo: "gastos" | "disponivel") => void;
+  onAbrirExtrato?: (tipo: TipoResumo) => void;
 }) {
-  const [oculto, setOculto] = useState(false);
+  const [oculto, setOculto] = useValoresOcultos();
   const negativo = resumo.sobra < 0;
-  const pct = resumo.salario > 0 ? Math.min(100, (resumo.meusGastos / resumo.salario) * 100) : 0;
-  const v = (n: number) => (oculto ? "R$ ••••" : brl(n));
-
-  const editarSalario = () => {
-    const t = window.prompt("Salário mensal (R$)", salario ? String(salario).replace(".", ",") : "");
-    if (t == null) return;
-    const n = Number(t.replace(/\./g, "").replace(",", "."));
-    if (!Number.isNaN(n) && n >= 0) onConfig(n);
-  };
+  const pct = resumo.entradas > 0 ? Math.min(100, (resumo.totalGasto / resumo.entradas) * 100) : 0;
+  const v = (n: number) => brl(n);
+  const cartao = "rounded-2xl bg-surface p-4 text-left ring-1 ring-line active:scale-[0.98]";
 
   return (
-    <section className="md:hidden">
-      <div
-        role={onAbrirExtrato ? "button" : undefined}
-        tabIndex={onAbrirExtrato ? 0 : undefined}
-        aria-label={onAbrirExtrato ? "Ver extrato do valor disponível" : undefined}
+    <section className="md:hidden" aria-label="Resumo do mês">
+      <button
+        type="button"
         onClick={() => onAbrirExtrato?.("disponivel")}
-        onKeyDown={(e) => { if (onAbrirExtrato && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrirExtrato("disponivel"); } }}
-        className={`relative overflow-hidden rounded-3xl p-5 shadow-lg ${negativo ? "bg-rose-600 text-white" : "bg-accent text-on-accent"} ${onAbrirExtrato ? "cursor-pointer active:scale-[0.99]" : ""}`}
+        className={`relative block w-full overflow-hidden rounded-3xl p-5 text-left shadow-lg ${negativo ? "bg-rose-700 text-white" : "bg-gradient-to-br from-accent to-[color-mix(in_srgb,var(--accent),black_28%)] text-on-accent"}`}
       >
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-white/10" />
-        <div className="pointer-events-none absolute -bottom-14 -left-8 size-36 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between">
-          <p className="text-xs font-medium opacity-80">{negativo ? "Acima do salário" : "Disponível após os gastos"}{onAbrirExtrato && <Ico icon={ChevronRight} size={14} className="ml-1 inline" />}</p>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setOculto((o) => !o); }}
+          <p className="text-xs font-medium opacity-80">{negativo ? "Saldo negativo" : "Saldo restante"}</p>
+          <span
+            role="button"
+            tabIndex={0}
             aria-label={oculto ? "Mostrar valores" : "Ocultar valores"}
-            className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium active:scale-95"
+            onClick={(e) => { e.stopPropagation(); setOculto(!oculto); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setOculto(!oculto); } }}
+            className="grid size-8 place-items-center rounded-full bg-white/15 active:scale-95"
           >
-            <span className="inline-flex items-center gap-1.5"><Ico icon={oculto ? Eye : EyeOff} size={14} />{oculto ? "Mostrar" : "Ocultar"}</span>
-          </button>
+            <Ico icon={oculto ? Eye : EyeOff} size={16} />
+          </span>
         </div>
-        <p className="relative mt-2 text-4xl font-semibold tracking-tight tabular-nums">{v(Math.abs(resumo.sobra))}</p>
+        <p className="relative mt-2 text-4xl font-semibold tracking-tight tabular-nums">{negativo ? "− " : ""}{v(Math.abs(resumo.sobra))}</p>
         <div className="relative mt-4 h-1.5 overflow-hidden rounded-full bg-white/20">
           <div className="h-full rounded-full bg-white/90 transition-all" style={{ width: `${pct}%` }} />
         </div>
-        <p className="relative mt-2 text-xs opacity-80">{pct.toFixed(0)}% do salário já usado</p>
-      </div>
+        <p className="relative mt-2 text-xs opacity-80">{porc(pct)} das entradas já usado</p>
+      </button>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <button type="button" onClick={editarSalario} className="rounded-2xl bg-surface p-4 text-left ring-1 ring-line active:scale-[0.98]">
-          <p className="flex items-center gap-1 text-xs text-muted">Salário <Ico icon={Pencil} size={12} /></p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{v(salario)}</p>
+        <button type="button" onClick={() => onAbrirExtrato?.("entradas")} className={cartao}>
+          <p className="flex items-center gap-1.5 text-xs text-muted"><span className="grid size-5 place-items-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"><Ico icon={ArrowDownLeft} size={12} /></span>Entradas</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{v(resumo.entradas)}</p>
         </button>
-        <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className="rounded-2xl bg-surface p-4 text-left ring-1 ring-line active:scale-[0.98]">
-          <p className="text-xs text-muted">Gastos do mês{onAbrirExtrato && <Ico icon={ChevronRight} size={14} className="ml-1 inline" />}</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{v(resumo.totalGasto)}</p>
+        <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className={cartao}>
+          <p className="flex items-center gap-1.5 text-xs text-muted"><span className="grid size-5 place-items-center rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-400"><Ico icon={ArrowUpRight} size={12} /></span>Saídas</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-rose-700 dark:text-rose-400">{v(resumo.totalGasto)}</p>
+          {resumo.faltaPagar > 0 && <p className="mt-0.5 text-[11px] text-muted">Falta pagar {v(resumo.faltaPagar)}</p>}
         </button>
       </div>
+    </section>
+  );
+}
 
-      <div className="mt-3 divide-y divide-line rounded-2xl bg-surface ring-1 ring-line">
-        {[
-          { r: "Lançamentos do mês", n: resumo.porOrigem.extrato, s: ICONE_ABA.lancamentos },
-          { r: "Parcelas", n: resumo.porOrigem.cartao, s: ICONE_ABA.cartao },
-          { r: "Contas fixas", n: resumo.porOrigem.contas, s: ICONE_ABA.contas },
-        ].map((i) => (
-          <div key={i.r} className="flex items-center gap-3 px-4 py-3">
-            <span className="grid size-9 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={i.s} /></span>
-            <span className="flex-1 text-sm">{i.r}</span>
-            <span className="text-sm font-semibold tabular-nums">{v(i.n)}</span>
-          </div>
+/* ---------- Módulos acessados recentemente (sem atalhos duplicados da barra inferior) ---------- */
+const MODULOS: Record<string, { r: string; s: LucideIcon }> = {
+  fatura: { r: "Cartões", s: ICONE_ABA.fatura },
+  graficos: { r: "Gráficos", s: ICONE_ABA.graficos },
+  investimentos: { r: "Investimentos", s: ICONE_ABA.investimentos },
+  cartao: { r: "Parceladas", s: ICONE_ABA.cartao },
+  contas: { r: "Contas fixas", s: ICONE_ABA.contas },
+  lancamentos: { r: "Lançamentos", s: ICONE_ABA.lancamentos },
+};
+
+export function MobileRecentes({ recentes, onAba }: { recentes: string[]; onAba: (a: Aba) => void }) {
+  const ids = [...recentes.filter((id) => MODULOS[id]), ...Object.keys(MODULOS)].filter((id, i, l) => l.indexOf(id) === i).slice(0, 3);
+  return (
+    <section className="md:hidden" aria-label="Acessados recentemente">
+      <p className="mb-2 px-1 text-xs font-medium text-muted">Acessados recentemente</p>
+      <div className="grid grid-cols-3 gap-2">
+        {ids.map((id) => (
+          <button key={id} type="button" onClick={() => onAba(id as Aba)} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl bg-surface px-2 py-3 text-xs font-medium ring-1 ring-line active:scale-95">
+            <span className="text-accent"><Ico icon={MODULOS[id].s} size={20} /></span>
+            <span className="truncate">{MODULOS[id].r}</span>
+          </button>
         ))}
       </div>
     </section>
   );
 }
 
-/* ---------- Atalhos rápidos ---------- */
-export function MobileAtalhos({
-  onAba,
-  onGrupo,
-}: {
-  onAba: (a: Aba) => void;
-  onGrupo: () => void;
-  onCadastros?: () => void;
-}) {
-  const itens = [
-    { r: "Lançar", s: ICONES.novo, f: () => onAba("lancamentos") },
-    { r: "Parcelas", s: ICONE_ABA.cartao, f: () => onAba("cartao") },
-    { r: "Faturas", s: ICONE_ABA.fatura, f: () => onAba("fatura") },
-    { r: "Fixas", s: ICONE_ABA.contas, f: () => onAba("contas") },
-    { r: "Extrato", s: ICONE_ABA.extrato, f: () => onAba("extrato") },
-    { r: "Gráficos", s: ICONES.graficos, f: () => document.getElementById("graficos")?.scrollIntoView({ behavior: "smooth" }) },
-    { r: "Grupo", s: ICONES.grupo, f: onGrupo },
-    { r: "Ajustes", s: ICONE_ABA.ajustes, f: () => onAba("ajustes") },
-  ];
-  return (
-    <div className="grid grid-cols-4 gap-y-4 rounded-3xl bg-surface p-4 ring-1 ring-line md:hidden">
-      {itens.map((i) => (
-        <button key={i.r} type="button" onClick={i.f} className="flex min-w-0 flex-col items-center gap-1.5 active:scale-95">
-          <span className="grid size-12 place-items-center rounded-2xl bg-accent/10 text-accent"><Ico icon={i.s} size={22} /></span>
-          <span className="truncate text-xs font-medium">{i.r}</span>
-        </button>
-      ))}
-    </div>
+/* ---------- Barra inferior: Início, Extrato, Nova transação, Grupo, Perfil ---------- */
+export function MobileBottomNav({ aba, onAba, onNova, onGrupo }: { aba: Aba; onAba: (a: Aba) => void; onNova: () => void; onGrupo: () => void }) {
+  const Item = ({ ativo, r, s, onClick }: { ativo: boolean; r: string; s: LucideIcon; onClick: () => void }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={ativo ? "page" : undefined}
+      className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px] font-medium transition ${ativo ? "text-accent" : "text-muted"}`}
+    >
+      <span className={`grid h-7 w-12 place-items-center rounded-full ${ativo ? "bg-accent/15" : ""}`}><Ico icon={s} size={22} /></span>
+      {r}
+    </button>
   );
-}
-
-/* ---------- Barra de navegação inferior ---------- */
-export function MobileBottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
-  const [novoAberto, setNovoAberto] = useState(false);
-  const Item = ({ id, r, s }: { id: Aba; r: string; s: LucideIcon }) => {
-    const ativo = aba === id;
-    return (
-      <button
-        type="button"
-        onClick={() => onAba(id)}
-        aria-current={ativo ? "page" : undefined}
-        className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition ${
-          ativo ? "text-accent" : "text-muted"
-        }`}
-      >
-        <span className={`grid h-7 w-12 place-items-center rounded-full ${ativo ? "bg-accent/15" : ""}`}><Ico icon={s} size={22} /></span>
-        {r}
-      </button>
-    );
-  };
 
   return (
-    <>
-      <nav className="fixed inset-x-0 bottom-0 left-0 right-0 z-50 w-full border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
-        <div className="mx-auto flex max-w-md items-end px-2">
-          <Item id="inicio" r="Início" s={ICONE_ABA.inicio} />
-          <Item id="extrato" r="Extrato" s={ICONE_ABA.extrato} />
-          <div className="flex flex-1 justify-center">
-            <button
-              type="button"
-              onClick={() => setNovoAberto(true)}
-              aria-label="Novo lançamento"
-              className="-mt-6 grid size-14 place-items-center rounded-full bg-accent text-on-accent shadow-lg ring-4 ring-background active:scale-95"
-            >
-              <Ico icon={ICONES.novo} size={26} />
-            </button>
-          </div>
-          <Item id="cartao" r="Parcelas" s={ICONE_ABA.cartao} />
-          <Item id="fatura" r="Faturas" s={ICONE_ABA.fatura} />
-        </div>
-      </nav>
-
-      <Sheet aberto={novoAberto} onFechar={() => setNovoAberto(false)} titulo="Novo lançamento">
-        {[
-          { id: "lancamentos" as Aba, r: "Lançamento normal", d: "Gasto ou entrada do dia a dia", s: ICONE_ABA.lancamentos },
-          { id: "cartao" as Aba, r: "Conta parcelada", d: "Compras divididas em parcelas", s: ICONE_ABA.cartao },
-          { id: "contas" as Aba, r: "Conta fixa", d: "Aluguel, internet, assinaturas", s: ICONE_ABA.contas },
-        ].map((t) => (
+    <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-50 w-full border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+      <div className="mx-auto flex max-w-md items-end px-2">
+        <Item ativo={aba === "inicio"} r="Início" s={ICONE_ABA.inicio} onClick={() => onAba("inicio")} />
+        <Item ativo={aba === "extrato"} r="Extrato" s={ICONE_ABA.extrato} onClick={() => onAba("extrato")} />
+        <div className="flex flex-1 justify-center">
           <button
-            key={t.id}
             type="button"
-            onClick={() => {
-              onAba(t.id);
-              setNovoAberto(false);
-            }}
-            className="flex w-full items-center gap-3 rounded-2xl p-3 text-left active:bg-background"
+            onClick={onNova}
+            aria-label="Nova transação"
+            className="-mt-6 grid size-14 place-items-center rounded-full bg-accent text-on-accent shadow-lg ring-4 ring-background active:scale-95"
           >
-            <span className="grid size-11 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={t.s} /></span>
-            <span className="flex-1">
-              <span className="block text-sm font-semibold">{t.r}</span>
-              <span className="block text-xs text-muted">{t.d}</span>
-            </span>
-            <Ico icon={ChevronRight} size={18} className="text-muted" />
+            <Ico icon={ICONES.novo} size={26} />
           </button>
-        ))}
-      </Sheet>
-    </>
+        </div>
+        <Item ativo={false} r="Grupo" s={ICONES.grupo} onClick={onGrupo} />
+        <Item ativo={aba === "ajustes"} r="Perfil" s={ICONE_ABA.ajustes} onClick={() => onAba("ajustes")} />
+      </div>
+    </nav>
   );
 }
 
@@ -318,9 +262,13 @@ export function MobileMenu({
           <button type="button" onClick={onFechar} aria-label="Fechar menu" className="grid size-10 place-items-center rounded-full text-muted active:bg-background"><Ico icon={X} /></button>
         </header>
         <div className="flex-1 space-y-1 overflow-y-auto px-3">
-          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Contas</p>
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Análises</p>
+          <button type="button" className={linha} onClick={() => ir("graficos")}><span className={icone}><Ico icon={ICONE_ABA.graficos} /></span>Gráficos e relatórios</button>
+          <button type="button" className={linha} onClick={() => ir("investimentos")}><span className={icone}><Ico icon={ICONE_ABA.investimentos} /></span>Investimentos</button>
+
+          <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Contas</p>
           <button type="button" className={linha} onClick={() => ir("cartao")}><span className={icone}><Ico icon={ICONE_ABA.cartao} /></span>Contas parceladas</button>
-          <button type="button" className={linha} onClick={() => ir("fatura")}><span className={icone}><Ico icon={ICONE_ABA.fatura} /></span>Faturas do cartão</button>
+          <button type="button" className={linha} onClick={() => ir("fatura")}><span className={icone}><Ico icon={ICONE_ABA.fatura} /></span>Cartões e Faturas</button>
           <button type="button" className={linha} onClick={() => ir("contas")}><span className={icone}><Ico icon={ICONE_ABA.contas} /></span>Contas fixas</button>
           <button type="button" className={linha} onClick={() => ir("lancamentos")}><span className={icone}><Ico icon={ICONE_ABA.lancamentos} /></span>Lançamentos do mês</button>
 

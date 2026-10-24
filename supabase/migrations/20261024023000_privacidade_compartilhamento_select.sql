@@ -58,7 +58,6 @@ using (
     legado_privacidade_v1 is true
     and (
       responsavel_id in (select public.meus_membros())
-      or grupo_id in (select public.meus_grupos())
     )
   )
   or (
@@ -81,7 +80,6 @@ using (
     and privado is not true
     and (
       responsavel_id in (select public.meus_membros())
-      or grupo_id in (select public.meus_grupos())
     )
   )
   or (

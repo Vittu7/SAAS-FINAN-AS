@@ -19,6 +19,7 @@ export type LinhaExtrato = {
   forma: string;
   responsavel: string;
   responsavelCor?: string | null;
+  responsavelAvatar?: string | null;
   valor: number;
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
   /** Entrada de dinheiro (ex.: salário) — aparece em verde e não entra em totais de gasto. */
@@ -49,6 +50,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       forma: i.pagamento || "",
       responsavel: i.responsavel || "",
       responsavelCor: i.responsavelCor,
+      responsavelAvatar: i.responsavelAvatar,
       valor: num(i.valor),
       entrada: ehEntrada(i),
     })),
@@ -61,6 +63,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       forma: i.cartao || "",
       responsavel: i.responsavel || "",
       responsavelCor: i.responsavelCor,
+      responsavelAvatar: i.responsavelAvatar,
       valor: num(i.valor),
       status: { texto: `Parcela ${i.parcelaAtual ?? i.parcela_atual ?? 1}/${i.parcelaTotal ?? i.parcela_total ?? 1}`, tom: "neutro" as const },
     })),
@@ -73,6 +76,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       forma: i.formaPagamento || i.forma_pagamento || "",
       responsavel: i.responsavel || "",
       responsavelCor: i.responsavelCor,
+      responsavelAvatar: i.responsavelAvatar,
       valor: num(i.valor),
       status: i.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
     })),

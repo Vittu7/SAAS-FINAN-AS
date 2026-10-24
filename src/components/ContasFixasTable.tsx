@@ -1,5 +1,6 @@
 "use client";
 
+import { ResponsavelChip } from "@/components/Avatar";
 import { Check, ChevronDown, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import { ICONE_ABA, Ico } from "@/components/icons";
 import MobileLista from "@/components/mobile/MobileLista";
@@ -352,7 +353,7 @@ export default function ContasFixasTable({
         }}
         itens={[...itens].sort((x: any, y: any) => Number(x.pago) - Number(y.pago)).map((item: any) => ({
           id: item.id, titulo: item.nome || "Sem nome", subtitulo: [item.categoria, item.formaPagamento || item.forma_pagamento].filter(Boolean).join(" · "),
-          valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
+          valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
           status: item.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
           onAlternar: () => onTogglePago(item.id), rotuloAlternar: item.pago ? "Desmarcar" : "Marcar como paga",
           onEditar: () => setEditando(item), onRemover: () => onRemove(item.id),
@@ -427,10 +428,7 @@ export default function ContasFixasTable({
                   {item.vencimento ? `Dia ${item.vencimento}` : "—"}
                 </td>
                 <td className="py-3 pr-3">
-                  <Selo
-                    nome={item.responsavel || "Membro"}
-                    cor={item.responsavelCor}
-                  />
+                  <ResponsavelChip nome={item.responsavel} cor={item.responsavelCor} avatar={item.responsavelAvatar} />
                 </td>
                 <td className="py-3 pr-3 text-right font-semibold tabular-nums">
                   {brl(item.valor)}

@@ -8,7 +8,7 @@ import { arred, calcularMes, ehEntrada, semDuplicados } from "./calculos";
 type Item = Record<string, any>;
 type Fonte = { extrato?: Item[]; cartao?: Item[]; contas?: Item[]; config?: { salario?: number } };
 
-export type FiltroRelatorio = { de: string; ate: string; responsavel?: string; categoria?: string };
+export type FiltroRelatorio = { de: string; ate: string; responsaveis?: string[]; categoria?: string };
 
 export type MovimentoRelatorio = {
   mes: string;
@@ -54,8 +54,9 @@ function agrupar(mapa: Map<string, number>, total: number): Grupo[] {
 
 export function gerarRelatorio(e: Fonte, f: FiltroRelatorio, agora: Date = new Date()): Relatorio {
   const meses = mesesDoPeriodo(f.de, f.ate);
-  const temFiltro = Boolean(f.responsavel || f.categoria);
-  const manter = (i: Item) => (!f.responsavel || i.responsavel === f.responsavel) && (!f.categoria || i.categoria === f.categoria);
+  const escolhidos = f.responsaveis ?? [];
+  const temFiltro = Boolean(escolhidos.length || f.categoria);
+  const manter = (i: Item) => (escolhidos.length === 0 || escolhidos.includes(i.responsavel)) && (!f.categoria || i.categoria === f.categoria);
   const fonte = {
     extrato: (e.extrato || []).filter(manter),
     cartao: (e.cartao || []).filter(manter),
@@ -137,7 +138,7 @@ export function relatorioParaCSV(r: Relatorio): string {
   const linhas = [
     l("Relatório financeiro HomeCash"),
     l("Período", `${mesCurto(r.filtro.de)} a ${mesCurto(r.filtro.ate)}`),
-    l("Responsável", r.filtro.responsavel || "Todos"),
+    l("Responsáveis", r.filtro.responsaveis?.length ? r.filtro.responsaveis.join(", ") : "Todos"),
     l("Categoria", r.filtro.categoria || "Todas"),
     l("Gerado em", r.geradoEm),
     "",
@@ -175,7 +176,7 @@ th,td{padding:4px 6px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-a
 .e{color:#047857}.s{color:#be123c}tr{page-break-inside:avoid}@media print{body{margin:10mm}}
 </style></head><body>
 <h1>Relatório financeiro HomeCash</h1>
-<p>Período: ${mesCurto(r.filtro.de)} a ${mesCurto(r.filtro.ate)} · Responsável: ${esc(r.filtro.responsavel || "Todos")} · Categoria: ${esc(r.filtro.categoria || "Todas")}</p>
+<p>Período: ${mesCurto(r.filtro.de)} a ${mesCurto(r.filtro.ate)} · Responsáveis: ${esc(r.filtro.responsaveis?.length ? r.filtro.responsaveis.join(", ") : "Todos")} · Categoria: ${esc(r.filtro.categoria || "Todas")}</p>
 <p>Gerado em ${esc(r.geradoEm)}</p>
 <div class="cards">
 <div class="c">Entradas<b class="e">${moeda(r.totais.entradas)}</b></div>

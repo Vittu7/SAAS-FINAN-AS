@@ -1,5 +1,6 @@
 "use client";
 
+import Avatar from "@/components/Avatar";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl } from "@/lib/finance";
@@ -21,7 +22,7 @@ const VISOES: { id: Visao; rotulo: string; descricao: string }[] = [
   { id: "categoria", rotulo: "Por categoria", descricao: "Para onde o dinheiro foi." },
 ];
 
-type Fatia = { id: string; nome: string; valor: number; cor: string; limite?: number | null; editavel?: boolean };
+type Fatia = { id: string; nome: string; valor: number; cor: string; limite?: number | null; editavel?: boolean; avatar?: string | null };
 
 export default function ResponsavelPanel({
   resumo,
@@ -55,9 +56,9 @@ export default function ResponsavelPanel({
       .maybeSingle();
 
     if (perfil?.grupo_id) {
-      const { data } = await supabase.from("perfis").select("id, nome_usuario, cor").eq("grupo_id", perfil.grupo_id);
+      const { data } = await supabase.from("perfis").select("id, nome_usuario, cor, avatar_url").eq("grupo_id", perfil.grupo_id);
       if (data && data.length > 0) {
-        setMembros(data.map((m, idx) => ({ id: m.id, nome: m.nome_usuario || "Membro", cor: m.cor || CORES_PADRAO[idx % CORES_PADRAO.length] })));
+        setMembros(data.map((m, idx) => ({ id: m.id, nome: m.nome_usuario || "Membro", cor: m.cor || CORES_PADRAO[idx % CORES_PADRAO.length], avatar: (m as any).avatar_url || null })));
       }
     } else if (perfil) {
       setMembros([{ id: perfil.id, nome: perfil.nome_usuario || "Membro", cor: perfil.cor || "#10B981" }]);
@@ -72,7 +73,7 @@ export default function ResponsavelPanel({
   const fatias: Fatia[] = useMemo(() => {
     if (visao === "pessoa") {
       const lista = membros.length > 0 ? membros : [{ id: "1", nome: "Membro", cor: "#10B981" }];
-      return lista.map((m) => ({ id: m.id, nome: m.nome, cor: m.cor, valor: resumo?.porResponsavel?.[m.nome] || 0, editavel: true }));
+      return lista.map((m) => ({ id: m.id, nome: m.nome, cor: m.cor, valor: resumo?.porResponsavel?.[m.nome] || 0, editavel: true, avatar: (m as any).avatar }));
     }
 
     const extrato = (itens?.extrato || []).filter((i: any) => i.tipo !== "entrada");
@@ -176,6 +177,7 @@ export default function ResponsavelPanel({
                   ) : (
                     <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: f.cor }} />
                   )}
+                  {visao === "pessoa" && <Avatar src={f.avatar} nome={f.nome} cor={f.cor} tamanho="sm" />}
                   <span className="truncate text-xs font-medium uppercase tracking-wide">{f.nome}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

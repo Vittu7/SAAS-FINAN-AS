@@ -164,7 +164,7 @@ export default function Home() {
       if (aba === "extrato" && filtros.tipo !== "todos" && filtros.tipo !== origem) return false;
       const descricao = String(item.descricao || item.nome || "").toLocaleLowerCase("pt-BR");
       if (filtros.busca && !descricao.includes(filtros.busca.trim().toLocaleLowerCase("pt-BR"))) return false;
-      if (filtros.responsavel && item.responsavel !== filtros.responsavel) return false;
+      if (filtros.responsavel.length > 0 && !filtros.responsavel.includes(item.responsavel)) return false;
       if (filtros.categoria && item.categoria !== filtros.categoria) return false;
       const pagamento = item.pagamento || item.forma_pagamento || item.cartao || "";
       if (filtros.pagamento && pagamento !== filtros.pagamento) return false;
@@ -232,7 +232,7 @@ export default function Home() {
           sidebarExpandida ? "md:pl-60" : "md:pl-16"
         }`}
       >
-        <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
+        <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
             titulo={
               aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
@@ -332,7 +332,7 @@ export default function Home() {
           </header>
 
           {mostrarPainel && (
-            <>
+            <div className="anim-stagger space-y-5">
               {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} onAbrirExtrato={setDetalheExtrato} />}
               {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} onAbrirExtrato={setDetalheExtrato} /></div>}
               <MobileRecentes recentes={recentes} onAba={irPara} />
@@ -347,7 +347,7 @@ export default function Home() {
                   <span className="inline-flex items-center gap-1.5"><Ico icon={Pencil} size={14} />Personalizar tela inicial</span>
                 </button>
               </div>
-            </>
+            </div>
           )}
 
           {mostrarFiltros && (
@@ -367,6 +367,7 @@ export default function Home() {
                 filtros={filtros}
                 setFiltros={setFiltros}
                 responsaveis={opcoesFiltro.responsaveis}
+                pessoas={membros.map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
                 categorias={opcoesFiltro.categorias}
                 pagamentos={opcoesFiltro.pagamentos}
                 mostrarTipo={aba === "extrato"}
@@ -440,8 +441,10 @@ export default function Home() {
       </main>
 
       {/* Fora do container centralizado: barra fixa no rodapé e menu lateral */}
-      <MobileBottomNav aba={aba} onAba={irPara} onNova={() => setNovaAberta(true)} onGrupo={() => setModalGrupoAberto(true)} />
+      <MobileBottomNav perfil={membros.find((m) => m.id === userId) ? { nome: membros.find((m) => m.id === userId)!.nome, avatar: membros.find((m) => m.id === userId)!.avatar, cor: membros.find((m) => m.id === userId)!.cor } : undefined} aba={aba} onAba={irPara} onNova={() => setNovaAberta(true)} onGrupo={() => setModalGrupoAberto(true)} />
       <MobileMenu
+        abaAtiva={aba}
+        perfil={(() => { const eu = membros.find((m) => m.id === userId); return eu ? { nome: eu.nome, avatar: eu.avatar, cor: eu.cor } : undefined; })()}
         onAba={irPara}
         aberto={menuMobile}
         onFechar={() => setMenuMobile(false)}

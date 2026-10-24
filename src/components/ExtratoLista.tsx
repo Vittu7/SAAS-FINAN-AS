@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDownLeft, Pencil, Trash2 } from "lucide-react";
+import PessoaIcone from "@/components/PessoaIcone";
 import { ICONE_ORIGEM_LINHA, Ico } from "@/components/icons";
 import { Selo } from "@/components/SeletorOpcao";
 import { brl } from "@/lib/finance";
@@ -44,7 +45,7 @@ export default function ExtratoLista({
   return (
     <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
       {entradas.length > 0 && (
-        <ul className="divide-y divide-line">
+        <ul className="anim-stagger divide-y divide-line">
           {entradas.map((l) => (
             <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} onEditar={onEditar} onRemover={onRemover} />
           ))}
@@ -52,7 +53,7 @@ export default function ExtratoLista({
       )}
 
       {ordem ? (
-        <ul className="divide-y divide-line">
+        <ul className="anim-stagger divide-y divide-line">
           {gastos.map((l) => (
             <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} onEditar={onEditar} onRemover={onRemover} />
           ))}
@@ -64,7 +65,7 @@ export default function ExtratoLista({
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">{g.rotulo}</h3>
               <span className="text-xs font-semibold tabular-nums text-muted">{brl(g.total)}</span>
             </header>
-            <ul className="divide-y divide-line">
+            <ul className="anim-stagger divide-y divide-line">
               {g.linhas.map((l) => (
                 <Linha key={l.id} linha={l} cor={corCategoria(l.categoria)} onEditar={onEditar} onRemover={onRemover} />
               ))}
@@ -80,19 +81,13 @@ function Linha({ linha: l, cor, onEditar, onRemover }: { linha: LinhaExtrato; co
   const corIcone = l.entrada ? "#10B981" : cor || COR_PADRAO;
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
-      <span
-        aria-hidden
-        className="grid size-11 place-items-center rounded-full"
-        style={{ backgroundColor: `${corIcone}26`, color: corIcone }}
-      >
-        <Ico icon={l.entrada ? ArrowDownLeft : ICONE_ORIGEM_LINHA[l.origem]} />
-      </span>
+      <PessoaIcone pessoa={{ nome: l.responsavel, avatar: l.responsavelAvatar, cor: l.responsavelCor }} icone={l.entrada ? ArrowDownLeft : ICONE_ORIGEM_LINHA[l.origem]} cor={corIcone} />
 
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold">{l.descricao}</p>
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {l.categoria && <Selo nome={l.categoria} cor={cor} />}
-          <span className="min-w-0 truncate text-xs text-muted">{[l.forma, l.responsavel].filter(Boolean).join(" · ")}</span>
+          <span className="min-w-0 truncate text-xs text-muted">{[l.responsavel && <b key="r" className="font-semibold text-ink">{l.responsavel}</b>, l.forma].filter(Boolean).reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, " · ", x] : [x]), [])}</span>
         </div>
       </div>
 

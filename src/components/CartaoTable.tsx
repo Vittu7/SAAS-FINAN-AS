@@ -1,5 +1,6 @@
 "use client";
 
+import { ResponsavelChip } from "@/components/Avatar";
 import { ArrowRight, ChevronDown, Pencil, Plus, Settings2, Trash2, Users, X } from "lucide-react";
 import { ICONE_ABA, Ico } from "@/components/icons";
 import MobileLista from "@/components/mobile/MobileLista";
@@ -416,6 +417,7 @@ export default function CartaoTable({
           subtitulo: [item.cartao, item.categoria].filter(Boolean).join(" · "),
           valor: item.valor,
           icone: ICONE_ABA.cartao,
+          pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, 
           tags: [item.cartao, item.categoria, item.responsavel],
           status: { texto: `${item.parcelaAtual ?? 1}/${item.parcelaTotal ?? 1}`, tom: "neutro" as const },
           progresso: ((item.parcelaAtual ?? 1) / Math.max(1, item.parcelaTotal ?? 1)) * 100,
@@ -452,7 +454,7 @@ export default function CartaoTable({
                   {item.parcelaAtual}/{item.parcelaTotal}
                 </td>
                 <td className="py-3">
-                  <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
+                  <ResponsavelChip nome={item.responsavel} cor={item.responsavelCor} avatar={item.responsavelAvatar} />
                 </td>
                 <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
                 <td className="py-3 text-center">

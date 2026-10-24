@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
 import { addMeses, brl, pct as porc, rotuloMes, useValoresOcultos, type Resumo } from "@/lib/finance";
 import { useAparencia } from "@/components/ThemeToggle";
+import Avatar from "@/components/Avatar";
 import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import DialogResponsivo from "@/components/DialogResponsivo";
 
@@ -183,7 +184,7 @@ export function MobileRecentes({ recentes, onAba }: { recentes: string[]; onAba:
 }
 
 /* ---------- Barra inferior: Início, Extrato, Nova transação, Grupo, Perfil ---------- */
-export function MobileBottomNav({ aba, onAba, onNova, onGrupo }: { aba: Aba; onAba: (a: Aba) => void; onNova: () => void; onGrupo: () => void }) {
+export function MobileBottomNav({ aba, onAba, onNova, onGrupo, perfil }: { aba: Aba; onAba: (a: Aba) => void; onNova: () => void; onGrupo: () => void; perfil?: { nome: string; avatar: string | null; cor: string | null } }) {
   const Item = ({ ativo, r, s, onClick }: { ativo: boolean; r: string; s: LucideIcon; onClick: () => void }) => (
     <button
       type="button"
@@ -212,7 +213,12 @@ export function MobileBottomNav({ aba, onAba, onNova, onGrupo }: { aba: Aba; onA
           </button>
         </div>
         <Item ativo={false} r="Grupo" s={ICONES.grupo} onClick={onGrupo} />
-        <Item ativo={aba === "ajustes"} r="Perfil" s={ICONE_ABA.ajustes} onClick={() => onAba("ajustes")} />
+        <button type="button" onClick={() => onAba("ajustes")} aria-current={aba === "ajustes" ? "page" : undefined} className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px] font-medium transition ${aba === "ajustes" ? "text-accent" : "text-muted"}`}>
+          <span className="grid h-7 w-12 place-items-center">
+            {perfil ? <Avatar src={perfil.avatar} nome={perfil.nome} cor={perfil.cor} tamanho={26} anel={aba === "ajustes"} /> : <Ico icon={ICONE_ABA.ajustes} size={22} />}
+          </span>
+          Perfil
+        </button>
       </div>
     </nav>
   );
@@ -224,11 +230,15 @@ export function MobileMenu({
   onFechar,
   onGrupo,
   onAba,
+  perfil,
+  abaAtiva,
 }: {
   aberto: boolean;
   onFechar: () => void;
   onGrupo: () => void;
   onAba: (a: Aba) => void;
+  perfil?: { nome: string; avatar: string | null; cor: string | null; email?: string };
+  abaAtiva?: Aba;
 }) {
   const router = useRouter();
   const { tema, mudarTema } = useAparencia();
@@ -254,29 +264,44 @@ export function MobileMenu({
 
   return createPortal(
     <div className="fixed inset-0 z-[10020] md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
-      <div className="absolute inset-0 bg-black/50" onClick={onFechar} />
-      <aside className="absolute inset-y-0 right-0 flex w-[min(85vw,340px)] flex-col bg-surface shadow-2xl" style={{ paddingTop: "max(env(safe-area-inset-top),16px)", paddingBottom: "max(env(safe-area-inset-bottom),16px)", animation: "hc-drawer-in .22s ease-out" }}>
+      <div className="absolute inset-0 bg-black/50 anim-fade" onClick={onFechar} />
+      <aside className="absolute inset-y-0 right-0 flex w-[min(85vw,340px)] flex-col bg-surface shadow-2xl" style={{ paddingTop: "max(env(safe-area-inset-top),16px)", paddingBottom: "max(env(safe-area-inset-bottom),16px)", animation: "hc-drawer-in .28s cubic-bezier(.2,.8,.2,1)" }}>
         <style>{`@keyframes hc-drawer-in{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
-        <header className="flex items-center justify-between px-4 pb-3">
-          <p className="text-lg font-semibold">Menu</p>
-          <button type="button" onClick={onFechar} aria-label="Fechar menu" className="grid size-10 place-items-center rounded-full text-muted active:bg-background"><Ico icon={X} /></button>
+        <header className="flex items-center gap-3 px-4 pb-3">
+          <button type="button" onClick={() => ir("ajustes")} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1 text-left active:bg-background">
+            <Avatar src={perfil?.avatar} nome={perfil?.nome} cor={perfil?.cor || "var(--accent)"} tamanho="lg" />
+            <span className="min-w-0">
+              <span className="block truncate text-base font-semibold">{perfil?.nome || "Meu perfil"}</span>
+              <span className="block text-xs text-muted">Ver perfil e configurações</span>
+            </span>
+          </button>
+          <button type="button" onClick={onFechar} aria-label="Fechar menu" className="grid size-10 shrink-0 place-items-center rounded-full text-muted active:bg-background"><Ico icon={X} /></button>
         </header>
-        <div className="flex-1 space-y-1 overflow-y-auto px-3">
-          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Análises</p>
-          <button type="button" className={linha} onClick={() => ir("graficos")}><span className={icone}><Ico icon={ICONE_ABA.graficos} /></span>Gráficos e relatórios</button>
-          <button type="button" className={linha} onClick={() => ir("investimentos")}><span className={icone}><Ico icon={ICONE_ABA.investimentos} /></span>Investimentos</button>
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-2">
+          {([
+            ["Cartões e contas", [["fatura", "Cartões e Faturas"], ["cartao", "Contas parceladas"], ["contas", "Contas fixas"], ["lancamentos", "Tabela de lançamentos"]]],
+            ["Análises", [["graficos", "Gráficos e relatórios"], ["investimentos", "Investimentos"]]],
+          ] as [string, [Aba, string][]][]).map(([titulo, itens]) => (
+            <section key={titulo}>
+              <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">{titulo}</p>
+              <div className="grid grid-cols-2 gap-2 anim-stagger">
+                {itens.map(([id, rotulo]) => (
+                  <button key={id} type="button" onClick={() => ir(id)} aria-current={abaAtiva === id ? "page" : undefined}
+                    className={`flex min-h-24 flex-col items-start justify-between rounded-2xl p-3 text-left text-sm font-medium ring-1 transition active:scale-[0.97] ${abaAtiva === id ? "bg-accent/12 text-accent ring-accent/40" : "bg-background ring-line"}`}>
+                    <span className="grid size-9 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={ICONE_ABA[id]} size={18} /></span>
+                    <span className="leading-tight">{rotulo}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
 
-          <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Contas</p>
-          <button type="button" className={linha} onClick={() => ir("cartao")}><span className={icone}><Ico icon={ICONE_ABA.cartao} /></span>Contas parceladas</button>
-          <button type="button" className={linha} onClick={() => ir("fatura")}><span className={icone}><Ico icon={ICONE_ABA.fatura} /></span>Cartões e Faturas</button>
-          <button type="button" className={linha} onClick={() => ir("contas")}><span className={icone}><Ico icon={ICONE_ABA.contas} /></span>Contas fixas</button>
-          <button type="button" className={linha} onClick={() => ir("lancamentos")}><span className={icone}><Ico icon={ICONE_ABA.lancamentos} /></span>Lançamentos do mês</button>
+          <section>
+            <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Grupo</p>
+            <button type="button" className={linha} onClick={() => { onFechar(); onGrupo(); }}><span className={icone}><Ico icon={ICONES.grupo} /></span>Gerenciar grupo</button>
+          </section>
 
-          <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Conta</p>
-          <button type="button" className={linha} onClick={() => ir("ajustes")}><span className={icone}><Ico icon={ICONE_ABA.ajustes} /></span>Configurações e perfil</button>
-          <button type="button" className={linha} onClick={() => { onFechar(); onGrupo(); }}><span className={icone}><Ico icon={ICONES.grupo} /></span>Gerenciar grupo</button>
-
-          <p className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted">Tema</p>
+          <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Tema</p>
           <div className="mx-1 grid grid-cols-3 gap-1 rounded-2xl bg-background p-1 ring-1 ring-line">
             {([["light", Sun, "Claro"], ["dark", Moon, "Escuro"], ["system", SunMoon, "Sistema"]] as const).map(([id, s, r]) => (
               <button key={id} type="button" aria-pressed={tema === id} onClick={() => mudarTema(id)}

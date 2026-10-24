@@ -1,5 +1,6 @@
 "use client";
 
+import { ResponsavelChip } from "@/components/Avatar";
 import { ChevronDown, Lock, Pencil, Plus, Settings2, Trash2, Users, X } from "lucide-react";
 import { ICONE_ABA, Ico } from "@/components/icons";
 import MobileLista from "@/components/mobile/MobileLista";
@@ -278,7 +279,7 @@ export default function ExtratoTable({
 
       <MobileLista vazio="Nenhum lançamento neste mês." itens={itens.map((item: any) => ({
         id: item.id, titulo: item.descricao || "Sem descrição", subtitulo: [item.categoria, item.pagamento].filter(Boolean).join(" · "),
-        valor: item.valor, icone: ICONE_ABA.lancamentos, tags: [item.pagamento, item.categoria, item.responsavel],
+        valor: item.valor, icone: ICONE_ABA.lancamentos, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.pagamento, item.categoria, item.responsavel],
         onEditar: onEdit ? () => setEditando(item) : undefined, onRemover: () => onRemove(item.id),
       }))} />
 
@@ -319,7 +320,7 @@ export default function ExtratoTable({
                   )}
                 </td>
                 <td className="py-3">
-                  <Selo nome={item.responsavel || "Membro"} cor={item.responsavelCor} />
+                  <ResponsavelChip nome={item.responsavel} cor={item.responsavelCor} avatar={item.responsavelAvatar} />
                 </td>
                 <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
                 <td className="py-3 text-center">

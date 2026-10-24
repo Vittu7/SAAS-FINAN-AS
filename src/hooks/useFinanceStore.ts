@@ -46,6 +46,7 @@ function enriquecer(row: any, membros: Membro[]): any {
   const extras: Record<string, any> = {
     responsavel: membro?.nome ?? row.responsavel,
     responsavelCor: membro?.cor ?? COR_PADRAO_MEMBRO,
+    responsavelAvatar: membro?.avatar ?? null,
   };
 
   if (row.parcela_atual !== undefined) {

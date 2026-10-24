@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useOpcoes } from '@/lib/useOpcoes';
 import { calcularFatura } from '@/lib/faturas';
 import { addMeses, brl, pct as porc, rotuloMes } from '@/lib/finance';
+import PessoaIcone from '@/components/PessoaIcone';
 import { gradienteCartao } from '@/lib/cartao';
 import type { Estado } from '@/lib/types';
 
@@ -81,10 +82,10 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
         <ul className="divide-y divide-line">
           {fatura.itens.map((i) => (
             <li key={i.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 md:px-0">
-              <span aria-hidden className="grid size-10 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={i.detalhe === 'Compra' ? CreditCard : ReceiptText} size={18} /></span>
+              <PessoaIcone pessoa={{ nome: i.responsavel, avatar: (i as any).responsavelAvatar, cor: (i as any).responsavelCor }} icone={i.detalhe === 'Compra' ? CreditCard : ReceiptText} tamanho={40} />
               <div className="min-w-0">
                 <p className="truncate font-medium">{i.descricao}</p>
-                <p className="truncate text-xs text-muted">{i.categoria} · {i.responsavel} · {i.detalhe}</p>
+                <p className="truncate text-xs text-muted"><b className="font-semibold text-ink">{i.responsavel}</b> · {i.categoria} · {i.detalhe}</p>
               </div>
               <span className="shrink-0 text-sm font-semibold tabular-nums">{brl(i.valor)}</span>
             </li>

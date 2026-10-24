@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { Ico } from "@/components/icons";
+import FiltroResponsaveis from "@/components/FiltroResponsaveis";
 import { addMeses, brl, pct } from "@/lib/finance";
 import { gerarRelatorio, mesCurto, relatorioParaCSV, relatorioParaHTML, type Grupo } from "@/lib/relatorio";
 
@@ -43,7 +44,7 @@ export default function RelatorioFinanceiro({ estado, mes }: { estado: { extrato
   const [preset, setPreset] = useState<Preset>("mes");
   const [deC, setDeC] = useState(mes);
   const [ateC, setAteC] = useState(mes);
-  const [responsavel, setResponsavel] = useState("");
+  const [responsaveisSel, setResponsaveisSel] = useState<string[]>([]);
   const [categoria, setCategoria] = useState("");
   const [limite, setLimite] = useState(30);
 
@@ -59,10 +60,17 @@ export default function RelatorioFinanceiro({ estado, mes }: { estado: { extrato
   }, [preset, mes, deC, ateC]);
 
   const todos = useMemo(() => [...estado.extrato, ...estado.cartao, ...estado.contas], [estado]);
-  const responsaveis = useMemo(() => [...new Set(todos.map((i) => String(i.responsavel || "").trim()).filter(Boolean))].sort(), [todos]);
+  const pessoas = useMemo(() => {
+    const vistos = new Map<string, { nome: string; avatar?: string | null; cor?: string | null }>();
+    for (const i of todos) {
+      const nome = String(i.responsavel || "").trim();
+      if (nome && !vistos.has(nome)) vistos.set(nome, { nome, avatar: i.responsavelAvatar, cor: i.responsavelCor });
+    }
+    return [...vistos.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [todos]);
   const categorias = useMemo(() => [...new Set(todos.map((i) => String(i.categoria || "").trim()).filter(Boolean))].sort(), [todos]);
 
-  const r = useMemo(() => gerarRelatorio(estado, { de, ate, responsavel: responsavel || undefined, categoria: categoria || undefined }), [estado, de, ate, responsavel, categoria]);
+  const r = useMemo(() => gerarRelatorio(estado, { de, ate, responsaveis: responsaveisSel, categoria: categoria || undefined }), [estado, de, ate, responsaveisSel, categoria]);
   const negativo = r.totais.saldo < 0;
 
   const baixar = (conteudo: string, tipo: string, nome: string) => {
@@ -98,13 +106,6 @@ export default function RelatorioFinanceiro({ estado, mes }: { estado: { extrato
               {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.r}</option>)}
             </select>
           </div>
-          <div>
-            <label htmlFor="rel-r" className={rotulo}>Responsável</label>
-            <select id="rel-r" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className={campo}>
-              <option value="">Todos</option>
-              {responsaveis.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-          </div>
           <div className="sm:col-span-2 lg:col-span-1">
             <label htmlFor="rel-c" className={rotulo}>Categoria</label>
             <select id="rel-c" value={categoria} onChange={(e) => setCategoria(e.target.value)} className={campo}>
@@ -118,6 +119,10 @@ export default function RelatorioFinanceiro({ estado, mes }: { estado: { extrato
               <div><label htmlFor="rel-ate" className={rotulo}>Até</label><input id="rel-ate" type="month" value={ateC} onChange={(e) => setAteC(e.target.value)} className={campo} /></div>
             </div>
           )}
+        </div>
+        <div>
+          <span className={rotulo}>Responsáveis</span>
+          <FiltroResponsaveis pessoas={pessoas} selecionados={responsaveisSel} onChange={setResponsaveisSel} />
         </div>
         <p className="text-xs text-muted">Período analisado: {mesCurto(r.filtro.de <= r.filtro.ate ? r.filtro.de : r.filtro.ate)} a {mesCurto(r.filtro.de <= r.filtro.ate ? r.filtro.ate : r.filtro.de)} · {r.meses.length} {r.meses.length === 1 ? "mês" : "meses"}</p>
         <div className="grid gap-2 sm:grid-cols-2 sm:max-w-md">

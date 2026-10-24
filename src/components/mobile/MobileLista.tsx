@@ -4,6 +4,7 @@ import { Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { Ico } from "@/components/icons";
 import { useState } from "react";
 import { brl } from "@/lib/finance";
+import PessoaIcone, { type PessoaItem } from "@/components/PessoaIcone";
 
 export type ItemMobile = {
   id: string;
@@ -12,6 +13,7 @@ export type ItemMobile = {
   valor: number;
   icone: LucideIcon;
   tags?: string[];
+  pessoa?: PessoaItem | null;
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
   progresso?: number; // 0 a 100 (parcelas)
   onEditar?: () => void;
@@ -52,7 +54,7 @@ export default function MobileLista({
       {itens.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line px-4 py-10 text-center text-sm text-muted">{vazio}</div>
       ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+        <ul className="anim-stagger divide-y divide-line overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
           {itens.map((i) => {
             const exp = aberto === i.id;
             const temAcoes = i.onEditar || i.onRemover || i.onAlternar;
@@ -63,10 +65,12 @@ export default function MobileLista({
                   onClick={() => temAcoes && setAberto(exp ? null : i.id)}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-background"
                 >
-                  <span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent/10 text-accent"><Ico icon={i.icone} /></span>
+                  <PessoaIcone pessoa={i.pessoa} icone={i.icone} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{i.titulo}</span>
                     <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted">
+                      {i.pessoa?.nome && <b className="font-semibold text-ink">{i.pessoa.nome}</b>}
+                      {i.pessoa?.nome && i.subtitulo && <span aria-hidden>·</span>}
                       {i.subtitulo}
                     </span>
                     {i.progresso != null && (

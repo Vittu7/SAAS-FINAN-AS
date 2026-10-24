@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import Avatar from "@/components/Avatar";
 import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
-
 
 interface SidebarProps {
   onAbrirGrupo: () => void;
   onNova: () => void;
+  /** Mantidos por compatibilidade: a escolha de visualização fica no cabeçalho da página. */
   membroSelecionado?: string;
   setMembroSelecionado?: (membro: string) => void;
   listaMembros?: string[];
@@ -18,45 +19,36 @@ interface SidebarProps {
   onAlterarExpandido?: (expandido: boolean) => void;
 }
 
-const SECOES = [
+/** Navegação agrupada pelo que a pessoa quer fazer: ver, pagar/organizar e analisar. */
+const SECOES: { titulo: string; itens: { id: string; rotulo: string }[] }[] = [
   {
-    titulo: "Visão geral",
-    itens: [{ id: "inicio", rotulo: "Início" }],
-  },
-  {
-    titulo: "Movimentações",
+    titulo: "Resumo",
     itens: [
+      { id: "inicio", rotulo: "Início" },
       { id: "extrato", rotulo: "Extrato" },
-      { id: "lancamentos", rotulo: "Lançamentos (editar)" },
     ],
   },
   {
-    titulo: "Contas",
+    titulo: "Cartões e contas",
     itens: [
       { id: "fatura", rotulo: "Cartões e Faturas" },
       { id: "cartao", rotulo: "Contas parceladas" },
       { id: "contas", rotulo: "Contas fixas" },
+      { id: "lancamentos", rotulo: "lançamentos do mês" },
+    ],
+  },
+  {
+    titulo: "Análises",
+    itens: [
+      { id: "graficos", rotulo: "Gráficos e relatórios" },
+      { id: "investimentos", rotulo: "Investimentos" },
     ],
   },
 ];
 
-export default function Sidebar({
-  onAbrirGrupo,
-  onNova,
-  membroSelecionado = "TODOS",
-  setMembroSelecionado,
-  listaMembros = [],
-  abaAtiva,
-  onSelecionarAba,
-  onAlterarExpandido,
-}: SidebarProps) {
+export default function Sidebar({ onAbrirGrupo, onNova, abaAtiva, onSelecionarAba, onAlterarExpandido }: SidebarProps) {
   const [expandido, setExpandido] = useState(true);
-
-  const [perfil, setPerfil] = useState<{ nome: string; avatar: string | null; email: string }>({
-    nome: "",
-    avatar: null,
-    email: "",
-  });
+  const [perfil, setPerfil] = useState<{ nome: string; avatar: string | null; email: string }>({ nome: "", avatar: null, email: "" });
 
   const router = useRouter();
   const pathname = usePathname();
@@ -67,20 +59,10 @@ export default function Sidebar({
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
-        .from("perfis")
-        .select("nome_usuario, avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
-      setPerfil({
-        nome: data?.nome_usuario || "Você",
-        avatar: data?.avatar_url || null,
-        email: user.email || "",
-      });
+      const { data } = await supabase.from("perfis").select("nome_usuario, avatar_url").eq("id", user.id).maybeSingle();
+      setPerfil({ nome: data?.nome_usuario || "Você", avatar: data?.avatar_url || null, email: user.email || "" });
     };
-
     carregarPerfil();
-
     // Atualiza nome/foto quando o perfil muda em Configurações.
     window.addEventListener("homecash:perfil", carregarPerfil);
     return () => window.removeEventListener("homecash:perfil", carregarPerfil);
@@ -98,7 +80,6 @@ export default function Sidebar({
 
   const selecionarAba = (id: string) => {
     onSelecionarAba?.(id);
-
     if (pathname !== "/") router.push("/");
   };
 
@@ -108,40 +89,38 @@ export default function Sidebar({
   };
 
   const classeItem = (ativo: boolean) =>
-    `flex min-h-10 w-full items-center rounded-xl px-3 text-sm transition ${
-      expandido ? "gap-3" : "justify-center"
-    } ${
-      ativo
-        ? "bg-accent/12 font-semibold text-accent ring-1 ring-accent/20"
-        : "text-muted hover:bg-background hover:text-ink"
+    `group relative flex min-h-10 w-full items-center rounded-xl px-3 text-sm transition-all duration-200 ${expandido ? "gap-3" : "justify-center"} ${
+      ativo ? "bg-accent/12 font-semibold text-accent" : "text-muted hover:bg-background hover:text-ink"
     }`;
+
+  const Item = ({ id, rotulo, icone }: { id: string; rotulo: string; icone: Parameters<typeof Ico>[0]["icon"] }) => {
+    const ativo = abaAtiva === id;
+    return (
+      <button type="button" onClick={() => selecionarAba(id)} aria-current={ativo ? "page" : undefined} title={!expandido ? rotulo : undefined} className={classeItem(ativo)}>
+        <span aria-hidden className={`absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent transition-all duration-200 ${ativo ? "opacity-100" : "scale-y-0 opacity-0"}`} />
+        <span className="grid w-5 shrink-0 place-items-center transition-transform duration-200 group-hover:scale-110">
+          <Ico icon={icone} />
+        </span>
+        {expandido && <span className="truncate anim-fade">{rotulo}</span>}
+      </button>
+    );
+  };
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 hidden flex-col md:flex border-r border-line bg-surface/80 backdrop-blur-xl transition-[width] duration-200 ${
-        expandido ? "w-60" : "w-16"
-      }`}
+      className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-line bg-surface/85 backdrop-blur-xl transition-[width] duration-300 ease-out md:flex ${expandido ? "w-60" : "w-16"}`}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {/* CABEÇALHO DA SIDEBAR */}
-        <div
-          className={`flex h-12 items-center border-b border-line pb-3 ${
-            expandido ? "justify-between" : "justify-center"
-          }`}
-        >
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
+        {/* Marca + recolher */}
+        <div className={`flex h-12 items-center ${expandido ? "justify-between" : "justify-center"}`}>
           {expandido && (
-            <div className="flex items-center gap-2">
-              <img
-                src="/logo.png"
-                alt="HomeCash"
-                className="h-8 w-auto object-contain"
-              />
+            <div className="flex items-center gap-2 anim-fade">
+              <img src="/logo.png" alt="HomeCash" className="h-8 w-auto object-contain" />
               <span className="text-base font-semibold text-ink">
                 Home<span className="text-accent">Cash</span>
               </span>
             </div>
           )}
-
           <button
             type="button"
             onClick={() => alterarExpandido(!expandido)}
@@ -152,159 +131,68 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* FILTRO DE MEMBROS */}
-        {expandido && setMembroSelecionado && abaAtiva !== "ajustes" && (
-          <div className="border-b border-line py-4">
-            <label
-              htmlFor="filtro-membro"
-              className="mb-1.5 block text-xs text-muted"
-            >
-              Visualização
-            </label>
-            <select
-              id="filtro-membro"
-              value={membroSelecionado}
-              onChange={(event) => setMembroSelecionado(event.target.value)}
-              className="h-9 w-full rounded-lg border border-line bg-background px-2.5 text-xs text-ink outline-none focus:ring-2 focus:ring-accent"
-            >
-              <option value="EU">Somente eu</option>
-              <option value="TODOS">Todo o grupo</option>
-              {listaMembros.map((membro) => (
-                <option key={membro} value={membro}>
-                  {membro}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* BOTÃO NOVO LANÇAMENTO */}
-        <div className="relative py-4">
+        {/* Ação principal */}
+        <div className="py-3">
           <button
             type="button"
             onClick={onNova}
             title={!expandido ? "Nova transação" : undefined}
-            className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:opacity-95 ${
-              expandido ? "gap-2" : ""
-            }`}
+            className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent shadow-lg shadow-accent/25 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:scale-[0.98] ${expandido ? "gap-2" : ""}`}
           >
             <Ico icon={ICONES.novo} />
             {expandido && <span>Nova transação</span>}
           </button>
-
         </div>
 
-        {/* NAVEGAÇÃO */}
-        <nav className="space-y-5">
+        {/* Navegação */}
+        <nav aria-label="Principal" className="space-y-4">
           {SECOES.map((secao) => (
-            <section key={secao.titulo} className="space-y-1">
-              {expandido && (
-                <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">
-                  {secao.titulo}
-                </h2>
+            <section key={secao.titulo} className="space-y-0.5">
+              {expandido ? (
+                <h2 className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">{secao.titulo}</h2>
+              ) : (
+                <div aria-hidden className="mx-3 mb-1 h-px bg-line" />
               )}
-
               {secao.itens.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => selecionarAba(item.id)}
-                  aria-current={abaAtiva === item.id ? "page" : undefined}
-                  title={!expandido ? item.rotulo : undefined}
-                  className={classeItem(abaAtiva === item.id)}
-                >
-                  <span className="grid w-5 place-items-center">
-                    <Ico icon={ICONE_ABA[item.id]} />
-                  </span>
-                  {expandido && <span>{item.rotulo}</span>}
-                </button>
+                <Item key={item.id} id={item.id} rotulo={item.rotulo} icone={ICONE_ABA[item.id]} />
               ))}
             </section>
           ))}
-
-          {/* ANÁLISES */}
-          <section className="space-y-1">
-            {expandido && (
-              <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">
-                Análises
-              </h2>
-            )}
-            <button type="button" onClick={() => selecionarAba("graficos")} aria-current={abaAtiva === "graficos" ? "page" : undefined} className={classeItem(abaAtiva === "graficos")} title={!expandido ? "Gráficos e relatórios" : undefined}>
-              <span className="grid w-5 place-items-center"><Ico icon={ICONES.graficos} /></span>
-              {expandido && <span>Gráficos e relatórios</span>}
-            </button>
-            <button type="button" onClick={() => selecionarAba("investimentos")} aria-current={abaAtiva === "investimentos" ? "page" : undefined} className={classeItem(abaAtiva === "investimentos")} title={!expandido ? "Investimentos" : undefined}>
-              <span className="grid w-5 place-items-center"><Ico icon={ICONES.investimentos} /></span>
-              {expandido && <span>Investimentos</span>}
-            </button>
-          </section>
-
-          <section className="space-y-1">
-            {expandido && <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">AJUSTES</h2>}
-            <button type="button" onClick={() => selecionarAba("ajustes")} className={classeItem(abaAtiva === "ajustes")} title="Configurações">
-              <span className="grid w-5 place-items-center"><Ico icon={ICONE_ABA.ajustes} /></span>{expandido && <span>Configurações</span>}
-            </button>
-          </section>
         </nav>
       </div>
 
-      {/* RODAPÉ E PERFIL DO UTILIZADOR */}
-      <footer className="space-y-1 border-t border-line p-3">
+      {/* Rodapé: perfil em destaque + ações rápidas */}
+      <footer className="space-y-2 border-t border-line p-3">
         <button
           type="button"
-          onClick={() => onSelecionarAba?.("ajustes")}
-          title={!expandido ? perfil.nome : undefined}
-          className={`mb-1 flex w-full items-center rounded-xl p-2 text-left transition hover:bg-background ${
-            expandido ? "gap-3" : "justify-center"
-          }`}
+          onClick={() => selecionarAba("ajustes")}
+          title={!expandido ? `${perfil.nome} · Configurações` : undefined}
+          aria-current={abaAtiva === "ajustes" ? "page" : undefined}
+          className={`group flex w-full items-center rounded-xl p-2 text-left transition-all duration-200 hover:bg-background ${expandido ? "gap-3" : "justify-center"} ${abaAtiva === "ajustes" ? "bg-accent/12" : ""}`}
         >
-          <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-bold text-on-accent">
-            {perfil.avatar ? (
-              <img src={perfil.avatar} alt="" className="h-full w-full object-cover" />
-            ) : (
-              (perfil.nome[0] || "?").toUpperCase()
-            )}
-          </span>
+          <Avatar src={perfil.avatar} nome={perfil.nome} cor="var(--accent)" tamanho="md" anel={abaAtiva === "ajustes"} />
           {expandido && (
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-ink">
-                {perfil.nome}
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-ink">{perfil.nome}</span>
+                <span className="block truncate text-[11px] text-muted">Configurações e perfil</span>
               </span>
-              <span className="block truncate text-[11px] text-muted">
-                {perfil.email}
-              </span>
-            </span>
+              <Ico icon={ChevronRight} size={16} className="text-muted transition-transform group-hover:translate-x-0.5" />
+            </>
           )}
         </button>
 
-        <button
-          type="button"
-          onClick={onAbrirGrupo}
-          className={classeItem(false)}
-          title={!expandido ? "Gerenciar grupo" : undefined}
-        >
-          <span className="grid w-5 place-items-center">
-            <Ico icon={ICONES.grupo} />
-          </span>
-          {expandido && <span>Gerenciar grupo</span>}
-        </button>
-
-
-        <button
-          type="button"
-          onClick={sair}
-          className={`flex min-h-10 w-full items-center rounded-lg px-3 text-sm text-muted transition hover:bg-red-500/10 hover:text-red-400 ${
-            expandido ? "gap-3" : "justify-center"
-          }`}
-          title={!expandido ? "Sair da conta" : undefined}
-        >
-          <span className="grid w-5 place-items-center">
-            <Ico icon={ICONES.sair} />
-          </span>
-          {expandido && <span>Sair da conta</span>}
-        </button>
+        <div className={`grid gap-1 ${expandido ? "grid-cols-2" : "grid-cols-1"}`}>
+          <button type="button" onClick={onAbrirGrupo} title={!expandido ? "Gerenciar grupo" : undefined} className="flex h-10 items-center justify-center gap-2 rounded-xl text-sm text-muted transition hover:bg-background hover:text-ink">
+            <Ico icon={ICONES.grupo} size={18} />
+            {expandido && <span>Grupo</span>}
+          </button>
+          <button type="button" onClick={sair} title={!expandido ? "Sair da conta" : undefined} className="flex h-10 items-center justify-center gap-2 rounded-xl text-sm text-muted transition hover:bg-rose-500/10 hover:text-rose-500">
+            <Ico icon={ICONES.sair} size={18} />
+            {expandido && <span>Sair</span>}
+          </button>
+        </div>
       </footer>
-
     </aside>
   );
 }

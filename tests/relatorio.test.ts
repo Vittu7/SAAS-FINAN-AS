@@ -30,7 +30,8 @@ describe("relatório", () => {
       expect(g.reduce((t, x) => t + x.valor, 0)).toBe(r.totais.saidas);
   });
   it("filtra por responsável e por categoria", () => {
-    expect(gerarRelatorio(e, { de: "2026-09", ate: "2026-10", responsavel: "Gi" }).totais.saidas).toBe(100);
+    expect(gerarRelatorio(e, { de: "2026-09", ate: "2026-10", responsaveis: ["Gi"] }).totais.saidas).toBe(100);
+    expect(gerarRelatorio(e, { de: "2026-09", ate: "2026-10", responsaveis: ["Gi", "Vitu"] }).totais.saidas).toBe(680);
     expect(gerarRelatorio(e, { de: "2026-09", ate: "2026-10", categoria: "Casa" }).totais.saidas).toBe(280);
   });
   it("falta pagar considera só contas não pagas", () => expect(r.totais.faltaPagar).toBe(80));

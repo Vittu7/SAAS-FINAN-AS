@@ -41,8 +41,8 @@ export default function GraficoEvolucao({ estado, mes }: { estado: { extrato: an
         {dados.map((d) => (
           <div key={d.mes} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1" title={`${curto(d.mes)} · entradas ${brl(d.entradas)} · saídas ${brl(d.saidas)}`}>
             <div className="flex h-full items-end justify-center gap-0.5">
-              <div className="w-1/2 max-w-5 rounded-t bg-emerald-600 dark:bg-emerald-500" style={{ height: h(d.entradas) }} />
-              <div className="w-1/2 max-w-5 rounded-t bg-rose-600 dark:bg-rose-500" style={{ height: h(d.saidas) }} />
+              <div className="anim-grow w-1/2 max-w-5 rounded-t bg-emerald-600 dark:bg-emerald-500" style={{ height: h(d.entradas) }} />
+              <div className="anim-grow w-1/2 max-w-5 rounded-t bg-rose-600 dark:bg-rose-500" style={{ height: h(d.saidas), animationDelay: "60ms" }} />
             </div>
             <span className={`truncate text-center text-[11px] capitalize ${d.mes === mes ? "font-bold text-accent" : "text-muted"}`}>{curto(d.mes)}</span>
           </div>

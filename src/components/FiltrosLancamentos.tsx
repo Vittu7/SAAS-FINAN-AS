@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import FiltroResponsaveis from "@/components/FiltroResponsaveis";
+import type { PessoaVisual } from "@/components/Avatar";
 
 export type FiltrosLancamentoState = {
   busca: string;
-  responsavel: string;
+  /** Pessoas selecionadas (vazio = todas) */
+  responsavel: string[];
   categoria: string;
   pagamento: string;
   tipo: string;
@@ -15,7 +18,7 @@ export type FiltrosLancamentoState = {
 
 export const FILTROS_INICIAIS: FiltrosLancamentoState = {
   busca: "",
-  responsavel: "",
+  responsavel: [],
   categoria: "",
   pagamento: "",
   tipo: "todos",
@@ -27,6 +30,8 @@ type Props = {
   filtros: FiltrosLancamentoState;
   setFiltros: (filtros: FiltrosLancamentoState) => void;
   responsaveis: string[];
+  /** Foto e cor de cada pessoa (opcional) */
+  pessoas?: PessoaVisual[];
   categorias: string[];
   pagamentos: string[];
   mostrarTipo?: boolean;
@@ -37,6 +42,7 @@ export default function FiltrosLancamentos({
   filtros,
   setFiltros,
   responsaveis,
+  pessoas = [],
   categorias,
   pagamentos,
   mostrarTipo = false,
@@ -44,10 +50,10 @@ export default function FiltrosLancamentos({
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const ativos = Object.entries(filtros).filter(([chave, valor]) =>
-    chave === "tipo" || chave === "status" ? valor !== "todos" : Boolean(valor),
+    chave === "tipo" || chave === "status" ? valor !== "todos" : Array.isArray(valor) ? valor.length > 0 : Boolean(valor),
   ).length;
 
-  const atualizar = (campo: keyof FiltrosLancamentoState, valor: string) =>
+  const atualizar = (campo: Exclude<keyof FiltrosLancamentoState, "responsavel">, valor: string) =>
     setFiltros({ ...filtros, [campo]: valor } as FiltrosLancamentoState);
 
   const selectClass = "min-w-0 rounded-lg border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
@@ -69,6 +75,13 @@ export default function FiltrosLancamentos({
         </button>
       </div>
       <div className={`${aberto ? "grid" : "hidden"} mt-3 grid-cols-1 gap-3 sm:grid-cols-2 md:grid md:grid-cols-3 xl:grid-cols-6`}>
+        <div className="col-span-full">
+          <FiltroResponsaveis
+            pessoas={responsaveis.map((nome) => pessoas.find((p) => p.nome === nome) ?? { nome })}
+            selecionados={filtros.responsavel}
+            onChange={(nomes) => setFiltros({ ...filtros, responsavel: nomes })}
+          />
+        </div>
         <input
           type="search"
           value={filtros.busca}
@@ -77,10 +90,6 @@ export default function FiltrosLancamentos({
           aria-label="Buscar descrição"
           className={`${selectClass} xl:col-span-2`}
         />
-        <select aria-label="Filtrar responsável" value={filtros.responsavel} onChange={(event) => atualizar("responsavel", event.target.value)} className={selectClass}>
-          <option value="">Todos os responsáveis</option>
-          {responsaveis.map((item) => <option key={item} value={item}>{item}</option>)}
-        </select>
         <select aria-label="Filtrar categoria" value={filtros.categoria} onChange={(event) => atualizar("categoria", event.target.value)} className={selectClass}>
           <option value="">Todas as categorias</option>
           {categorias.map((item) => <option key={item} value={item}>{item}</option>)}

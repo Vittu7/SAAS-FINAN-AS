@@ -32,8 +32,9 @@ export default function ExtratoTable({
   const [membros, setMembros] = useState<string[]>([]);
   const [membrosIds, setMembrosIds] = useState<{ id: string; nome: string }[]>([]);
   const [meuId, setMeuId] = useState("");
-  // "" = todo o grupo · "privado" = só eu · <id> = só eu e essa pessoa
-  const [visivelPara, setVisivelPara] = useState("");
+  const [grupoId, setGrupoId] = useState("");
+  // Padrão privado; "grupo" = todo o grupo; <id> = só eu e essa pessoa.
+  const [visivelPara, setVisivelPara] = useState("privado");
   const [meuNome, setMeuNome] = useState("");
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
@@ -71,6 +72,7 @@ export default function ExtratoTable({
       .maybeSingle();
 
     if (!perfil) return;
+    setGrupoId(perfil.grupo_id || "");
 
     const nomeReal = perfil.nome_usuario || "Usuário";
     setMeuNome(nomeReal);
@@ -123,7 +125,12 @@ export default function ExtratoTable({
         descricao: qtd > 1 ? `${descricao} (1/${qtd})` : descricao,
         responsavel: resp,
         privado: visivelPara === "privado",
-        compartilhado_com: visivelPara && visivelPara !== "privado" ? visivelPara : null,
+        compartilhado_com:
+          visivelPara === "grupo"
+            ? grupoId || null
+            : visivelPara !== "privado"
+              ? visivelPara
+              : null,
       });
     });
 
@@ -131,7 +138,7 @@ export default function ExtratoTable({
     setDescricao("");
     setResponsaveisSelecionados([meuNome || "Usuário"]);
     setMenuResponsavelAberto(false);
-    setVisivelPara("");
+    setVisivelPara("privado");
   };
 
   return (
@@ -251,7 +258,7 @@ export default function ExtratoTable({
             onChange={(e) => setVisivelPara(e.target.value)}
             className="w-full rounded-xl border border-line bg-background text-ink px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent"
           >
-            <option value="">Todo o grupo</option>
+            <option value="grupo" disabled={!grupoId}>Todo o grupo</option>
             <option value="privado">Só eu</option>
             {membrosIds.filter((m) => m.id !== meuId).map((m) => (
               <option key={m.id} value={m.id}>Só eu e {m.nome}</option>

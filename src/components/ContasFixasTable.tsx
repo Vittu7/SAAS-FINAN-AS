@@ -37,6 +37,9 @@ export default function ContasFixasTable({
   const [novoAberto, setNovoAberto] = useState(false);
 
   const [membros, setMembros] = useState<string[]>([]);
+  const [membrosCompartilhamento, setMembrosCompartilhamento] = useState<{ id: string; nome: string }[]>([]);
+  const [grupoId, setGrupoId] = useState("");
+  const [visivelPara, setVisivelPara] = useState("privado");
   const [meuNome, setMeuNome] = useState("");
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
@@ -62,7 +65,7 @@ export default function ContasFixasTable({
 
     const { data: perfil } = await supabase
       .from("perfis")
-      .select("grupo_id, nome_usuario")
+      .select("id, grupo_id, nome_usuario")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -70,6 +73,7 @@ export default function ContasFixasTable({
 
     const nomeReal = perfil.nome_usuario || "Usuário";
     setMeuNome(nomeReal);
+    setGrupoId(perfil.grupo_id || "");
     setResponsaveisSelecionados((atuais) =>
       atuais.length > 0 ? atuais : [nomeReal],
     );
@@ -77,7 +81,7 @@ export default function ContasFixasTable({
     if (perfil.grupo_id) {
       const { data } = await supabase
         .from("perfis")
-        .select("nome_usuario")
+        .select("id, nome_usuario")
         .eq("grupo_id", perfil.grupo_id);
 
       const nomes = (data || [])
@@ -85,6 +89,7 @@ export default function ContasFixasTable({
         .filter(Boolean);
 
       setMembros(nomes.length > 0 ? nomes : [nomeReal]);
+      setMembrosCompartilhamento((data || []).filter((membro) => membro.id !== perfil.id && membro.nome_usuario).map((membro) => ({ id: membro.id, nome: membro.nome_usuario || "Membro" })));
     } else {
       setMembros([nomeReal]);
     }
@@ -156,6 +161,7 @@ export default function ContasFixasTable({
           forma_pagamento: formaPagamento || null,
           pago: false,
           responsavel,
+          compartilhado_com: visivelPara === "grupo" ? grupoId || null : visivelPara !== "privado" ? visivelPara : null,
         }),
       ),
     );
@@ -165,6 +171,7 @@ export default function ContasFixasTable({
     setVencimento("");
     setCategoria("");
     setFormaPagamento("");
+    setVisivelPara("privado");
     setResponsaveisSelecionados([meuNome || "Usuário"]);
     setMenuResponsavelAberto(false);
     setNovoAberto(false);
@@ -328,6 +335,15 @@ export default function ContasFixasTable({
               </div>
             )}
           </div>
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted">Quem pode ver?</span>
+            <select value={visivelPara} onChange={(event) => setVisivelPara(event.target.value)} className="w-full rounded-lg border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent">
+              <option value="privado">Só eu</option>
+              <option value="grupo" disabled={!grupoId}>Todo o grupo</option>
+              {membrosCompartilhamento.map((membro) => <option key={membro.id} value={membro.id}>Só eu e {membro.nome}</option>)}
+            </select>
+          </label>
 
           <div className="flex justify-end gap-2 sm:col-span-2">
             <button

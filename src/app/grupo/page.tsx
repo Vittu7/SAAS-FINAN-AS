@@ -1,60 +1,63 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+
+type PerfilGrupo = {
+  id: string;
+  grupo_id: string | null;
+  cargo: string | null;
+  grupos_familiares: { nome: string; convite_codigo: string } | null;
+};
 
 export default function FamiliaPage() {
   const router = useRouter();
   const [nomeGrupo, setNomeGrupo] = useState("");
   const [carregando, setCarregando] = useState(false);
-  const [meuPerfil, setMeuPerfil] = useState<any>(null);
+  const [meuPerfil, setMeuPerfil] = useState<PerfilGrupo | null>(null);
+
+  const carregarPerfil = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    const { data } = await supabase
+      .from("perfis")
+      .select("id, grupo_id, cargo, grupos_familiares(nome, convite_codigo)")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (data) setMeuPerfil(data as unknown as PerfilGrupo);
+  }, [router]);
 
   useEffect(() => {
-    carregarPerfil();
-  }, []);
+    void carregarPerfil();
+  }, [carregarPerfil]);
 
-  const carregarPerfil = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return router.push("/login");
-
-    const { data, error } = await supabase
-      .from("perfis")
-      .select("*, grupos_familiares(nome)")
-      .eq("id", user.id)
-      .single();
-
-    if (data) setMeuPerfil(data);
-  };
-
-  const criarGrupo = async (e: React.FormEvent) => {
+  const criarGrupo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCarregando(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // 1. Cria o grupo novo
-      const { data: grupo, error: erroGrupo } = await supabase
-        .from("grupos_familiares")
-        .insert([{ nome: nomeGrupo }])
-        .select()
-        .single();
+      if (!user) throw new Error("Faça login novamente para criar um grupo.");
 
-      if (erroGrupo) throw erroGrupo;
+      const nomePadrao = user.user_metadata?.full_name || user.email || "Usuário";
+      const { error } = await supabase.rpc("criar_grupo_familiar", {
+        p_nome: nomeGrupo.trim(),
+        p_nome_usuario: nomePadrao,
+      });
 
-      // 2. Atualiza o seu perfil para ser o Gestor deste grupo
-      const { error: erroPerfil } = await supabase
-        .from("perfis")
-        .update({ grupo_id: grupo.id, cargo: "gestor" })
-        .eq("id", user?.id);
-
-      if (erroPerfil) throw erroPerfil;
+      if (error) throw error;
 
       alert("Grupo familiar criado com sucesso!");
-      carregarPerfil(); // Recarrega a tela
-    } catch (error: any) {
-      alert("Erro ao criar grupo: " + error.message);
+      await carregarPerfil();
+    } catch (error: unknown) {
+      const mensagem = error instanceof Error ? error.message : "Erro inesperado.";
+      alert("Erro ao criar grupo: " + mensagem);
     } finally {
       setCarregando(false);
     }
@@ -70,11 +73,10 @@ export default function FamiliaPage() {
             Seu Grupo: <span className="text-accent">{meuPerfil.grupos_familiares?.nome}</span>
           </h2>
           <p className="text-muted mb-4">Você é o <strong>{meuPerfil.cargo}</strong> deste grupo.</p>
-          
           <div className="bg-background p-4 rounded-lg border border-line">
-            <p className="text-sm">Para convidar sua mãe ou pai, peça para eles criarem uma conta e informe este ID do grupo para eles entrarem:</p>
+            <p className="text-sm">Para convidar sua mãe ou pai, peça para eles criarem uma conta e informe este código de convite para eles entrarem:</p>
             <code className="block mt-2 p-2 bg-surface rounded text-xs select-all">
-              {meuPerfil.grupo_id}
+              {meuPerfil.grupos_familiares?.convite_codigo}
             </code>
           </div>
         </div>
@@ -83,7 +85,6 @@ export default function FamiliaPage() {
           <div>
             <h2 className="text-xl font-semibold mb-2">Criar um Novo Grupo Familiar</h2>
             <p className="text-sm text-muted mb-4">Crie um grupo para compartilhar despesas com seus familiares.</p>
-            
             <label className="text-xs font-medium text-muted block mb-1">Nome do Grupo (ex: Casa Araguaína)</label>
             <input
               type="text"
@@ -94,7 +95,6 @@ export default function FamiliaPage() {
               placeholder="Digite o nome do grupo..."
             />
           </div>
-          
           <button
             type="submit"
             disabled={carregando}

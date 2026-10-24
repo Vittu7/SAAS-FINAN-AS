@@ -20,7 +20,7 @@ export default function FamiliaPage() {
 
     const { data, error } = await supabase
       .from("perfis")
-      .select("*, grupos_familiares(nome)")
+      .select("*, grupos_familiares(nome, convite_codigo)")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -64,7 +64,7 @@ export default function FamiliaPage() {
           <p className="text-muted mb-4">Você é o <strong>{meuPerfil.cargo}</strong> deste grupo.</p>
           
           <div className="bg-background p-4 rounded-lg border border-line">
-            <p className="text-sm">Para convidar sua mãe ou pai, peça para eles criarem uma conta e informe este ID do grupo para eles entrarem:</p>
+            <p className="text-sm">Para convidar sua mãe ou pai, peça para eles criarem uma conta e informe este código de convite para eles entrarem:</p>
             <code className="block mt-2 p-2 bg-surface rounded text-xs select-all">
               {meuPerfil.grupo_id}
             </code>

@@ -204,8 +204,8 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
               </code>
             </div>
 
-            {meuPerfil?.cargo === "gestor" && (
             {/* Adicionar Convidado sem Conta */}
+            {meuPerfil?.cargo === "gestor" && (
             <div className="border-t border-line pt-3">
               {!adicionandoConvidado ? (
                 <button
@@ -276,8 +276,8 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                       {/* Foto do perfil ou inicial do nome */}
                       <Avatar src={m.avatar_url} nome={m.nome_usuario} cor={m.cor} tamanho={36} />
 
-                      {meuPerfil?.cargo === "gestor" && (
                       {/* Seletor de cor circular */}
+                      {meuPerfil?.cargo === "gestor" && (
                       <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border border-line shadow-sm cursor-pointer">
                         <input
                           type="color"

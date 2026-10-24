@@ -231,6 +231,7 @@ declare
   v_grupo_id uuid;
   v_cargo text;
   v_alvo_user_id uuid;
+  v_alvo_eh_convidado boolean;
 begin
   if v_user_id is null then raise exception 'É necessário estar autenticado.'; end if;
 
@@ -240,20 +241,31 @@ begin
   order by criado_em
   limit 1;
 
-  if coalesce(v_cargo, '') <> 'gestor' then raise exception 'Somente o gestor pode remover perfis do grupo.'; end if;
+  if v_grupo_id is null or coalesce(v_cargo, '') <> 'gestor' then
+    raise exception 'Somente o gestor do grupo pode remover perfis.';
+  end if;
 
-  select user_id into v_alvo_user_id
+  select user_id, eh_convidado
+    into v_alvo_user_id, v_alvo_eh_convidado
   from public.perfis
   where id = p_perfil_id and grupo_id = v_grupo_id;
 
-  if v_grupo_id is null or not found then
+  if not found then
     raise exception 'Perfil não pertence ao seu grupo.';
   end if;
   if v_alvo_user_id = v_user_id then
     raise exception 'Não é possível remover seu próprio perfil por esta opção.';
   end if;
 
-  delete from public.perfis where id = p_perfil_id and grupo_id = v_grupo_id;
+  -- Preserva o perfil e os dados financeiros de usuários reais; apenas os desvincula.
+  -- Perfis convidados sem conta podem ser removidos.
+  if v_alvo_user_id is not null and coalesce(v_alvo_eh_convidado, false) = false then
+    update public.perfis
+       set grupo_id = null, cargo = 'membro'
+     where id = p_perfil_id and grupo_id = v_grupo_id;
+  else
+    delete from public.perfis where id = p_perfil_id and grupo_id = v_grupo_id;
+  end if;
 end;
 $$;
 

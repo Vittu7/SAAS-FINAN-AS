@@ -26,6 +26,9 @@ drop policy if exists "contas_fixas_select" on public.contas_fixas;
 drop policy if exists "partilha seletiva segura" on public.contas_fixas;
 drop policy if exists "extrato_select" on public.extrato;
 drop policy if exists "partilha seletiva segura" on public.extrato;
+drop policy if exists "cartao_select_privacidade_v1" on public.cartao;
+drop policy if exists "contas_fixas_select_privacidade_v1" on public.contas_fixas;
+drop policy if exists "extrato_select_privacidade_v1" on public.extrato;
 
 create policy "cartao_select_privacidade_v1"
 on public.cartao for select to authenticated

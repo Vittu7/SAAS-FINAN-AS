@@ -200,7 +200,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
             <div className="p-4 bg-slate-900/50 rounded-xl border border-line">
               <p className="text-sm mb-1 font-medium">Código para novos usuários</p>
               <code className="block p-2 bg-black/40 rounded text-xs select-all text-center text-emerald-400 font-mono">
-                {meuPerfil.grupo_id}
+                {meuPerfil.grupos_familiares?.convite_codigo}
               </code>
             </div>
 

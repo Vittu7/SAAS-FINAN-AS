@@ -1,33 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+
+type PerfilGrupo = {
+  id: string;
+  grupo_id: string | null;
+  cargo: string | null;
+  grupos_familiares: { nome: string; convite_codigo: string } | null;
+};
 
 export default function FamiliaPage() {
   const router = useRouter();
   const [nomeGrupo, setNomeGrupo] = useState("");
   const [carregando, setCarregando] = useState(false);
-  const [meuPerfil, setMeuPerfil] = useState<any>(null);
+  const [meuPerfil, setMeuPerfil] = useState<PerfilGrupo | null>(null);
 
-  useEffect(() => {
-    carregarPerfil();
-  }, []);
-
-  const carregarPerfil = async () => {
+  const carregarPerfil = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return router.push("/login");
+    if (!user) {
+      router.push("/login");
+      return;
+    }
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("perfis")
-      .select("*, grupos_familiares(nome, convite_codigo)")
+      .select("id, grupo_id, cargo, grupos_familiares(nome, convite_codigo)")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (data) setMeuPerfil(data);
-  };
+    if (data) setMeuPerfil(data as unknown as PerfilGrupo);
+  }, [router]);
 
-  const criarGrupo = async (e: React.FormEvent) => {
+  useEffect(() => {
+    void carregarPerfil();
+  }, [carregarPerfil]);
+
+  const criarGrupo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCarregando(true);
 
@@ -44,9 +54,10 @@ export default function FamiliaPage() {
       if (error) throw error;
 
       alert("Grupo familiar criado com sucesso!");
-      carregarPerfil(); // Recarrega a tela
-    } catch (error: any) {
-      alert("Erro ao criar grupo: " + error.message);
+      await carregarPerfil();
+    } catch (error: unknown) {
+      const mensagem = error instanceof Error ? error.message : "Erro inesperado.";
+      alert("Erro ao criar grupo: " + mensagem);
     } finally {
       setCarregando(false);
     }
@@ -62,7 +73,6 @@ export default function FamiliaPage() {
             Seu Grupo: <span className="text-accent">{meuPerfil.grupos_familiares?.nome}</span>
           </h2>
           <p className="text-muted mb-4">Você é o <strong>{meuPerfil.cargo}</strong> deste grupo.</p>
-          
           <div className="bg-background p-4 rounded-lg border border-line">
             <p className="text-sm">Para convidar sua mãe ou pai, peça para eles criarem uma conta e informe este código de convite para eles entrarem:</p>
             <code className="block mt-2 p-2 bg-surface rounded text-xs select-all">
@@ -75,7 +85,6 @@ export default function FamiliaPage() {
           <div>
             <h2 className="text-xl font-semibold mb-2">Criar um Novo Grupo Familiar</h2>
             <p className="text-sm text-muted mb-4">Crie um grupo para compartilhar despesas com seus familiares.</p>
-            
             <label className="text-xs font-medium text-muted block mb-1">Nome do Grupo (ex: Casa Araguaína)</label>
             <input
               type="text"
@@ -86,7 +95,6 @@ export default function FamiliaPage() {
               placeholder="Digite o nome do grupo..."
             />
           </div>
-          
           <button
             type="submit"
             disabled={carregando}

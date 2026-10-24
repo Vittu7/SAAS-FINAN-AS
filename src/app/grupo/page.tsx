@@ -66,7 +66,7 @@ export default function FamiliaPage() {
           <div className="bg-background p-4 rounded-lg border border-line">
             <p className="text-sm">Para convidar sua mãe ou pai, peça para eles criarem uma conta e informe este código de convite para eles entrarem:</p>
             <code className="block mt-2 p-2 bg-surface rounded text-xs select-all">
-              {meuPerfil.grupo_id}
+              {meuPerfil.grupos_familiares?.convite_codigo}
             </code>
           </div>
         </div>

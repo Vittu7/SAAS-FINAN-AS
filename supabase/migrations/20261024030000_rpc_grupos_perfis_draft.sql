@@ -4,6 +4,12 @@
 
 begin;
 
+-- Código de convite aleatório separado do ID público do grupo.
+alter table public.grupos_familiares
+  add column if not exists convite_codigo uuid not null default gen_random_uuid();
+create unique index if not exists grupos_familiares_convite_codigo_uidx
+  on public.grupos_familiares (convite_codigo);
+
 create or replace function public.garantir_meu_perfil(p_nome_usuario text default 'Usuário')
 returns uuid
 language plpgsql
@@ -95,7 +101,9 @@ begin
 end;
 $$;
 
-create or replace function public.entrar_grupo_por_convite(p_grupo_id uuid, p_nome_usuario text default 'Usuário')
+drop function if exists public.entrar_grupo_por_convite(uuid, text);
+
+create function public.entrar_grupo_por_convite(p_codigo_convite uuid, p_nome_usuario text default 'Usuário')
 returns uuid
 language plpgsql
 security definer
@@ -104,12 +112,16 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_perfil_id uuid;
+  v_grupo_id uuid;
 begin
   if v_user_id is null then raise exception 'É necessário estar autenticado.'; end if;
-  if p_grupo_id is null or not exists (
-    select 1 from public.grupos_familiares where id = p_grupo_id
-  ) then
-    raise exception 'Código do grupo inválido.';
+
+  select id into v_grupo_id
+  from public.grupos_familiares
+  where convite_codigo = p_codigo_convite;
+
+  if v_grupo_id is null then
+    raise exception 'Código de convite inválido.';
   end if;
 
   perform public.garantir_meu_perfil(p_nome_usuario);
@@ -122,16 +134,16 @@ begin
 
   if exists (
     select 1 from public.perfis
-    where user_id = v_user_id and grupo_id is not null and grupo_id <> p_grupo_id
+    where user_id = v_user_id and grupo_id is not null and grupo_id <> v_grupo_id
   ) then
     raise exception 'Você já participa de outro grupo. Saia dele antes de entrar neste.';
   end if;
 
   update public.perfis
-     set grupo_id = p_grupo_id, cargo = 'membro'
+     set grupo_id = v_grupo_id, cargo = 'membro'
    where id = v_perfil_id;
 
-  return p_grupo_id;
+  return v_grupo_id;
 end;
 $$;
 

@@ -38,13 +38,13 @@ using (
     legado_privacidade_v1 is true
     and privado is not true
     and (
-      responsavel_id in (select public.meus_membros())
+      (responsavel_id = auth.uid() or responsavel_id in (select p.id from public.perfis p where p.user_id = auth.uid()))
     )
   )
   or (
     legado_privacidade_v1 is false
     and privado is not true
-    and grupo_id in (select public.meus_grupos())
+    and exists (select 1 from public.perfis p where p.user_id = auth.uid() and p.grupo_id = cartao.grupo_id)
     and (
       compartilhado_com = auth.uid()
       or compartilhado_com in (select id from public.perfis where user_id = auth.uid())
@@ -60,12 +60,12 @@ using (
   or (
     legado_privacidade_v1 is true
     and (
-      responsavel_id in (select public.meus_membros())
+      (responsavel_id = auth.uid() or responsavel_id in (select p.id from public.perfis p where p.user_id = auth.uid()))
     )
   )
   or (
     legado_privacidade_v1 is false
-    and grupo_id in (select public.meus_grupos())
+    and exists (select 1 from public.perfis p where p.user_id = auth.uid() and p.grupo_id = contas_fixas.grupo_id)
     and (
       compartilhado_com = auth.uid()
       or compartilhado_com in (select id from public.perfis where user_id = auth.uid())
@@ -82,13 +82,13 @@ using (
     legado_privacidade_v1 is true
     and privado is not true
     and (
-      responsavel_id in (select public.meus_membros())
+      (responsavel_id = auth.uid() or responsavel_id in (select p.id from public.perfis p where p.user_id = auth.uid()))
     )
   )
   or (
     legado_privacidade_v1 is false
     and privado is not true
-    and grupo_id in (select public.meus_grupos())
+    and exists (select 1 from public.perfis p where p.user_id = auth.uid() and p.grupo_id = extrato.grupo_id)
     and (
       compartilhado_com = auth.uid()
       or compartilhado_com in (select id from public.perfis where user_id = auth.uid())

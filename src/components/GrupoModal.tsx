@@ -204,6 +204,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
               </code>
             </div>
 
+            {meuPerfil?.cargo === "gestor" && (
             {/* Adicionar Convidado sem Conta */}
             <div className="border-t border-line pt-3">
               {!adicionandoConvidado ? (
@@ -263,6 +264,8 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
+            )}
+
             {/* Lista de Membros e Seleção de Cor em Círculo */}
             <div>
               <p className="text-sm font-semibold mb-2">Pessoas no Grupo ({membros.length})</p>
@@ -273,6 +276,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                       {/* Foto do perfil ou inicial do nome */}
                       <Avatar src={m.avatar_url} nome={m.nome_usuario} cor={m.cor} tamanho={36} />
 
+                      {meuPerfil?.cargo === "gestor" && (
                       {/* Seletor de cor circular */}
                       <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border border-line shadow-sm cursor-pointer">
                         <input
@@ -283,6 +287,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                           title="Mudar cor desta pessoa"
                         />
                       </div>
+                      )}
 
                       <div>
                         <p className="font-medium text-xs flex items-center gap-1.5">
@@ -296,7 +301,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                       </div>
                     </div>
 
-                    {m.id !== meuPerfil.id && (
+                    {meuPerfil?.cargo === "gestor" && m.id !== meuPerfil.id && (
                       <button
                         onClick={() => removerMembro(m.id)}
                         className="inline-flex items-center gap-1 text-xs text-red-400 hover:underline"

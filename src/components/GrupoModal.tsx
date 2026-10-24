@@ -60,7 +60,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
       const { data: perfilCriado } = await supabase
         .from("perfis")
-        .select("*, grupos_familiares(nome)")
+        .select("*, grupos_familiares(nome, convite_codigo)")
         .eq("user_id", user.id)
         .maybeSingle();
       perfil = perfilCriado;
@@ -326,14 +326,14 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         ) : (
           <form onSubmit={gerenciarGrupo} className="space-y-4">
             <label className="text-sm font-medium text-muted">
-              {modo === "criar" ? "Nome do Grupo (ex: Casa Araguaína)" : "Cole o Código do Grupo"}
+              {modo === "criar" ? "Nome do Grupo (ex: Casa Araguaína)" : "Cole o código de convite"}
             </label>
             <input
               type="text"
               required
               value={inputValor}
               onChange={(e) => setInputValor(e.target.value)}
-              placeholder={modo === "criar" ? "Nome do grupo..." : "Cole o ID aqui..."}
+              placeholder={modo === "criar" ? "Nome do grupo..." : "Cole o código de convite aqui..."}
               className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-sm focus:ring-2 focus:ring-accent outline-none"
             />
             <div className="flex gap-2">

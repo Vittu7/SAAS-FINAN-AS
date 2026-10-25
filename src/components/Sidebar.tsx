@@ -34,7 +34,7 @@ const SECOES: { titulo: string; itens: { id: string; rotulo: string }[] }[] = [
       { id: "fatura", rotulo: "Cartões e Faturas" },
       { id: "cartao", rotulo: "Contas parceladas" },
       { id: "contas", rotulo: "Contas fixas" },
-      { id: "lancamentos", rotulo: "lançamentos do mês" },
+      { id: "lancamentos", rotulo: "Lançamentos do Mês" },
     ],
   },
   {
@@ -43,6 +43,10 @@ const SECOES: { titulo: string; itens: { id: string; rotulo: string }[] }[] = [
       { id: "graficos", rotulo: "Gráficos e relatórios" },
       { id: "investimentos", rotulo: "Investimentos" },
     ],
+  },
+  {
+    titulo: "Suporte",
+    itens: [{ id: "ajuda", rotulo: "Central de ajuda" }],
   },
 ];
 

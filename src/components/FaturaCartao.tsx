@@ -5,13 +5,16 @@ import { useState } from 'react';
 import { useOpcoes } from '@/lib/useOpcoes';
 import { calcularFatura } from '@/lib/faturas';
 import { addMeses, brl, pct as porc, rotuloMes } from '@/lib/finance';
+import EstadoVazio from '@/components/EstadoVazio';
+import CadastrarCartaoModal from '@/components/CadastrarCartaoModal';
+import { ICONE_ABA } from '@/components/icons';
 import PessoaIcone from '@/components/PessoaIcone';
 import { gradienteCartao } from '@/lib/cartao';
 import type { Estado } from '@/lib/types';
 
 /** Mesmo visual da tela de Contas parceladas: carrossel de cartões + lista em painel. */
 export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; mes: string; setMes: (mes: string) => void }) {
-  const { pagamento, corPagamento } = useOpcoes();
+  const { pagamento, corPagamento, recarregar } = useOpcoes();
   // Cartões com a maior fatura do mês aparecem primeiro
   const cartoes = pagamento
     .filter((i) => i.eh_cartao)
@@ -19,8 +22,14 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
     .sort((a, b) => b.total - a.total || a.c.nome.localeCompare(b.c.nome, 'pt-BR'))
     .map((x) => x.c);
   const [id, setId] = useState('');
+  const [cadastrando, setCadastrando] = useState(false);
   const escolhido = cartoes.find((i) => i.id === id) || cartoes[0];
-  if (!escolhido) return <p className="py-6 text-muted">Nenhum cartão de crédito cadastrado. Acesse Configurações → Cadastros → Cartões.</p>;
+  if (!escolhido) return (
+    <>
+      <EstadoVazio icone={ICONE_ABA.fatura} titulo="Nenhum cartão cadastrado" descricao="Aqui você acompanha a fatura e o limite de cada cartão de crédito. Para começar, cadastre o seu primeiro cartão." passos={["Informe o nome do cartão", "Informe o limite total (opcional)", "Escolha uma cor e salve"]} acao={{ rotulo: "Cadastrar primeiro cartão", onClick: () => setCadastrando(true) }} />
+      {cadastrando && <CadastrarCartaoModal onFechar={() => setCadastrando(false)} onConcluir={() => recarregar()} />}
+    </>
+  );
   const fatura = calcularFatura(estado, escolhido.nome, mes, Number(escolhido.limite) || 0);
 
   return (

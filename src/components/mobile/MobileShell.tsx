@@ -12,7 +12,7 @@ import Avatar from "@/components/Avatar";
 import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import DialogResponsivo from "@/components/DialogResponsivo";
 
-type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajustes";
+type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "ajustes";
 
 /* ---------- Cabeçalho do app no celular ---------- */
 export function MobileHeader({
@@ -161,13 +161,16 @@ const MODULOS: Record<string, { r: string; s: LucideIcon }> = {
   fatura: { r: "Cartões", s: ICONE_ABA.fatura },
   graficos: { r: "Gráficos", s: ICONE_ABA.graficos },
   investimentos: { r: "Investimentos", s: ICONE_ABA.investimentos },
+  ajuda: { r: "Ajuda", s: ICONE_ABA.ajuda },
   cartao: { r: "Parceladas", s: ICONE_ABA.cartao },
   contas: { r: "Contas fixas", s: ICONE_ABA.contas },
   lancamentos: { r: "Lançamentos", s: ICONE_ABA.lancamentos },
 };
 
 export function MobileRecentes({ recentes, onAba }: { recentes: string[]; onAba: (a: Aba) => void }) {
-  const ids = [...recentes.filter((id) => MODULOS[id]), ...Object.keys(MODULOS)].filter((id, i, l) => l.indexOf(id) === i).slice(0, 3);
+  // Só o histórico REAL do usuário atual (nada de sugestões de outras pessoas)
+  const ids = recentes.filter((id, i, l) => MODULOS[id] && l.indexOf(id) === i).slice(0, 3);
+  if (ids.length === 0) return null;
   return (
     <section className="md:hidden" aria-label="Acessados recentemente">
       <p className="mb-2 px-1 text-xs font-medium text-muted">Acessados recentemente</p>
@@ -217,7 +220,7 @@ export function MobileBottomNav({ aba, onAba, onNova, onGrupo, perfil }: { aba: 
           <span className="grid h-7 w-12 place-items-center">
             {perfil ? <Avatar src={perfil.avatar} nome={perfil.nome} cor={perfil.cor} tamanho={26} anel={aba === "ajustes"} /> : <Ico icon={ICONE_ABA.ajustes} size={22} />}
           </span>
-          Perfil
+          <span className="max-w-full truncate px-0.5 text-[10px] leading-tight">Configurações</span>
         </button>
       </div>
     </nav>
@@ -297,8 +300,9 @@ export function MobileMenu({
           ))}
 
           <section>
-            <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Grupo</p>
+            <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Grupo e suporte</p>
             <button type="button" className={linha} onClick={() => { onFechar(); onGrupo(); }}><span className={icone}><Ico icon={ICONES.grupo} /></span>Gerenciar grupo</button>
+            <button type="button" className={linha} onClick={() => ir("ajuda")}><span className={icone}><Ico icon={ICONE_ABA.ajuda} /></span>Central de ajuda</button>
           </section>
 
           <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">Tema</p>

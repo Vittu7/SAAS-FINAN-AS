@@ -32,7 +32,7 @@ const TUTORIAIS = [
   },
 ];
 
-export default function AjudaEInstalacao({ mostrarConvite = false }: { mostrarConvite?: boolean }) {
+export default function AjudaEInstalacao({ mostrarConvite = false, onAbrirCentral }: { mostrarConvite?: boolean; onAbrirCentral?: () => void }) {
   const [aberto, setAberto] = useState(false);
   const [secao, setSecao] = useState<"guia" | "instalar">("guia");
   const [passo, setPasso] = useState(0);
@@ -132,6 +132,7 @@ export default function AjudaEInstalacao({ mostrarConvite = false }: { mostrarCo
                   </div>
                   <div className="flex gap-2">
                     {passo > 0 && <button type="button" onClick={() => setPasso((atual) => atual - 1)} className="rounded-lg border border-line px-3 py-2 text-sm text-ink hover:bg-background">Voltar</button>}
+                    {onAbrirCentral && <button type="button" onClick={() => { setAberto(false); onAbrirCentral(); }} className="rounded-lg px-3 py-2 text-sm font-medium text-accent hover:bg-accent/10">Central de ajuda</button>}
                     {passo < TUTORIAIS.length - 1 ? <button type="button" onClick={() => setPasso((atual) => atual + 1)} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent">Próximo</button> : <button type="button" onClick={() => setAberto(false)} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent">Concluir</button>}
                   </div>
                 </div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CalendarClock, CreditCard, Wallet } from "lucide-react";
 import { Ico } from "@/components/icons";
+import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import { SeletorOpcao } from "@/components/SeletorOpcao";
 import { useOpcoes } from "@/lib/useOpcoes";
@@ -24,6 +25,7 @@ export default function NovaTransacao({
   membros,
   userId,
   tipoInicial = "saida",
+  comoInicial = "avista",
   onFechar,
   onAdicionarExtrato,
   onAdicionarCartao,
@@ -33,14 +35,16 @@ export default function NovaTransacao({
   membros: Membro[];
   userId: string | null;
   tipoInicial?: Tipo;
+  comoInicial?: Como;
   onFechar: () => void;
   onAdicionarExtrato: (item: any) => Promise<void> | void;
   onAdicionarCartao: (item: any, gerarSeguintes: boolean) => Promise<void> | void;
   onAdicionarConta: (item: any) => Promise<void> | void;
 }) {
-  const { pagamento: formas, categoria: categorias } = useOpcoes();
+  const { pagamento: formas, categoria: categorias, recarregar } = useOpcoes();
   const [tipo, setTipo] = useState<Tipo>(tipoInicial);
-  const [como, setComo] = useState<Como>("avista");
+  const [como, setComo] = useState<Como>(comoInicial);
+  const [cadastrandoCartao, setCadastrandoCartao] = useState(false);
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -159,6 +163,14 @@ export default function NovaTransacao({
           </div>
         )}
 
+        {saida && como === "parcelado" && cartoes.length === 0 && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm" role="note">
+            <p className="font-semibold">Você ainda não cadastrou um cartão.</p>
+            <p className="mt-0.5 text-muted">Cadastre o cartão primeiro; leva menos de um minuto.</p>
+            <button type="button" onClick={() => setCadastrandoCartao(true)} className="mt-2 h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-on-accent">Cadastrar cartão</button>
+          </div>
+        )}
+
         {saida ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -225,6 +237,7 @@ export default function NovaTransacao({
           {salvando ? "Salvando..." : saida ? "Salvar saída" : "Salvar entrada"}
         </button>
       </form>
+      {cadastrandoCartao && <CadastrarCartaoModal onFechar={() => setCadastrandoCartao(false)} onConcluir={() => recarregar()} />}
     </DialogResponsivo>
   );
 }

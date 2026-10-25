@@ -1,4 +1,5 @@
 import {
+  CircleHelp,
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
@@ -54,6 +55,7 @@ export const ICONE_ABA: Record<string, LucideIcon> = {
   cartao: CalendarDays, // contas parceladas
   contas: CalendarClock, // contas fixas
   ajustes: Settings,
+  ajuda: CircleHelp,
   graficos: ChartPie,
   investimentos: ChartNoAxesCombined,
 };

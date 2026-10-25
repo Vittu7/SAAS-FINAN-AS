@@ -18,6 +18,17 @@ import SummaryCards from "@/components/SummaryCards";
 import TelaGraficos from "@/components/TelaGraficos";
 import TelaInvestimentos from "@/components/TelaInvestimentos";
 import NovaTransacao from "@/components/NovaTransacao";
+import EstadoVazio from "@/components/EstadoVazio";
+import DicaModulo from "@/components/DicaModulo";
+import BoasVindas from "@/components/BoasVindas";
+import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
+import TelaAjuda from "@/components/TelaAjuda";
+import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
+import { ICONE_ABA } from "@/components/icons";
+import { useOpcoes } from "@/lib/useOpcoes";
+import { useOnboarding } from "@/lib/onboarding";
+import { lerListaDoUsuario, salvarDoUsuario } from "@/lib/usuarioStorage";
+import { DICAS_MODULO } from "@/lib/dicasModulo";
 import MovimentacoesRecentes from "@/components/MovimentacoesRecentes";
 import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -39,7 +50,7 @@ import { supabase } from "@/lib/supabase";
 import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes, MobileSaldo } from "@/components/mobile/MobileShell";
 import CaixinhasDestaque from "@/components/CaixinhasDestaque";
 
-type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajustes";
+type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "ajustes";
 
 export default function Home() {
   const router = useRouter();
@@ -63,21 +74,17 @@ export default function Home() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const a = p.get("aba") as AbaId | null;
-    if (a && ["inicio", "extrato", "lancamentos", "cartao", "contas", "fatura", "graficos", "investimentos", "ajustes"].includes(a)) setAba(a);
+    if (a && ["inicio", "extrato", "lancamentos", "cartao", "contas", "fatura", "graficos", "investimentos", "ajuda", "ajustes"].includes(a)) setAba(a);
     const sec = p.get("secao") as SecaoAjustes | null;
     if (sec) setSecaoAjustes(sec);
     if (a) window.history.replaceState(null, "", "/");
   }, []);
 
-  useEffect(() => {
-    try { setRecentes(JSON.parse(localStorage.getItem("modulos-recentes") || "[]")); } catch { /* sem histórico */ }
-  }, []);
-
   const irPara = (a: AbaId) => {
-    if (["fatura", "cartao", "contas", "lancamentos", "graficos", "investimentos"].includes(a)) {
+    if (["fatura", "cartao", "contas", "lancamentos", "graficos", "investimentos", "ajuda"].includes(a)) {
       const novos = [a, ...recentes.filter((r) => r !== a)].slice(0, 6);
       setRecentes(novos);
-      try { localStorage.setItem("modulos-recentes", JSON.stringify(novos)); } catch { /* ignora */ }
+      salvarDoUsuario(userId, "recentes", novos); // histórico individual por usuário
     }
     setAba(a);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -115,6 +122,28 @@ export default function Home() {
 
   const { estado, userId, membros } = loja;
   const dashboard = useDashboardPreferences(userId);
+  const onb = useOnboarding(userId);
+  const { pagamento: formasPagamento } = useOpcoes();
+  const [novaPreset, setNovaPreset] = useState<{ tipo?: "saida" | "entrada"; como?: "avista" | "parcelado" | "fixa" }>({});
+  const [ajudaFoco, setAjudaFoco] = useState<string | null>(null);
+  const [cadastrandoCartao, setCadastrandoCartao] = useState(false);
+
+  // O histórico "Acessados recentemente" é individual: carrega só o do usuário logado.
+  useEffect(() => {
+    try { localStorage.removeItem("modulos-recentes"); } catch { /* chave antiga, que era compartilhada no aparelho */ }
+  }, []);
+  useEffect(() => {
+    setRecentes(lerListaDoUsuario(userId, "recentes"));
+  }, [userId]);
+
+  const abrirNova = (preset: { tipo?: "saida" | "entrada"; como?: "avista" | "parcelado" | "fixa" } = {}) => {
+    setNovaPreset(preset);
+    setNovaAberta(true);
+  };
+  const abrirAjuda = (topico?: string) => {
+    setAjudaFoco(topico ?? null);
+    irPara("ajuda");
+  };
 
   const passaFiltro = useCallback(
     (item: any) => {
@@ -207,18 +236,39 @@ export default function Home() {
   }
 
   const mostrarPainel = aba === "inicio";
+
+  // ---- Orientação para quem está começando ----
+  const totalLanc = estado.extrato.length + estado.cartao.length + estado.contas.length;
+  const nadaTotal = totalLanc === 0;
+  const nadaVisivel = estadoFiltrado.extrato.length + estadoFiltrado.cartao.length + estadoFiltrado.contas.length === 0;
+  const semParcelas = estadoFiltrado.cartao.length === 0;
+  const semContas = estadoFiltrado.contas.length === 0;
+  const temCartao = formasPagamento.some((f) => f.eh_cartao);
+  const temEntrada = estado.extrato.some((i: any) => i.tipo === "entrada") || (estado.config?.salario ?? 0) > 0;
+  const temSaida = estado.extrato.some((i: any) => i.tipo !== "entrada") || estado.cartao.length > 0 || estado.contas.length > 0;
+  const passosGuia: PassoGuia[] = [
+    { id: "entrada", titulo: "Lance sua primeira entrada", descricao: "Seu salário ou qualquer dinheiro que você recebeu.", feito: temEntrada, acao: "Lançar", onClick: () => abrirNova({ tipo: "entrada" }) },
+    { id: "saida", titulo: "Lance sua primeira saída", descricao: "Um gasto do dia a dia, como mercado ou transporte.", feito: temSaida, acao: "Lançar", onClick: () => abrirNova({ tipo: "saida", como: "avista" }) },
+    { id: "cartao", titulo: "Cadastre um cartão de crédito", descricao: "Para acompanhar fatura e limite.", feito: temCartao, opcional: true, acao: "Cadastrar", onClick: () => setCadastrandoCartao(true) },
+    { id: "fixa", titulo: "Cadastre uma conta fixa", descricao: "Aluguel, internet, assinaturas: o que se repete todo mês.", feito: estado.contas.length > 0, opcional: true, acao: "Cadastrar", onClick: () => abrirNova({ tipo: "saida", como: "fixa" }) },
+    { id: "grupo", titulo: "Organize o grupo da família", descricao: "Crie ou entre em um grupo para dividir despesas.", feito: membros.length > 1, opcional: true, acao: "Abrir", onClick: () => setModalGrupoAberto(true) },
+  ];
+  const mostrarGuia = onb.pronto && !onb.estado.guiaOculto && totalLanc <= 15 && passosGuia.some((p) => !p.feito);
+  const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
+  const dica = DICAS_MODULO[aba];
+  const nomeUsuario = membros.find((m) => m.id === userId)?.nome?.split(" ")[0];
   // Em Configurações nada depende de mês nem de visualização por pessoa; em Faturas o mês já tem seletor próprio
-  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos";
-  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos";
+  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda";
+  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda";
   const rotuloVisualizacao =
     membroSelecionado === "EU" ? "Somente eu" : membroSelecionado === "TODOS" ? "Todo o grupo" : membroSelecionado;
-  const mostrarFiltros = !mostrarPainel && aba !== "ajustes" && aba !== "fatura" && aba !== "graficos" && aba !== "investimentos";
+  const mostrarFiltros = !mostrarPainel && !(aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" ? nadaVisivel : false) && aba !== "ajustes" && aba !== "fatura" && aba !== "graficos" && aba !== "investimentos" && aba !== "ajuda";
 
   return (
     <div className="min-h-screen bg-background text-ink">
       <Sidebar
         onAbrirGrupo={() => setModalGrupoAberto(true)}
-        onNova={() => setNovaAberta(true)}
+        onNova={() => abrirNova()}
         membroSelecionado={membroSelecionado}
         setMembroSelecionado={setMembroSelecionado}
         listaMembros={nomesOutrosMembros}
@@ -235,7 +285,7 @@ export default function Home() {
         <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
             titulo={
-              aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
+              aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
                 ? "Extrato"
@@ -273,6 +323,8 @@ export default function Home() {
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
                   ? "Todas as movimentações do mês em um só lugar."
+                  : aba === "ajuda"
+                  ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
                   : aba === "graficos"
                   ? "Veja para onde o dinheiro vai e gere relatórios por período."
                   : aba === "investimentos"
@@ -326,13 +378,14 @@ export default function Home() {
               </div>}
 
               <div className="hidden md:block"><BotaoOcultarValores /></div>
-              <AjudaEInstalacao mostrarConvite={mostrarPainel} />
+              <AjudaEInstalacao mostrarConvite={mostrarPainel} onAbrirCentral={() => abrirAjuda()} />
               <ThemeToggle />
             </div>
           </header>
 
           {mostrarPainel && (
             <div className="anim-stagger space-y-5">
+              {mostrarGuia && <GuiaInicial passos={passosGuia} onOcultar={() => onb.atualizar({ guiaOculto: true })} onAjuda={() => abrirAjuda()} />}
               {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} onAbrirExtrato={setDetalheExtrato} />}
               {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} onAbrirExtrato={setDetalheExtrato} /></div>}
               <MobileRecentes recentes={recentes} onAba={irPara} />
@@ -376,10 +429,18 @@ export default function Home() {
             </div>
           )}
 
+          {dica && onb.pronto && !vazioDoModulo && (
+            <DicaModulo titulo={dica.titulo} passos={dica.passos} visivel={!onb.estado.dicas.includes(aba)} onDispensar={() => onb.dispensarDica(aba)} onVerTutorial={() => abrirAjuda(dica.tutorial)} />
+          )}
+
           <div className="min-w-0">
             <section className="min-w-0">
+              {aba === "ajuda" && <TelaAjuda foco={ajudaFoco} onIrPara={(a) => irPara(a as AbaId)} onRever={() => { onb.reiniciar(); irPara("inicio"); }} />}
               {aba === "ajustes" && <CentralAjustes key={secaoAjustes} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
-              {aba === "graficos" && (
+              {aba === "graficos" && nadaVisivel && (
+                <EstadoVazio icone={ICONE_ABA.graficos} titulo="Ainda não há dados para os gráficos" descricao="Os gráficos e relatórios são montados a partir dos seus lançamentos. Registre algumas entradas e saídas para começar a ver para onde o dinheiro vai." passos={["Toque em Nova transação", "Lance uma entrada (seu salário) e algumas saídas", "Volte aqui para ver a evolução e exportar relatórios"]} acao={{ rotulo: "Fazer o primeiro lançamento", onClick: () => abrirNova() }} />
+              )}
+              {aba === "graficos" && !nadaVisivel && (
                 <TelaGraficos
                   estadoCompleto={estadoFiltrado}
                   mes={mes}
@@ -390,7 +451,10 @@ export default function Home() {
               )}
               {aba === "investimentos" && <TelaInvestimentos />}
               {aba === "fatura" && <FaturaCartao estado={estado} mes={mes} setMes={setMes} />}
-              {aba === "extrato" && (
+              {aba === "extrato" && nadaVisivel && (
+                <EstadoVazio icone={ICONE_ABA.extrato} titulo="Seu extrato está vazio" descricao="O extrato reúne tudo o que você lançar: entradas, compras, parcelas e contas fixas." passos={["Toque em Nova transação", "Escolha Entrada ou Saída e preencha o valor", "Salve e o lançamento aparece aqui"]} acao={{ rotulo: "Fazer o primeiro lançamento", onClick: () => abrirNova() }} />
+              )}
+              {aba === "extrato" && !nadaVisivel && (
                 <ExtratoGeral
                   mes={mes}
                   extrato={extrato}
@@ -413,7 +477,10 @@ export default function Home() {
                 />
               )}
 
-              {aba === "cartao" && (
+              {aba === "cartao" && semParcelas && (
+                <EstadoVazio icone={ICONE_ABA.cartao} titulo="Nenhuma compra parcelada ainda" descricao="Registre uma compra parcelada uma vez e as próximas parcelas são criadas nos meses seguintes." passos={["Cadastre o cartão (se ainda não tiver)", "Lance a compra em Nova transação > Saída > Parcelado", "Acompanhe as parcelas aqui e em Cartões e Faturas"]} acao={{ rotulo: "Lançar compra parcelada", onClick: () => abrirNova({ tipo: "saida", como: "parcelado" }) }} acaoSecundaria={temCartao ? undefined : { rotulo: "Cadastrar cartão", onClick: () => setCadastrandoCartao(true) }} />
+              )}
+              {aba === "cartao" && !semParcelas && (
                 <CartaoTable
                   estado={estado}
                   mes={mes}
@@ -424,7 +491,10 @@ export default function Home() {
                 />
               )}
 
-              {aba === "contas" && (
+              {aba === "contas" && semContas && (
+                <EstadoVazio icone={ICONE_ABA.contas} titulo="Nenhuma conta fixa cadastrada" descricao="Contas fixas são as que se repetem todo mês, como aluguel, internet e assinaturas. Cadastre uma vez e ela reaparece todo mês para você marcar como paga." passos={["Toque em Cadastrar conta fixa", "Informe nome, valor e (se quiser) o dia do vencimento", "Marque como paga quando pagar"]} acao={{ rotulo: "Cadastrar conta fixa", onClick: () => abrirNova({ tipo: "saida", como: "fixa" }) }} />
+              )}
+              {aba === "contas" && !semContas && (
                 <ContasFixasTable
                   mes={mes}
                   itens={contas}
@@ -441,7 +511,7 @@ export default function Home() {
       </main>
 
       {/* Fora do container centralizado: barra fixa no rodapé e menu lateral */}
-      <MobileBottomNav perfil={membros.find((m) => m.id === userId) ? { nome: membros.find((m) => m.id === userId)!.nome, avatar: membros.find((m) => m.id === userId)!.avatar, cor: membros.find((m) => m.id === userId)!.cor } : undefined} aba={aba} onAba={irPara} onNova={() => setNovaAberta(true)} onGrupo={() => setModalGrupoAberto(true)} />
+      <MobileBottomNav perfil={membros.find((m) => m.id === userId) ? { nome: membros.find((m) => m.id === userId)!.nome, avatar: membros.find((m) => m.id === userId)!.avatar, cor: membros.find((m) => m.id === userId)!.cor } : undefined} aba={aba} onAba={irPara} onNova={() => abrirNova()} onGrupo={() => setModalGrupoAberto(true)} />
       <MobileMenu
         abaAtiva={aba}
         perfil={(() => { const eu = membros.find((m) => m.id === userId); return eu ? { nome: eu.nome, avatar: eu.avatar, cor: eu.cor } : undefined; })()}
@@ -450,11 +520,17 @@ export default function Home() {
         onFechar={() => setMenuMobile(false)}
         onGrupo={() => setModalGrupoAberto(true)}
       />
+      {onb.pronto && !onb.estado.boasVindas && nadaTotal && !novaAberta && (
+        <BoasVindas nome={nomeUsuario} onConcluir={() => onb.atualizar({ boasVindas: true })} />
+      )}
+      {cadastrandoCartao && <CadastrarCartaoModal onFechar={() => setCadastrandoCartao(false)} onLancarCompra={() => abrirNova({ tipo: "saida", como: "parcelado" })} />}
       {novaAberta && (
         <NovaTransacao
           mes={mes}
           membros={membros}
           userId={userId}
+          tipoInicial={novaPreset.tipo}
+          comoInicial={novaPreset.como}
           onFechar={() => setNovaAberta(false)}
           onAdicionarExtrato={loja.adicionarExtrato}
           onAdicionarCartao={loja.adicionarCartao}

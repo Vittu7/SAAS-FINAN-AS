@@ -44,18 +44,26 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     let { data: perfil } = await supabase
       .from("perfis")
-      .select("*, grupos_familiares(nome)")
+      .select("*, grupos_familiares(nome, convite_codigo)")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!perfil) {
       const nomePadrao = user.user_metadata?.full_name || user.email || "Usuário";
-      const { data: novoPerfil } = await supabase
+      const { error: erroCriacaoPerfil } = await supabase.rpc("garantir_meu_perfil", {
+        p_nome_usuario: nomePadrao,
+      });
+      if (erroCriacaoPerfil) {
+        console.error("Erro ao criar perfil:", erroCriacaoPerfil);
+        return;
+      }
+
+      const { data: perfilCriado } = await supabase
         .from("perfis")
-        .upsert([{ id: user.id, user_id: user.id, nome_usuario: nomePadrao, cargo: "membro", cor: "#10B981" }])
-        .select("*, grupos_familiares(nome)")
-        .single();
-      perfil = novoPerfil;
+        .select("*, grupos_familiares(nome, convite_codigo)")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      perfil = perfilCriado;
     }
 
     if (perfil) {
@@ -73,8 +81,18 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   };
 
   const alterarCorMembro = async (membroId: string, novaCor: string) => {
-    await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
-    carregarPerfilEMembros();
+    const { error } = await supabase.rpc("alterar_cor_perfil_grupo", {
+      p_perfil_id: membroId,
+      p_cor: novaCor,
+    });
+
+    if (error) {
+      alert("Não foi possível alterar a cor: " + error.message);
+      await carregarPerfilEMembros();
+      return;
+    }
+
+    await carregarPerfilEMembros();
   };
 
   const gerenciarGrupo = async (e: React.FormEvent) => {
@@ -84,37 +102,33 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     try {
       if (modo === "criar") {
-        const { data: grupo, error: erroGrupo } = await supabase
-          .from("grupos_familiares")
-          .insert([{ nome: inputValor }])
-          .select()
-          .single();
-
-        if (erroGrupo) throw erroGrupo;
-
         const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
-        await supabase.from("perfis").upsert({
-          id: user?.id,
-          user_id: user?.id,
-          nome_usuario: nomePadrao,
-          grupo_id: grupo.id,
-          cargo: "gestor",
-          cor: "#10B981",
+        if (!user) throw new Error("Faça login novamente para criar um grupo.");
+
+        const { error: erroGrupo } = await supabase.rpc("criar_grupo_familiar", {
+          p_nome: inputValor.trim(),
+          p_nome_usuario: nomePadrao,
         });
+        if (erroGrupo) throw erroGrupo;
 
         alert("Grupo criado com sucesso!");
       }
 
       if (modo === "entrar") {
         const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
-        await supabase.from("perfis").upsert({
-          id: user?.id,
-          user_id: user?.id,
-          nome_usuario: nomePadrao,
-          grupo_id: inputValor,
-          cargo: "membro",
-          cor: "#6366F1",
+        if (!user) throw new Error("Faça login novamente para entrar em um grupo.");
+
+        const codigoConvite = inputValor.trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(codigoConvite)) {
+          throw new Error("Código do grupo inválido. Confira o código e tente novamente.");
+        }
+
+        const { error: erroEntrada } = await supabase.rpc("entrar_grupo_por_convite", {
+          p_codigo_convite: codigoConvite,
+          p_nome_usuario: nomePadrao,
         });
+
+        if (erroEntrada) throw erroEntrada;
 
         alert("Você entrou no grupo!");
       }
@@ -134,15 +148,10 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     if (!nomeConvidado.trim() || !meuPerfil?.grupo_id) return;
     setCarregando(true);
 
-    const { error } = await supabase.from("perfis").insert([
-      {
-        nome_usuario: nomeConvidado.trim(),
-        grupo_id: meuPerfil.grupo_id,
-        cargo: "membro",
-        eh_convidado: true,
-        cor: corConvidado,
-      },
-    ]);
+    const { error } = await supabase.rpc("adicionar_convidado_grupo", {
+      p_nome: nomeConvidado.trim(),
+      p_cor: corConvidado,
+    });
 
     if (error) {
       alert("Erro ao adicionar convidado: " + error.message);
@@ -156,8 +165,18 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
   const removerMembro = async (membroId: string) => {
     if (!confirm("Deseja remover esta pessoa do grupo?")) return;
-    await supabase.from("perfis").delete().eq("id", membroId);
-    carregarPerfilEMembros();
+
+    const { error } = await supabase.rpc("remover_perfil_grupo", {
+      p_perfil_id: membroId,
+    });
+
+    if (error) {
+      alert("Não foi possível remover esta pessoa. Verifique se você tem permissão para gerenciar o grupo.");
+      console.error("Erro ao remover perfil do grupo:", error);
+      return;
+    }
+
+    await carregarPerfilEMembros();
   };
 
   return (
@@ -181,11 +200,12 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
             <div className="p-4 bg-slate-900/50 rounded-xl border border-line">
               <p className="text-sm mb-1 font-medium">Código para novos usuários</p>
               <code className="block p-2 bg-black/40 rounded text-xs select-all text-center text-emerald-400 font-mono">
-                {meuPerfil.grupo_id}
+                {meuPerfil.grupos_familiares?.convite_codigo}
               </code>
             </div>
 
             {/* Adicionar Convidado sem Conta */}
+            {meuPerfil?.cargo === "gestor" && (
             <div className="border-t border-line pt-3">
               {!adicionandoConvidado ? (
                 <button
@@ -244,6 +264,8 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
+            )}
+
             {/* Lista de Membros e Seleção de Cor em Círculo */}
             <div>
               <p className="text-sm font-semibold mb-2">Pessoas no Grupo ({membros.length})</p>
@@ -255,6 +277,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                       <Avatar src={m.avatar_url} nome={m.nome_usuario} cor={m.cor} tamanho={36} />
 
                       {/* Seletor de cor circular */}
+                      {meuPerfil?.cargo === "gestor" && (
                       <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border border-line shadow-sm cursor-pointer">
                         <input
                           type="color"
@@ -264,6 +287,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                           title="Mudar cor desta pessoa"
                         />
                       </div>
+                      )}
 
                       <div>
                         <p className="font-medium text-xs flex items-center gap-1.5">
@@ -277,7 +301,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                       </div>
                     </div>
 
-                    {m.id !== meuPerfil.id && (
+                    {meuPerfil?.cargo === "gestor" && m.id !== meuPerfil.id && (
                       <button
                         onClick={() => removerMembro(m.id)}
                         className="inline-flex items-center gap-1 text-xs text-red-400 hover:underline"
@@ -302,14 +326,14 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         ) : (
           <form onSubmit={gerenciarGrupo} className="space-y-4">
             <label className="text-sm font-medium text-muted">
-              {modo === "criar" ? "Nome do Grupo (ex: Casa Araguaína)" : "Cole o Código do Grupo"}
+              {modo === "criar" ? "Nome do Grupo (ex: Casa Araguaína)" : "Cole o código de convite"}
             </label>
             <input
               type="text"
               required
               value={inputValor}
               onChange={(e) => setInputValor(e.target.value)}
-              placeholder={modo === "criar" ? "Nome do grupo..." : "Cole o ID aqui..."}
+              placeholder={modo === "criar" ? "Nome do grupo..." : "Cole o código de convite aqui..."}
               className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-sm focus:ring-2 focus:ring-accent outline-none"
             />
             <div className="flex gap-2">

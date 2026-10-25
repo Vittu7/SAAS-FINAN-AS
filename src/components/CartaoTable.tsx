@@ -44,6 +44,9 @@ export default function CartaoTable({
   const [gerarSeguintes, setGerarSeguintes] = useState(true);
 
   const [membros, setMembros] = useState<string[]>([]);
+  const [membrosCompartilhamento, setMembrosCompartilhamento] = useState<{ id: string; nome: string }[]>([]);
+  const [grupoId, setGrupoId] = useState("");
+  const [visivelPara, setVisivelPara] = useState("privado");
   const [meuNome, setMeuNome] = useState("");
   const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<string[]>([]);
   const [menuResponsavelAberto, setMenuResponsavelAberto] = useState(false);
@@ -67,7 +70,7 @@ export default function CartaoTable({
 
     const { data: perfil } = await supabase
       .from("perfis")
-      .select("grupo_id, nome_usuario")
+      .select("id, grupo_id, nome_usuario")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -75,13 +78,15 @@ export default function CartaoTable({
 
     const nomeReal = perfil.nome_usuario || "Usuário";
     setMeuNome(nomeReal);
+    setGrupoId(perfil.grupo_id || "");
     setResponsaveisSelecionados((prev) => (prev.length > 0 ? prev : [nomeReal]));
 
     if (perfil.grupo_id) {
-      const { data } = await supabase.from("perfis").select("nome_usuario").eq("grupo_id", perfil.grupo_id);
+      const { data } = await supabase.from("perfis").select("id, nome_usuario").eq("grupo_id", perfil.grupo_id);
       if (data) {
         const nomes = data.map((m) => m.nome_usuario).filter(Boolean);
         setMembros(nomes.length > 0 ? nomes : [nomeReal]);
+        setMembrosCompartilhamento(data.filter((m) => m.id !== perfil.id && m.nome_usuario).map((m) => ({ id: m.id, nome: m.nome_usuario || "Membro" })));
       }
     }
   }, []);
@@ -125,6 +130,8 @@ export default function CartaoTable({
           parcelaAtual: Number(parcelaAtual) || 1,
           parcelaTotal: Number(parcelaTotal) || 1,
           responsavel: resp,
+          privado: visivelPara === "privado",
+          compartilhado_com: visivelPara === "grupo" ? grupoId || null : visivelPara !== "privado" ? visivelPara : null,
         },
         gerarSeguintes
       );
@@ -134,6 +141,7 @@ export default function CartaoTable({
     setDescricao("");
     setParcelaAtual(1);
     setParcelaTotal(1);
+    setVisivelPara("privado");
     setResponsaveisSelecionados([meuNome || "Usuário"]);
     setMenuResponsavelAberto(false);
   };
@@ -394,6 +402,15 @@ export default function CartaoTable({
               </div>
             </div>
           )}
+        </div>
+
+        <div className="lg:col-span-2">
+          <label className="mb-1 block text-xs font-medium text-muted">Quem pode ver?</label>
+          <select value={visivelPara} onChange={(e) => setVisivelPara(e.target.value)} className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent">
+            <option value="privado">Só eu</option>
+            <option value="grupo" disabled={!grupoId}>Todo o grupo</option>
+            {membrosCompartilhamento.map((membro) => <option key={membro.id} value={membro.id}>Só eu e {membro.nome}</option>)}
+          </select>
         </div>
 
         <div className="lg:col-span-2">

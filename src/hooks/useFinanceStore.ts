@@ -11,6 +11,7 @@ import type {
   Tabela,
 } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
+import { registroVisivelParaUsuario } from "@/lib/record-visibility";
 
 const VAZIO: Estado = {
   extrato: [],
@@ -111,9 +112,12 @@ export function useFinanceStore() {
 
     setMembros(listaMembros);
 
+    const compartilhamento = perfil?.id
+      ? `,compartilhado_com.eq.${user.id},compartilhado_com.eq.${perfil.id}`
+      : `,compartilhado_com.eq.${user.id}`;
     const filtro = gId
-      ? `owner_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}`
-      : `owner_id.eq.${user.id},responsavel_id.eq.${user.id}`;
+      ? `owner_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}${compartilhamento}`
+      : `owner_id.eq.${user.id},responsavel_id.eq.${user.id}${compartilhamento}`;
 
     const [resExtrato, resCartao, resContas] = await Promise.all([
       supabase.from("extrato").select("*").or(filtro),
@@ -121,9 +125,9 @@ export function useFinanceStore() {
       supabase.from("contas_fixas").select("*").or(filtro),
     ]);
 
-    // Partilha seletiva: além da regra no banco, esconde o que foi partilhado com outra pessoa
+    // Filtro visual de defesa em profundidade. A autorização real precisa estar nas políticas RLS.
     const visivel = (row: any) =>
-      !row.compartilhado_com || row.owner_id === user.id || row.compartilhado_com === user.id;
+      registroVisivelParaUsuario(row, user.id, gId, perfil?.id);
 
     setEstado({
       extrato: (resExtrato.data || []).filter(visivel).map((row: any) =>
@@ -366,6 +370,7 @@ export function useFinanceStore() {
         valor: conta.valor,
         forma_pagamento: conta.forma_pagamento || null,
         categoria: conta.categoria || null,
+        compartilhado_com: conta.compartilhado_com || null,
         vencimento: conta.vencimento
           ? Number(conta.vencimento)
           : null,

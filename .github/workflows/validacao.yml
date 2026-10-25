@@ -1,0 +1,37 @@
+name: Validacao do projeto
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: ["fix/privacidade-grupo-fase1"]
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        id: install
+        run: npm ci
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Verificar lint
+        run: npm run lint
+
+      - name: Validar build
+        if: always() && steps.install.outcome == 'success'
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-key

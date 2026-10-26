@@ -1,5 +1,6 @@
 "use client";
 
+import AutorTag from "@/components/AutorTag";
 import { ResponsavelChip } from "@/components/Avatar";
 import { ArrowRight, ChevronDown, Pencil, Plus, Settings2, Trash2, Users, X } from "lucide-react";
 import { ICONE_ABA, Ico } from "@/components/icons";
@@ -417,6 +418,7 @@ export default function CartaoTable({
           subtitulo: [item.cartao, item.categoria].filter(Boolean).join(" · "),
           valor: item.valor,
           icone: ICONE_ABA.cartao,
+          autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : "pendente") : null, 
           pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, 
           tags: [item.cartao, item.categoria, item.responsavel],
           status: { texto: `${item.parcelaAtual ?? 1}/${item.parcelaTotal ?? 1}`, tom: "neutro" as const },
@@ -454,7 +456,7 @@ export default function CartaoTable({
                   {item.parcelaAtual}/{item.parcelaTotal}
                 </td>
                 <td className="py-3">
-                  <ResponsavelChip nome={item.responsavel} cor={item.responsavelCor} avatar={item.responsavelAvatar} />
+                  <div className="flex flex-col items-start gap-1"><ResponsavelChip nome={item.responsavel} cor={item.responsavelCor} avatar={item.responsavelAvatar} />{item.lancadoPorOutro && <AutorTag nome={item.autorNome} avatar={item.autorAvatar} cor={item.autorCor} />}</div>
                 </td>
                 <td className="py-3 text-right font-bold">{brl(item.valor)}</td>
                 <td className="py-3 text-center">

@@ -12,6 +12,8 @@ export type FiltrosLancamentoState = {
   pagamento: string;
   tipo: string;
   status: string;
+  /** Quem lançou: todos | mim (lançados por mim) | grupo (lançados por outros membros) */
+  autoria: "todos" | "mim" | "grupo";
   /** Ordenação por valor: "" (padrão) | "maior" (maior → menor) | "menor" (menor → maior). */
   ordem: "" | "maior" | "menor";
 };
@@ -23,6 +25,7 @@ export const FILTROS_INICIAIS: FiltrosLancamentoState = {
   pagamento: "",
   tipo: "todos",
   status: "todos",
+  autoria: "todos",
   ordem: "",
 };
 
@@ -36,6 +39,8 @@ type Props = {
   pagamentos: string[];
   mostrarTipo?: boolean;
   mostrarStatus?: boolean;
+  /** Mostra os filtros "Lançados por mim / pelo grupo" (só faz sentido com mais de uma pessoa) */
+  mostrarAutoria?: boolean;
 };
 
 export default function FiltrosLancamentos({
@@ -47,13 +52,14 @@ export default function FiltrosLancamentos({
   pagamentos,
   mostrarTipo = false,
   mostrarStatus = false,
+  mostrarAutoria = false,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const ativos = Object.entries(filtros).filter(([chave, valor]) =>
-    chave === "tipo" || chave === "status" ? valor !== "todos" : Array.isArray(valor) ? valor.length > 0 : Boolean(valor),
+    chave === "tipo" || chave === "status" || chave === "autoria" ? valor !== "todos" : Array.isArray(valor) ? valor.length > 0 : Boolean(valor),
   ).length;
 
-  const atualizar = (campo: Exclude<keyof FiltrosLancamentoState, "responsavel">, valor: string) =>
+  const atualizar = (campo: Exclude<keyof FiltrosLancamentoState, "responsavel" | "autoria">, valor: string) =>
     setFiltros({ ...filtros, [campo]: valor } as FiltrosLancamentoState);
 
   const selectClass = "min-w-0 rounded-lg border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
@@ -82,6 +88,13 @@ export default function FiltrosLancamentos({
             onChange={(nomes) => setFiltros({ ...filtros, responsavel: nomes })}
           />
         </div>
+        {mostrarAutoria && (
+          <div className="col-span-full flex gap-1 rounded-full bg-background p-1 ring-1 ring-line sm:w-fit" role="group" aria-label="Quem lançou">
+            {([["todos", "Todos"], ["mim", "Lançados por mim"], ["grupo", "Lançados pelo grupo"]] as const).map(([id, r]) => (
+              <button key={id} type="button" aria-pressed={filtros.autoria === id} onClick={() => setFiltros({ ...filtros, autoria: id })} className={`h-9 flex-1 rounded-full px-3 text-xs font-semibold transition sm:flex-none sm:px-4 ${filtros.autoria === id ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`}>{r}</button>
+            ))}
+          </div>
+        )}
         <input
           type="search"
           value={filtros.busca}

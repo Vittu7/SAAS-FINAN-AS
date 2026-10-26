@@ -49,7 +49,9 @@ export function calcularMes(
   e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
   opts: { mes: string; salarioConfig?: number },
 ): ResumoMes {
-  const doMes = (o: Origem) => semDuplicados((e?.[o] || []).filter((i) => i?.mes === opts.mes), o);
+  // Itens marcados "foraDoMeuSaldo" (lançados por mim para outra pessoa, na visão "Somente eu") não entram:
+  // o gasto é de quem é o responsável, e o repasse é só um acerto entre membros (nunca vira entrada/saída).
+  const doMes = (o: Origem) => semDuplicados((e?.[o] || []).filter((i) => i?.mes === opts.mes && !i?.foraDoMeuSaldo), o);
   const extratoMes = doMes("extrato");
   const cartao = doMes("cartao");
   const contas = doMes("contas");

@@ -2,6 +2,7 @@
 
 import { ArrowDownLeft, Pencil, Trash2 } from "lucide-react";
 import PessoaIcone from "@/components/PessoaIcone";
+import AutorTag from "@/components/AutorTag";
 import { ICONE_ORIGEM_LINHA, Ico } from "@/components/icons";
 import { Selo } from "@/components/SeletorOpcao";
 import { brl } from "@/lib/finance";
@@ -88,6 +89,9 @@ function Linha({ linha: l, cor, onEditar, onRemover }: { linha: LinhaExtrato; co
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {l.categoria && <Selo nome={l.categoria} cor={cor} />}
           <span className="min-w-0 truncate text-xs text-muted">{[l.responsavel && <b key="r" className="font-semibold text-ink">{l.responsavel}</b>, l.forma].filter(Boolean).reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, " · ", x] : [x]), [])}</span>
+          {l.autor && <AutorTag nome={l.autor} avatar={l.autorAvatar} cor={l.autorCor} />}
+          {l.repasse === "pendente" && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Repasse pendente</span>}
+          {l.repasse === "pago" && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Repassado</span>}
         </div>
       </div>
 

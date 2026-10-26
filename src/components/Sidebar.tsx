@@ -28,6 +28,7 @@ const SECOES: { titulo: string; itens: { id: string; rotulo: string }[] }[] = [
     itens: [
       { id: "inicio", rotulo: "Início" },
       { id: "extrato", rotulo: "Extrato" },
+      { id: "grupo", rotulo: "Grupo familiar" },
     ],
   },
   {

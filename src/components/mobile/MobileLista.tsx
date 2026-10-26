@@ -4,6 +4,7 @@ import { Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { Ico } from "@/components/icons";
 import { useState } from "react";
 import { brl } from "@/lib/finance";
+import AutorTag from "@/components/AutorTag";
 import PessoaIcone, { type PessoaItem } from "@/components/PessoaIcone";
 
 export type ItemMobile = {
@@ -14,6 +15,9 @@ export type ItemMobile = {
   icone: LucideIcon;
   tags?: string[];
   pessoa?: PessoaItem | null;
+  /** Quando o lançamento foi feito por outra pessoa */
+  autor?: PessoaItem | null;
+  repasse?: "pendente" | "pago" | null;
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
   progresso?: number; // 0 a 100 (parcelas)
   onEditar?: () => void;
@@ -73,6 +77,13 @@ export default function MobileLista({
                       {i.pessoa?.nome && i.subtitulo && <span aria-hidden>·</span>}
                       {i.subtitulo}
                     </span>
+                    {(i.autor?.nome || i.repasse) && (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {i.autor?.nome && <AutorTag nome={i.autor.nome} avatar={i.autor.avatar} cor={i.autor.cor} />}
+                        {i.repasse === "pendente" && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Repasse pendente</span>}
+                        {i.repasse === "pago" && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Repassado</span>}
+                      </span>
+                    )}
                     {i.progresso != null && (
                       <span className="mt-1.5 block h-1 w-full max-w-32 overflow-hidden rounded-full bg-line">
                         <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.min(100, i.progresso)}%` }} />

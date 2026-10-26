@@ -23,6 +23,8 @@ import EstadoVazio from "@/components/EstadoVazio";
 import DicaModulo from "@/components/DicaModulo";
 import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
+import TelaGrupo from "@/components/TelaGrupo";
+import { lancamentosDoGrupo, resumoRepasses } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
@@ -42,6 +44,7 @@ import { ordenarPorValor } from "@/lib/extrato";
 import { useFinanceStore } from "@/hooks/useFinanceStore";
 import {
   addMeses,
+  brl,
   mesAtual,
   useValoresOcultos,
   resumoDoMes,
@@ -51,7 +54,7 @@ import { supabase } from "@/lib/supabase";
 import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes, MobileSaldo } from "@/components/mobile/MobileShell";
 import CaixinhasDestaque from "@/components/CaixinhasDestaque";
 
-type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "ajustes";
+type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
 
 export default function Home() {
   const router = useRouter();
@@ -75,7 +78,7 @@ export default function Home() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const a = p.get("aba") as AbaId | null;
-    if (a && ["inicio", "extrato", "lancamentos", "cartao", "contas", "fatura", "graficos", "investimentos", "ajuda", "ajustes"].includes(a)) setAba(a);
+    if (a && ["inicio", "extrato", "lancamentos", "cartao", "contas", "fatura", "graficos", "investimentos", "ajuda", "grupo", "ajustes"].includes(a)) setAba(a);
     const sec = p.get("secao") as SecaoAjustes | null;
     if (sec) setSecaoAjustes(sec);
     if (a) window.history.replaceState(null, "", "/");
@@ -126,6 +129,7 @@ export default function Home() {
   const onb = useOnboarding(userId);
   const { pagamento: formasPagamento } = useOpcoes();
   const [novaPreset, setNovaPreset] = useState<{ tipo?: "saida" | "entrada"; como?: "avista" | "parcelado" | "fixa" }>({});
+  const [grupoSub, setGrupoSub] = useState<"resumo" | "lancamentos" | "repasses">("resumo");
   const [ajudaFoco, setAjudaFoco] = useState<string | null>(null);
   const [cadastrandoCartao, setCadastrandoCartao] = useState(false);
 
@@ -141,6 +145,10 @@ export default function Home() {
     setNovaPreset(preset);
     setNovaAberta(true);
   };
+  const abrirGrupo = (sub: "resumo" | "lancamentos" | "repasses" = "resumo") => {
+    setGrupoSub(sub);
+    irPara("grupo");
+  };
   const abrirAjuda = (topico?: string) => {
     setAjudaFoco(topico ?? null);
     irPara("ajuda");
@@ -149,7 +157,8 @@ export default function Home() {
   const passaFiltro = useCallback(
     (item: any) => {
       if (membroSelecionado === "TODOS") return true;
-      if (membroSelecionado === "EU") return item.responsavel_id === userId;
+      // "Somente eu": o que é meu (responsável) e também o que EU lancei para outras pessoas
+      if (membroSelecionado === "EU") return item.responsavel_id === userId || item.owner_id === userId;
       return item.responsavel === membroSelecionado;
     },
     [membroSelecionado, userId]
@@ -160,15 +169,17 @@ export default function Home() {
     [membros, userId]
   );
 
-  const estadoFiltrado = useMemo(
-    () => ({
+  const estadoFiltrado = useMemo(() => {
+    // Na visão "Somente eu", o que lancei para outra pessoa aparece nas listas (identificado),
+    // mas não entra nos MEUS totais: o gasto é de quem é responsável e o repasse não conta duas vezes.
+    const marcar = (item: any) => (membroSelecionado === "EU" && item.lancadoParaOutro ? { ...item, foraDoMeuSaldo: true } : item);
+    return {
       ...estado,
-      extrato: estado.extrato.filter(passaFiltro),
-      cartao: estado.cartao.filter(passaFiltro),
-      contas: estado.contas.filter(passaFiltro),
-    }),
-    [estado, passaFiltro]
-  );
+      extrato: estado.extrato.filter(passaFiltro).map(marcar),
+      cartao: estado.cartao.filter(passaFiltro).map(marcar),
+      contas: estado.contas.filter(passaFiltro).map(marcar),
+    };
+  }, [estado, passaFiltro, membroSelecionado]);
 
   const arraysMensais = useMemo(
     () => ({
@@ -195,6 +206,8 @@ export default function Home() {
       const descricao = String(item.descricao || item.nome || "").toLocaleLowerCase("pt-BR");
       if (filtros.busca && !descricao.includes(filtros.busca.trim().toLocaleLowerCase("pt-BR"))) return false;
       if (filtros.responsavel.length > 0 && !filtros.responsavel.includes(item.responsavel)) return false;
+      if (filtros.autoria === "mim" && item.owner_id && item.owner_id !== userId) return false;
+      if (filtros.autoria === "grupo" && !(item.owner_id && item.owner_id !== userId)) return false;
       if (filtros.categoria && item.categoria !== filtros.categoria) return false;
       const pagamento = item.pagamento || item.forma_pagamento || item.cartao || "";
       if (filtros.pagamento && pagamento !== filtros.pagamento) return false;
@@ -203,7 +216,7 @@ export default function Home() {
       }
       return true;
     },
-    [aba, filtros]
+    [aba, filtros, userId]
   );
 
   // A ordenação por valor combina com todos os demais filtros e só vale nos módulos de listagem
@@ -255,12 +268,13 @@ export default function Home() {
     { id: "grupo", titulo: "Organize o grupo da família", descricao: "Crie ou entre em um grupo para dividir despesas.", feito: membros.length > 1, opcional: true, acao: "Abrir", onClick: () => setModalGrupoAberto(true) },
   ];
   const mostrarGuia = onb.pronto && !onb.estado.guiaOculto && totalLanc <= 15 && passosGuia.some((p) => !p.feito);
+  const repasses = resumoRepasses(lancamentosDoGrupo(estado), userId || "");
   const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
   const dica = DICAS_MODULO[aba];
   const nomeUsuario = membros.find((m) => m.id === userId)?.nome?.split(" ")[0];
   // Em Configurações nada depende de mês nem de visualização por pessoa; em Faturas o mês já tem seletor próprio
-  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda";
-  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda";
+  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
+  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
   const rotuloVisualizacao =
     membroSelecionado === "EU" ? "Somente eu" : membroSelecionado === "TODOS" ? "Todo o grupo" : membroSelecionado;
   const mostrarFiltros = !mostrarPainel && !(aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" ? nadaVisivel : false) && aba !== "ajustes" && aba !== "fatura" && aba !== "graficos" && aba !== "investimentos" && aba !== "ajuda";
@@ -268,7 +282,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background text-ink">
       <Sidebar
-        onAbrirGrupo={() => setModalGrupoAberto(true)}
+        onAbrirGrupo={() => abrirGrupo()}
         onNova={() => abrirNova()}
         membroSelecionado={membroSelecionado}
         setMembroSelecionado={setMembroSelecionado}
@@ -286,7 +300,7 @@ export default function Home() {
         <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
             titulo={
-              aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
+              aba === "grupo" ? "Grupo familiar" : aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
                 ? "Extrato"
@@ -324,6 +338,8 @@ export default function Home() {
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
                   ? "Todas as movimentações do mês em um só lugar."
+                  : aba === "grupo"
+                  ? "Resumo por pessoa, lançamentos entre membros e valores a repassar."
                   : aba === "ajuda"
                   ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
                   : aba === "graficos"
@@ -387,6 +403,19 @@ export default function Home() {
           {mostrarPainel && (
             <div className="anim-stagger space-y-5">
               {mostrarGuia && <GuiaInicial passos={passosGuia} onOcultar={() => onb.atualizar({ guiaOculto: true })} onAjuda={() => abrirAjuda()} />}
+              {userId && (repasses.aReceber.agora > 0 || repasses.aRepassar.agora > 0) && (
+                <button type="button" onClick={() => abrirGrupo("repasses")} className="card-glass flex w-full items-center justify-between gap-3 p-4 text-left transition hover:-translate-y-0.5" aria-label="Ver valores a repassar">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold">Valores a repassar</span>
+                    <span className="block text-xs text-muted">
+                      {repasses.aReceber.agora > 0 && <>Você tem <b className="text-emerald-700 dark:text-emerald-400">{brl(repasses.aReceber.agora)}</b> a receber</>}
+                      {repasses.aReceber.agora > 0 && repasses.aRepassar.agora > 0 && " · "}
+                      {repasses.aRepassar.agora > 0 && <>Você deve repassar <b className="text-amber-700 dark:text-amber-400">{brl(repasses.aRepassar.agora)}</b></>}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-accent">Ver</span>
+                </button>
+              )}
               {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} onAbrirExtrato={setDetalheExtrato} />}
               {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} onAbrirExtrato={setDetalheExtrato} /></div>}
               <MobileRecentes recentes={recentes} onAba={irPara} />
@@ -422,6 +451,7 @@ export default function Home() {
                 setFiltros={setFiltros}
                 responsaveis={opcoesFiltro.responsaveis}
                 pessoas={membros.map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
+                mostrarAutoria={membros.length > 1}
                 categorias={opcoesFiltro.categorias}
                 pagamentos={opcoesFiltro.pagamentos}
                 mostrarTipo={aba === "extrato"}
@@ -436,6 +466,19 @@ export default function Home() {
 
           <div className="min-w-0">
             <section className="min-w-0">
+              {aba === "grupo" && (
+                <TelaGrupo
+                  key={grupoSub}
+                  abaInicial={grupoSub}
+                  dados={estado}
+                  membros={membros}
+                  userId={userId}
+                  mes={mes}
+                  onMarcarRepasses={loja.marcarRepasses}
+                  onGerenciar={() => setModalGrupoAberto(true)}
+                  onNova={() => abrirNova()}
+                />
+              )}
               {aba === "ajuda" && <TelaAjuda foco={ajudaFoco} onIrPara={(a) => irPara(a as AbaId)} onRever={() => { onb.reiniciar(); irPara("inicio"); }} />}
               {aba === "ajustes" && <CentralAjustes key={secaoAjustes} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
               {aba === "graficos" && nadaVisivel && (
@@ -512,7 +555,7 @@ export default function Home() {
       </main>
 
       {/* Fora do container centralizado: barra fixa no rodapé e menu lateral */}
-      <MobileBottomNav perfil={membros.find((m) => m.id === userId) ? { nome: membros.find((m) => m.id === userId)!.nome, avatar: membros.find((m) => m.id === userId)!.avatar, cor: membros.find((m) => m.id === userId)!.cor } : undefined} aba={aba} onAba={irPara} onNova={() => abrirNova()} onGrupo={() => setModalGrupoAberto(true)} />
+      <MobileBottomNav perfil={membros.find((m) => m.id === userId) ? { nome: membros.find((m) => m.id === userId)!.nome, avatar: membros.find((m) => m.id === userId)!.avatar, cor: membros.find((m) => m.id === userId)!.cor } : undefined} aba={aba} onAba={irPara} onNova={() => abrirNova()} onGrupo={() => abrirGrupo()} />
       <MobileMenu
         abaAtiva={aba}
         perfil={(() => { const eu = membros.find((m) => m.id === userId); return eu ? { nome: eu.nome, avatar: eu.avatar, cor: eu.cor } : undefined; })()}
@@ -520,7 +563,7 @@ export default function Home() {
         onAjustes={(secao) => { setSecaoAjustes(secao); irPara("ajustes"); }}
         aberto={menuMobile}
         onFechar={() => setMenuMobile(false)}
-        onGrupo={() => setModalGrupoAberto(true)}
+        onGrupo={() => abrirGrupo()}
       />
       {onb.pronto && !onb.estado.boasVindas && nadaTotal && !novaAberta && (
         <BoasVindas nome={nomeUsuario} onConcluir={() => onb.atualizar({ boasVindas: true })} />

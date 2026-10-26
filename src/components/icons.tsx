@@ -56,6 +56,7 @@ export const ICONE_ABA: Record<string, LucideIcon> = {
   contas: CalendarClock, // contas fixas
   ajustes: Settings,
   ajuda: CircleHelp,
+  grupo: Users,
   graficos: ChartPie,
   investimentos: ChartNoAxesCombined,
 };

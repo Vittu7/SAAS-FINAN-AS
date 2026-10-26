@@ -89,15 +89,16 @@ export const TUTORIAIS: Tutorial[] = [
     dicas: ["Aportes e resgates não entram em Entradas nem em Saídas do mês."],
   },
   {
-    id: "grupo", aba: "inicio", titulo: "Usar em família (grupo)",
-    resumo: "Reúna a família para dividir as finanças e saber quem é responsável por cada gasto.",
+    id: "grupo", aba: "grupo", titulo: "Grupo familiar, repasses e resumo por pessoa",
+    resumo: "Veja quem lançou cada gasto, o que cada pessoa deve repassar e o resumo de cada membro.",
     passos: [
-      "Abra Grupo (menu lateral ou barra inferior).",
-      "Sem grupo ainda? Crie um novo ou entre em um grupo existente usando o ID dele.",
-      "Para quem não tem conta, adicione um convidado com nome e cor.",
-      "Ao lançar, escolha quem paga e quem pode ver o lançamento.",
-      "Use o seletor de visualização no topo para ver só você, todo o grupo ou uma pessoa.",
+      "Abra Grupo familiar. Sem grupo ainda? Toque em Gerenciar grupo para criar um ou entrar com o ID.",
+      "Ao lançar uma despesa, abra Mais opções e escolha a pessoa responsável: o valor vai para Repasses dela.",
+      "Na aba Repasses, quem lançou marca “Recebi” quando a pessoa pagar. Isso não altera entradas nem saídas.",
+      "Na aba Lançamentos, filtre por tipo, responsável, autor e situação.",
+      "Na aba Resumo, veja entradas, despesas e saldo de cada pessoa. Você pode ocultar o seu resumo.",
     ],
+    dicas: ["Lançamentos feitos por outras pessoas aparecem com o selo “Lançado por …” em Extrato, Parceladas e Contas fixas.", "Use os filtros “Lançados por mim” e “Lançados pelo grupo” nesses módulos."],
   },
   {
     id: "config", aba: "ajustes", titulo: "Configurações e aparência",
@@ -122,6 +123,8 @@ export const PERGUNTAS: Pergunta[] = [
   { id: "ocultar", pergunta: "Como escondo os valores da tela?", resposta: "Toque no ícone de olho, no topo da tela. Todos os valores e porcentagens viram pontinhos. A escolha fica salva neste aparelho." },
   { id: "exportar", pergunta: "Como exporto um relatório?", resposta: "Vá em Gráficos e relatórios, aba Relatórios, escolha o período e toque em Exportar Excel (CSV) ou Exportar PDF.", aba: "graficos" },
   { id: "aporte", pergunta: "Um aporte em investimento conta como gasto?", resposta: "Não. Aportes, resgates e rendimentos ficam nas caixinhas e não entram em Entradas nem em Saídas.", aba: "investimentos" },
+  { id: "repasse", pergunta: "O que é “Valores a repassar”?", resposta: "É o acerto entre membros. Se você lança uma compra e define outra pessoa como responsável, ela deve repassar esse valor a você. Marcar como recebido só dá baixa no acerto: não cria entrada nem saída, então nada é contado duas vezes.", aba: "grupo" },
+  { id: "resumo-oculto", pergunta: "Como oculto meu resumo financeiro do grupo?", resposta: "Em Grupo familiar > Resumo, no seu cartão, desligue “Mostrar meu resumo ao grupo”. Os outros deixam de ver suas entradas, despesas e saldo nessa tela.", aba: "grupo" },
   { id: "privado", pergunta: "Posso lançar algo que só eu veja?", resposta: "Sim. Em Nova transação, abra “Mais opções” e, em “Quem pode ver”, escolha “Só eu”." },
   { id: "instalar", pergunta: "Posso instalar o HomeCash no celular?", resposta: "Sim. Toque em Ajuda no topo da tela e abra a aba “Instalar no celular” para ver o passo a passo do seu aparelho." },
 ];

@@ -230,6 +230,11 @@ export default function NovaTransacao({
           </details>
         )}
 
+        {saida && quem.some((n) => n !== meuNome) && (
+          <p className="rounded-xl bg-accent/8 px-3 py-2 text-xs text-muted" role="note">
+            <b className="text-ink">{quem.filter((n) => n !== meuNome).join(", ")}</b> {quem.filter((n) => n !== meuNome).length > 1 ? "ficam" : "fica"} como responsável{quem.filter((n) => n !== meuNome).length > 1 ? "is" : ""} e vai{quem.filter((n) => n !== meuNome).length > 1 ? "m" : ""} aparecer em Grupo &gt; Repasses, para repassar a você a parte de cada um.
+          </p>
+        )}
         <p className="text-xs text-muted">Será lançado em {rotuloMes(mes)}.</p>
         {erro && <p role="alert" className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-400">{erro}</p>}
 

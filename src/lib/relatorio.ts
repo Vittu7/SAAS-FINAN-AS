@@ -56,7 +56,7 @@ export function gerarRelatorio(e: Fonte, f: FiltroRelatorio, agora: Date = new D
   const meses = mesesDoPeriodo(f.de, f.ate);
   const escolhidos = f.responsaveis ?? [];
   const temFiltro = Boolean(escolhidos.length || f.categoria);
-  const manter = (i: Item) => (escolhidos.length === 0 || escolhidos.includes(i.responsavel)) && (!f.categoria || i.categoria === f.categoria);
+  const manter = (i: Item) => !i.foraDoMeuSaldo && (escolhidos.length === 0 || escolhidos.includes(i.responsavel)) && (!f.categoria || i.categoria === f.categoria);
   const fonte = {
     extrato: (e.extrato || []).filter(manter),
     cartao: (e.cartao || []).filter(manter),

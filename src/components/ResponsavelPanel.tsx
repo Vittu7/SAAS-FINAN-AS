@@ -76,17 +76,22 @@ export default function ResponsavelPanel({
       return lista.map((m) => ({ id: m.id, nome: m.nome, cor: m.cor, valor: resumo?.porResponsavel?.[m.nome] || 0, editavel: true, avatar: (m as any).avatar }));
     }
 
-    const extrato = (itens?.extrato || []).filter((i: any) => i.tipo !== "entrada");
-    const cartao = itens?.cartao || [];
-    const contas = itens?.contas || [];
+    // O que foi lançado por mim para outra pessoa não entra nos MEUS gastos por categoria,
+    // mas conta no cartão (a compra está no meu cartão e usa o meu limite).
+    const extratoTodos = (itens?.extrato || []).filter((i: any) => i.tipo !== "entrada");
+    const cartaoTodos = itens?.cartao || [];
+    const contasTodos = itens?.contas || [];
+    const extrato = extratoTodos.filter((i: any) => !i.foraDoMeuSaldo);
+    const cartao = cartaoTodos.filter((i: any) => !i.foraDoMeuSaldo);
+    const contas = contasTodos.filter((i: any) => !i.foraDoMeuSaldo);
     const mapa = new Map<string, number>();
     const somar = (nome: string, valor: number) => mapa.set(nome, (mapa.get(nome) || 0) + (Number(valor) || 0));
 
     if (visao === "cartao") {
       const nomesCartao = new Set(pagamento.filter((o) => o.eh_cartao).map((o) => o.nome));
-      for (const i of cartao) somar(i.cartao || "Cartão", i.valor);
-      for (const i of extrato) if (nomesCartao.has(i.pagamento)) somar(i.pagamento, i.valor);
-      for (const i of contas) if (nomesCartao.has(i.forma_pagamento)) somar(i.forma_pagamento, i.valor);
+      for (const i of cartaoTodos) somar(i.cartao || "Cartão", i.valor);
+      for (const i of extratoTodos) if (nomesCartao.has(i.pagamento)) somar(i.pagamento, i.valor);
+      for (const i of contasTodos) if (nomesCartao.has(i.forma_pagamento)) somar(i.forma_pagamento, i.valor);
       // Cartões cadastrados sem gasto também aparecem, para mostrar o limite livre
       for (const n of nomesCartao) if (!mapa.has(n)) mapa.set(n, 0);
       return [...mapa.entries()]

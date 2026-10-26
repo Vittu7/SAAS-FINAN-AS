@@ -1,5 +1,6 @@
 "use client";
 
+import AutorTag from "@/components/AutorTag";
 import { ResponsavelChip } from "@/components/Avatar";
 import { Check, ChevronDown, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import { ICONE_ABA, Ico } from "@/components/icons";
@@ -348,12 +349,12 @@ export default function ContasFixasTable({
         vazio="Nenhuma conta fixa cadastrada neste mês."
         resumo={{
           rotulo: "Falta pagar",
-          valor: itens.filter((i: any) => !i.pago).reduce((t: number, i: any) => t + (Number(i.valor) || 0), 0),
+          valor: itens.filter((i: any) => !i.pago && !i.foraDoMeuSaldo).reduce((t: number, i: any) => t + (Number(i.valor) || 0), 0),
           extra: `${itens.filter((i: any) => i.pago).length} de ${itens.length} pagas`,
         }}
         itens={[...itens].sort((x: any, y: any) => Number(x.pago) - Number(y.pago)).map((item: any) => ({
           id: item.id, titulo: item.nome || "Sem nome", subtitulo: [item.categoria, item.formaPagamento || item.forma_pagamento].filter(Boolean).join(" · "),
-          valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
+          valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : "pendente") : null, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
           status: item.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
           onAlternar: () => onTogglePago(item.id), rotuloAlternar: item.pago ? "Desmarcar" : "Marcar como paga",
           onEditar: () => setEditando(item), onRemover: () => onRemove(item.id),
@@ -428,7 +429,7 @@ export default function ContasFixasTable({
                   {item.vencimento ? `Dia ${item.vencimento}` : "—"}
                 </td>
                 <td className="py-3 pr-3">
-                  <ResponsavelChip nome={item.responsavel} cor={item.responsavelCor} avatar={item.responsavelAvatar} />
+                  <div className="flex flex-col items-start gap-1"><ResponsavelChip nome={item.responsavel} cor={item.responsavelCor} avatar={item.responsavelAvatar} />{item.lancadoPorOutro && <AutorTag nome={item.autorNome} avatar={item.autorAvatar} cor={item.autorCor} />}</div>
                 </td>
                 <td className="py-3 pr-3 text-right font-semibold tabular-nums">
                   {brl(item.valor)}

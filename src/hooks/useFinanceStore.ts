@@ -37,17 +37,33 @@ export interface Membro {
   cor: string | null;
   convidado: boolean;
   avatar: string | null;
+  /** Se o resumo financeiro desta pessoa aparece para o grupo (padrão: sim) */
+  resumoVisivel: boolean;
+  cargo?: string | null;
 }
 
 const COR_PADRAO_MEMBRO = "#64748B";
 
-function enriquecer(row: any, membros: Membro[]): any {
+function enriquecer(row: any, membros: Membro[], meuId?: string | null): any {
   const membro = membros.find((item) => item.id === row.responsavel_id);
+  const autor = membros.find((item) => item.id === row.owner_id);
+  const temAutor = Boolean(row.owner_id);
+  const temResp = Boolean(row.responsavel_id);
 
   const extras: Record<string, any> = {
     responsavel: membro?.nome ?? row.responsavel,
     responsavelCor: membro?.cor ?? COR_PADRAO_MEMBRO,
     responsavelAvatar: membro?.avatar ?? null,
+    // Quem lançou (autor) x quem é o responsável pelo gasto
+    autorId: row.owner_id ?? null,
+    autorNome: autor?.nome ?? null,
+    autorCor: autor?.cor ?? COR_PADRAO_MEMBRO,
+    autorAvatar: autor?.avatar ?? null,
+    lancadoPorOutro: temAutor && Boolean(meuId) && row.owner_id !== meuId,
+    lancadoParaOutro: temAutor && temResp && row.owner_id === meuId && row.responsavel_id !== meuId,
+    // Valor a repassar: o autor pagou e outra pessoa é a responsável
+    repasseDevido: temAutor && temResp && row.owner_id !== row.responsavel_id && row.tipo !== "entrada",
+    repassePago: Boolean(row.repasse_pago),
   };
 
   if (row.parcela_atual !== undefined) {
@@ -101,7 +117,7 @@ export function useFinanceStore() {
     if (gId) {
       const { data: perfisGrupo } = await supabase
         .from("perfis")
-        .select("id, nome_usuario, eh_convidado, cor, avatar_url")
+        .select("*")
         .eq("grupo_id", gId);
 
       listaMembros = (perfisGrupo || []).map((perfilMembro: any) => ({
@@ -110,6 +126,8 @@ export function useFinanceStore() {
         cor: perfilMembro.cor || null,
         convidado: Boolean(perfilMembro.eh_convidado),
         avatar: perfilMembro.avatar_url || null,
+        resumoVisivel: perfilMembro.resumo_visivel !== false,
+        cargo: perfilMembro.cargo || null,
       }));
     }
 
@@ -131,13 +149,13 @@ export function useFinanceStore() {
 
     setEstado({
       extrato: (resExtrato.data || []).filter(visivel).map((row: any) =>
-        enriquecer(row, listaMembros),
+        enriquecer(row, listaMembros, user.id),
       ),
       cartao: (resCartao.data || []).filter(visivel).map((row: any) =>
-        enriquecer(row, listaMembros),
+        enriquecer(row, listaMembros, user.id),
       ),
       contas: (resContas.data || []).filter(visivel).map((row: any) =>
-        enriquecer(row, listaMembros),
+        enriquecer(row, listaMembros, user.id),
       ),
       config: {
         salario: cfg?.salario || 0,
@@ -207,7 +225,7 @@ export function useFinanceStore() {
     if (data) {
       setEstado((atual) => ({
         ...atual,
-        extrato: [...atual.extrato, enriquecer(data, membros)],
+        extrato: [...atual.extrato, enriquecer(data, membros, userId)],
       }));
     }
   };
@@ -256,7 +274,7 @@ export function useFinanceStore() {
         ...atual,
         cartao: [
           ...atual.cartao,
-          ...data.map((row: any) => enriquecer(row, membros)),
+          ...data.map((row: any) => enriquecer(row, membros, userId)),
         ],
       }));
     }
@@ -299,7 +317,7 @@ export function useFinanceStore() {
     if (data) {
       setEstado((atual) => ({
         ...atual,
-        contas: [...atual.contas, enriquecer(data, membros)],
+        contas: [...atual.contas, enriquecer(data, membros, userId)],
       }));
     }
   };
@@ -406,7 +424,7 @@ export function useFinanceStore() {
 
           const contasNovas = data
             .filter((conta: any) => !idsExistentes.has(conta.id))
-            .map((conta: any) => enriquecer(conta, membros));
+            .map((conta: any) => enriquecer(conta, membros, userId));
 
           return {
             ...atual,
@@ -447,7 +465,7 @@ export function useFinanceStore() {
       return false;
     }
 
-    const atualizado = enriquecer(data[0], membros);
+    const atualizado = enriquecer(data[0], membros, userId);
 
     setEstado(
       (atual) =>
@@ -578,7 +596,57 @@ export function useFinanceStore() {
     }));
   };
 
+  /**
+   * Confirma (ou desfaz) o recebimento de valores a repassar. Só o autor do lançamento pode.
+   * Não cria entrada nem saída: o repasse é só o acerto entre membros, então nada é contado duas vezes.
+   */
+  const marcarRepasses = async (
+    itens: { origem: Tabela; id: string }[],
+    pago: boolean,
+  ): Promise<boolean> => {
+    if (!userId || itens.length === 0) return false;
+    const carimbo = pago ? new Date().toISOString() : null;
+
+    for (const origem of ["extrato", "cartao", "contas"] as Tabela[]) {
+      const ids = itens.filter((i) => i.origem === origem).map((i) => i.id);
+      if (ids.length === 0) continue;
+
+      const { data, error } = await supabase
+        .from(NOME_TABELA_DB[origem])
+        .update({ repasse_pago: pago, repasse_pago_em: carimbo })
+        .in("id", ids)
+        .eq("owner_id", userId)
+        .select("id");
+
+      if (error) {
+        const faltaColuna = /repasse_pago/.test(error.message);
+        alert(
+          faltaColuna
+            ? "Para controlar repasses, execute o script supabase-04-grupo-repasses.sql no Supabase."
+            : "Erro ao atualizar o repasse: " + error.message,
+        );
+        return false;
+      }
+      if (!data || data.length !== ids.length) {
+        alert("Só quem fez o lançamento pode confirmar o recebimento do repasse.");
+        return false;
+      }
+
+      const confirmados = new Set(ids);
+      setEstado((atual) => ({
+        ...atual,
+        [origem]: (atual[origem] as any[]).map((item) =>
+          confirmados.has(item.id)
+            ? { ...item, repasse_pago: pago, repasse_pago_em: carimbo, repassePago: pago }
+            : item,
+        ),
+      }) as Estado);
+    }
+    return true;
+  };
+
   return {
+    marcarRepasses,
     estado,
     pronto,
     userId,

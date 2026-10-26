@@ -20,6 +20,14 @@ export type LinhaExtrato = {
   responsavel: string;
   responsavelCor?: string | null;
   responsavelAvatar?: string | null;
+  /** Quem lançou (autor), quando é outra pessoa */
+  autor?: string | null;
+  autorAvatar?: string | null;
+  autorCor?: string | null;
+  /** Lançado por mim para outra pessoa (visão "Somente eu"): aparece, mas não entra nos meus totais */
+  foraDoSaldo?: boolean;
+  /** Valor a repassar já recebido? (somente quando há repasse) */
+  repasse?: "pendente" | "pago" | null;
   valor: number;
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
   /** Entrada de dinheiro (ex.: salário) — aparece em verde e não entra em totais de gasto. */
@@ -51,6 +59,11 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       responsavel: i.responsavel || "",
       responsavelCor: i.responsavelCor,
       responsavelAvatar: i.responsavelAvatar,
+      autor: i.lancadoPorOutro ? i.autorNome : null,
+      autorAvatar: i.autorAvatar,
+      autorCor: i.autorCor,
+      foraDoSaldo: Boolean(i.foraDoMeuSaldo),
+      repasse: (i.repasseDevido ? (i.repassePago ? "pago" : "pendente") : null) as "pago" | "pendente" | null,
       valor: num(i.valor),
       entrada: ehEntrada(i),
     })),
@@ -64,6 +77,11 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       responsavel: i.responsavel || "",
       responsavelCor: i.responsavelCor,
       responsavelAvatar: i.responsavelAvatar,
+      autor: i.lancadoPorOutro ? i.autorNome : null,
+      autorAvatar: i.autorAvatar,
+      autorCor: i.autorCor,
+      foraDoSaldo: Boolean(i.foraDoMeuSaldo),
+      repasse: (i.repasseDevido ? (i.repassePago ? "pago" : "pendente") : null) as "pago" | "pendente" | null,
       valor: num(i.valor),
       status: { texto: `Parcela ${i.parcelaAtual ?? i.parcela_atual ?? 1}/${i.parcelaTotal ?? i.parcela_total ?? 1}`, tom: "neutro" as const },
     })),
@@ -77,6 +95,11 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       responsavel: i.responsavel || "",
       responsavelCor: i.responsavelCor,
       responsavelAvatar: i.responsavelAvatar,
+      autor: i.lancadoPorOutro ? i.autorNome : null,
+      autorAvatar: i.autorAvatar,
+      autorCor: i.autorCor,
+      foraDoSaldo: Boolean(i.foraDoMeuSaldo),
+      repasse: (i.repasseDevido ? (i.repassePago ? "pago" : "pendente") : null) as "pago" | "pendente" | null,
       valor: num(i.valor),
       status: i.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
     })),
@@ -99,4 +122,4 @@ export function agruparPorOrigem(linhas: LinhaExtrato[]): GrupoExtrato[] {
     .filter((g) => g.linhas.length > 0);
 }
 
-export const totalGastos = (linhas: LinhaExtrato[]) => linhas.filter((l) => !l.entrada).reduce((s, l) => s + l.valor, 0);
+export const totalGastos = (linhas: LinhaExtrato[]) => linhas.filter((l) => !l.entrada && !l.foraDoSaldo).reduce((s, l) => s + l.valor, 0);

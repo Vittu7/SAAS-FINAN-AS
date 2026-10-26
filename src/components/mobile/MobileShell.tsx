@@ -13,7 +13,7 @@ import { sairDaConta } from "@/lib/auth";
 import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import DialogResponsivo from "@/components/DialogResponsivo";
 
-type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "ajustes";
+type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
 
 /* ---------- Cabeçalho do app no celular ---------- */
 export function MobileHeader({
@@ -216,7 +216,7 @@ export function MobileBottomNav({ aba, onAba, onNova, onGrupo, perfil }: { aba: 
             <Ico icon={ICONES.novo} size={26} />
           </button>
         </div>
-        <Item ativo={false} r="Grupo" s={ICONES.grupo} onClick={onGrupo} />
+        <Item ativo={aba === "grupo"} r="Grupo" s={ICONES.grupo} onClick={onGrupo} />
         <button type="button" onClick={() => onAba("ajustes")} aria-current={aba === "ajustes" ? "page" : undefined} className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px] font-medium transition ${aba === "ajustes" ? "text-accent" : "text-muted"}`}>
           <span className="grid h-7 w-12 place-items-center">
             {perfil ? <Avatar src={perfil.avatar} nome={perfil.nome} cor={perfil.cor} tamanho={26} anel={aba === "ajustes"} /> : <Ico icon={ICONE_ABA.ajustes} size={22} />}

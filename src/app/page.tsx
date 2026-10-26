@@ -17,6 +17,7 @@ import ResponsavelPanel from "@/components/ResponsavelPanel";
 import SummaryCards from "@/components/SummaryCards";
 import TelaGraficos from "@/components/TelaGraficos";
 import TelaInvestimentos from "@/components/TelaInvestimentos";
+import CompletarPerfilModal from "@/components/CompletarPerfilModal";
 import NovaTransacao from "@/components/NovaTransacao";
 import EstadoVazio from "@/components/EstadoVazio";
 import DicaModulo from "@/components/DicaModulo";
@@ -516,6 +517,7 @@ export default function Home() {
         abaAtiva={aba}
         perfil={(() => { const eu = membros.find((m) => m.id === userId); return eu ? { nome: eu.nome, avatar: eu.avatar, cor: eu.cor } : undefined; })()}
         onAba={irPara}
+        onAjustes={(secao) => { setSecaoAjustes(secao); irPara("ajustes"); }}
         aberto={menuMobile}
         onFechar={() => setMenuMobile(false)}
         onGrupo={() => setModalGrupoAberto(true)}
@@ -524,6 +526,7 @@ export default function Home() {
         <BoasVindas nome={nomeUsuario} onConcluir={() => onb.atualizar({ boasVindas: true })} />
       )}
       {cadastrandoCartao && <CadastrarCartaoModal onFechar={() => setCadastrandoCartao(false)} onLancarCompra={() => abrirNova({ tipo: "saida", como: "parcelado" })} />}
+      <CompletarPerfilModal />
       {novaAberta && (
         <NovaTransacao
           mes={mes}

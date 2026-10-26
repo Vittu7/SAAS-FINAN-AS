@@ -11,6 +11,7 @@ import type {
   Tabela,
 } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
+import { garantirPerfil } from "@/lib/perfil";
 
 const VAZIO: Estado = {
   extrato: [],
@@ -76,6 +77,9 @@ export function useFinanceStore() {
     }
 
     setUserId(user.id);
+
+    // Todo usuário precisa ter uma linha em "perfis" (nome, foto, grupo)
+    await garantirPerfil(supabase as any, user).catch(() => null);
 
     const { data: perfil } = await supabase
       .from("perfis")
@@ -145,6 +149,13 @@ export function useFinanceStore() {
 
     setPronto(true);
   }, []);
+
+  // Quando nome/foto mudam (Configurações ou boas-vindas), recarrega os membros para a foto aparecer em todo o sistema
+  useEffect(() => {
+    const aoMudarPerfil = () => void carregarDados();
+    window.addEventListener("homecash:perfil", aoMudarPerfil);
+    return () => window.removeEventListener("homecash:perfil", aoMudarPerfil);
+  }, [carregarDados]);
 
   useEffect(() => {
     void carregarDados();

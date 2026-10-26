@@ -87,18 +87,21 @@ export function useAparencia() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
 
-        if (user?.user_metadata) {
-          const { theme_color, theme_accent, theme_bg } = user.user_metadata;
+        if (user) {
+          const { theme_color, theme_accent, theme_bg } = user.user_metadata ?? {};
           let atualizado = false;
+          // Cor de destaque: a escolhida PELO PRÓPRIO usuário; sem escolha, o padrão é verde-água
+          // (nunca herda a cor que outra pessoa deixou neste aparelho).
+          const destaqueFinal = (theme_accent as Destaque) || "teal";
 
           if (theme_color && theme_color !== temaInicial) {
             setTema(theme_color);
             localStorage.setItem("homecash-theme", theme_color);
             atualizado = true;
           }
-          if (theme_accent && theme_accent !== destaqueInicial) {
-            setDestaque(theme_accent);
-            localStorage.setItem("homecash-accent", theme_accent);
+          if (destaqueFinal !== destaqueInicial) {
+            setDestaque(destaqueFinal);
+            localStorage.setItem("homecash-accent", destaqueFinal);
             atualizado = true;
           }
           if (theme_bg && theme_bg !== fundoInicial) {
@@ -108,7 +111,7 @@ export function useAparencia() {
           }
 
           if (atualizado) {
-            aplicarTema(theme_color || temaInicial, theme_accent || destaqueInicial);
+            aplicarTema(theme_color || temaInicial, destaqueFinal);
             aplicarFundo(theme_bg || fundoInicial);
             avisar();
           }

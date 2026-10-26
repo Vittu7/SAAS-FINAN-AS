@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { avatarDoProvedor, nomePadrao } from "@/lib/perfil";
+import { sairDaConta } from "@/lib/auth";
 import Avatar from "@/components/Avatar";
 import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
 
@@ -34,7 +36,7 @@ const SECOES: { titulo: string; itens: { id: string; rotulo: string }[] }[] = [
       { id: "fatura", rotulo: "Cartões e Faturas" },
       { id: "cartao", rotulo: "Contas parceladas" },
       { id: "contas", rotulo: "Contas fixas" },
-      { id: "lancamentos", rotulo: "Lançamentos do Mês" },
+      { id: "lancamentos", rotulo: "Tabela de lançamentos" },
     ],
   },
   {
@@ -64,7 +66,11 @@ export default function Sidebar({ onAbrirGrupo, onNova, abaAtiva, onSelecionarAb
       } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from("perfis").select("nome_usuario, avatar_url").eq("id", user.id).maybeSingle();
-      setPerfil({ nome: data?.nome_usuario || "Você", avatar: data?.avatar_url || null, email: user.email || "" });
+      setPerfil({
+        nome: data?.nome_usuario || nomePadrao(user),
+        avatar: data?.avatar_url || avatarDoProvedor(user),
+        email: user.email || "",
+      });
     };
     carregarPerfil();
     // Atualiza nome/foto quando o perfil muda em Configurações.
@@ -88,7 +94,7 @@ export default function Sidebar({ onAbrirGrupo, onNova, abaAtiva, onSelecionarAb
   };
 
   const sair = async () => {
-    await supabase.auth.signOut();
+    await sairDaConta(supabase);
     router.push("/login");
   };
 

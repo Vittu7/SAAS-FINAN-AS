@@ -1,4 +1,5 @@
 'use client';
+import { sairDaConta } from '@/lib/auth';
 import { Check, Crown, LayoutDashboard, Palette, type LucideIcon } from 'lucide-react';
 import { ICONES, Ico } from '@/components/icons';
 import { useState } from 'react';
@@ -46,7 +47,7 @@ export default function CentralAjustes({ preferencias, pronto, salvando, erro, o
   const [cadastro, setCadastro] = useState<Cadastro>('cartoes');
   const atual = SECOES.find((s) => s.id === secao)!;
 
-  const sair = async () => { await supabase.auth.signOut(); router.push('/login'); };
+  const sair = async () => { await sairDaConta(supabase); router.push('/login'); };
 
   return (
     <section className="grid min-w-0 gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
@@ -91,8 +92,8 @@ export default function CentralAjustes({ preferencias, pronto, salvando, erro, o
           <div className="card-glass overflow-hidden">
             <div className="bg-gradient-to-br from-accent to-accent/60 p-6 text-on-accent">
               <p className="text-xs font-medium uppercase tracking-wider opacity-80">Plano atual</p>
-              <p className="mt-1 text-2xl font-bold">Gratuito</p>
-              <p className="mt-1 text-sm opacity-90">Todos os recursos liberados durante o acesso antecipado.</p>
+              <p className="mt-1 text-2xl font-bold">Beta Teste</p>
+              <p className="mt-1 text-sm opacity-90">Todos os recursos liberados durante o acesso antecipado BETA.</p>
             </div>
             <ul className="divide-y divide-line p-2 text-sm">
               {['Lançamentos, parcelas e contas fixas ilimitados', 'Faturas de cartão com controle de limite', 'Grupo financeiro compartilhado', 'Temas e personalização'].map((t) => (

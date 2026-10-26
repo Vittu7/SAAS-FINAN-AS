@@ -9,6 +9,7 @@ import { ICONES, ICONE_ABA, Ico } from "@/components/icons";
 import { addMeses, brl, pct as porc, rotuloMes, useValoresOcultos, type Resumo } from "@/lib/finance";
 import { useAparencia } from "@/components/ThemeToggle";
 import Avatar from "@/components/Avatar";
+import { sairDaConta } from "@/lib/auth";
 import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import DialogResponsivo from "@/components/DialogResponsivo";
 
@@ -235,6 +236,7 @@ export function MobileMenu({
   onAba,
   perfil,
   abaAtiva,
+  onAjustes,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -242,6 +244,8 @@ export function MobileMenu({
   onAba: (a: Aba) => void;
   perfil?: { nome: string; avatar: string | null; cor: string | null; email?: string };
   abaAtiva?: Aba;
+  /** Abre Configurações já em uma seção específica (ex.: aparência) */
+  onAjustes?: (secao: "perfil" | "aparencia") => void;
 }) {
   const router = useRouter();
   const { tema, mudarTema } = useAparencia();
@@ -258,7 +262,7 @@ export function MobileMenu({
   if (!aberto || typeof document === "undefined") return null;
 
   const sair = async () => {
-    await supabase.auth.signOut();
+    await sairDaConta(supabase);
     router.push("/login");
   };
   const ir = (a: Aba) => { onFechar(); onAba(a); };
@@ -271,7 +275,7 @@ export function MobileMenu({
       <aside className="absolute inset-y-0 right-0 flex w-[min(85vw,340px)] flex-col bg-surface shadow-2xl" style={{ paddingTop: "max(env(safe-area-inset-top),16px)", paddingBottom: "max(env(safe-area-inset-bottom),16px)", animation: "hc-drawer-in .28s cubic-bezier(.2,.8,.2,1)" }}>
         <style>{`@keyframes hc-drawer-in{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
         <header className="flex items-center gap-3 px-4 pb-3">
-          <button type="button" onClick={() => ir("ajustes")} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1 text-left active:bg-background">
+          <button type="button" onClick={() => { onFechar(); (onAjustes ? onAjustes("perfil") : onAba("ajustes")); }} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1 text-left active:bg-background">
             <Avatar src={perfil?.avatar} nome={perfil?.nome} cor={perfil?.cor || "var(--accent)"} tamanho="lg" />
             <span className="min-w-0">
               <span className="block truncate text-base font-semibold">{perfil?.nome || "Meu perfil"}</span>
@@ -314,7 +318,7 @@ export function MobileMenu({
               </button>
             ))}
           </div>
-          <button type="button" className={`${linha} mt-1 text-muted`} onClick={() => ir("ajustes")}><span className={icone}><Ico icon={Palette} /></span>Mais opções de aparência</button>
+          <button type="button" className={`${linha} mt-1 text-muted`} onClick={() => { onFechar(); (onAjustes ? onAjustes("aparencia") : onAba("ajustes")); }}><span className={icone}><Ico icon={Palette} /></span>Mais opções de aparência</button>
         </div>
         <div className="border-t border-line px-3 pt-2">
           <button type="button" className={`${linha} text-rose-500`} onClick={sair}>

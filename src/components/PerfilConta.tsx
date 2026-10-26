@@ -5,6 +5,10 @@ import { Ico } from "@/components/icons";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import Avatar from "@/components/Avatar";
+import CampoSenha from "@/components/auth/CampoSenha";
+import { traduzirErroAuth, validarSenha } from "@/lib/auth";
+import { avatarDoProvedor, avisarPerfilAtualizado, enviarFotoPerfil, garantirPerfil, nomePadrao, salvarPerfil } from "@/lib/perfil";
 
 export default function PerfilConta() {
   const router = useRouter();
@@ -16,6 +20,12 @@ export default function PerfilConta() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const [status, setStatus] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  const [novaSenha, setNovaSenha] = useState("");
+  const [repetirSenha, setRepetirSenha] = useState("");
+  const [tentouSenha, setTentouSenha] = useState(false);
+  const [salvandoSenha, setSalvandoSenha] = useState(false);
+  const [statusSenha, setStatusSenha] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
   const inputFoto = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -30,70 +40,88 @@ export default function PerfilConta() {
     setEmail(user.email || "");
     setUserId(user.id);
 
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("*, grupos_familiares(nome)")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (perfil) {
-      setNomeUsuario(perfil.nome_usuario || "");
-      setGrupoNome(perfil.grupos_familiares?.nome || "Sem grupo vinculado");
+    try {
+      // Cria o perfil se ainda não existir (antes, quem acabou de se cadastrar não conseguia salvar)
+      const perfil = await garantirPerfil(supabase as any, user);
+      setNomeUsuario(perfil.nome_usuario || nomePadrao(user));
       setAvatar(perfil.avatar_url || null);
+      const { data: grupo } = await supabase.from("perfis").select("grupos_familiares(nome)").eq("id", user.id).maybeSingle();
+      setGrupoNome((grupo as any)?.grupos_familiares?.nome || "Sem grupo vinculado");
+    } catch (e: any) {
+      setStatus({ tipo: "erro", texto: e.message || "Não foi possível carregar o perfil." });
+      setNomeUsuario(nomePadrao(user));
+      setAvatar(avatarDoProvedor(user));
     }
     setCarregando(false);
   };
 
-  // Avisa o resto do app (Grupo Familiar, Sidebar) que o perfil mudou.
-  const avisarPerfilAtualizado = (avatarUrl: string | null) => {
-    window.dispatchEvent(
-      new CustomEvent("homecash:perfil", { detail: { id: userId, avatar_url: avatarUrl } })
-    );
-  };
+  const usuarioAtual = async () => (await supabase.auth.getUser()).data.user;
 
   const enviarFoto = async (arquivo?: File) => {
-    if (!arquivo || !userId) return;
-    if (!arquivo.type.startsWith("image/")) return alert("Escolha uma imagem (JPG, PNG ou WEBP).");
-    if (arquivo.size > 5 * 1024 * 1024) return alert("A imagem deve ter no máximo 5 MB.");
-
+    if (!arquivo) return;
+    const user = await usuarioAtual();
+    if (!user) return;
     setEnviandoFoto(true);
-    const ext = (arquivo.name.split(".").pop() || "jpg").toLowerCase();
-    const caminho = `${userId}/avatar-${Date.now()}.${ext}`;
-
-    const { error: erroUpload } = await supabase.storage.from("avatars").upload(caminho, arquivo, { upsert: true, contentType: arquivo.type });
-    if (erroUpload) {
+    setStatus(null);
+    try {
+      const url = await enviarFotoPerfil(supabase as any, user, arquivo);
+      setAvatar(url);
+      avisarPerfilAtualizado();
+      setStatus({ tipo: "ok", texto: "Foto atualizada." });
+    } catch (e: any) {
+      setStatus({ tipo: "erro", texto: e.message || "Não foi possível enviar a foto." });
+    } finally {
       setEnviandoFoto(false);
-      return alert("Erro ao enviar a foto: " + erroUpload.message);
     }
-
-    const { data } = supabase.storage.from("avatars").getPublicUrl(caminho);
-    const { error } = await supabase.from("perfis").update({ avatar_url: data.publicUrl }).eq("id", userId);
-    if (error) alert("Erro ao salvar a foto: " + error.message);
-    else {
-      setAvatar(data.publicUrl);
-      avisarPerfilAtualizado(data.publicUrl);
-    }
-    setEnviandoFoto(false);
   };
 
   const removerFoto = async () => {
     if (!confirm("Remover sua foto de perfil?")) return;
-    const { error } = await supabase.from("perfis").update({ avatar_url: null }).eq("id", userId);
-    if (error) return alert("Erro ao remover: " + error.message);
-    setAvatar(null);
-    avisarPerfilAtualizado(null);
+    const user = await usuarioAtual();
+    if (!user) return;
+    try {
+      await salvarPerfil(supabase as any, user, { avatar_url: null });
+      setAvatar(null);
+      avisarPerfilAtualizado();
+      setStatus({ tipo: "ok", texto: "Foto removida." });
+    } catch (e: any) {
+      setStatus({ tipo: "erro", texto: e.message });
+    }
   };
 
-  const salvarPerfil = async (e: React.FormEvent) => {
+  const salvarPerfilForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!nomeUsuario.trim()) return setStatus({ tipo: "erro", texto: "Digite um nome." });
+    const user = await usuarioAtual();
+    if (!user) return;
     setSalvando(true);
-    const { error } = await supabase.from("perfis").update({ nome_usuario: nomeUsuario }).eq("id", userId);
-    if (error) alert("Erro ao atualizar nome: " + error.message);
-    else {
-      avisarPerfilAtualizado(avatar);
-      alert("Perfil atualizado com sucesso!");
+    setStatus(null);
+    try {
+      const salvo = await salvarPerfil(supabase as any, user, { nome: nomeUsuario });
+      setNomeUsuario(salvo.nome_usuario || nomeUsuario);
+      avisarPerfilAtualizado();
+      setStatus({ tipo: "ok", texto: "Perfil atualizado com sucesso!" });
+    } catch (e: any) {
+      setStatus({ tipo: "erro", texto: e.message || "Não foi possível salvar." });
+    } finally {
+      setSalvando(false);
     }
-    setSalvando(false);
+  };
+
+  const alterarSenha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTentouSenha(true);
+    const msg = validarSenha(novaSenha);
+    if (msg) return setStatusSenha({ tipo: "erro", texto: msg });
+    if (novaSenha !== repetirSenha) return setStatusSenha({ tipo: "erro", texto: "As senhas não são iguais." });
+    setSalvandoSenha(true);
+    const { error } = await supabase.auth.updateUser({ password: novaSenha });
+    setSalvandoSenha(false);
+    if (error) return setStatusSenha({ tipo: "erro", texto: traduzirErroAuth(error) });
+    setNovaSenha("");
+    setRepetirSenha("");
+    setTentouSenha(false);
+    setStatusSenha({ tipo: "ok", texto: "Senha alterada com sucesso." });
   };
 
   if (carregando) {
@@ -114,7 +142,7 @@ export default function PerfilConta() {
               className="group relative grid size-24 place-items-center overflow-hidden rounded-3xl bg-accent text-3xl font-bold text-on-accent ring-4 ring-surface shadow-lg"
               aria-label="Alterar foto de perfil"
             >
-              {avatar ? <img src={avatar} alt="Sua foto" className="h-full w-full object-cover" /> : nomeUsuario ? nomeUsuario[0].toUpperCase() : <Ico icon={UserRound} size={40} />}
+              <Avatar src={avatar} nome={nomeUsuario} cor="var(--accent)" tamanho="xl" className="!rounded-none !h-full !w-full" />
               <span className="absolute inset-0 grid place-items-center bg-black/50 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
                 {enviandoFoto ? "Enviando..." : "Alterar foto"}
               </span>
@@ -138,7 +166,7 @@ export default function PerfilConta() {
         </div>
       </div>
 
-      <form onSubmit={salvarPerfil} className="card-glass space-y-4 p-5">
+      <form onSubmit={salvarPerfilForm} className="card-glass space-y-4 p-5">
         <div>
           <label className="mb-1 block text-xs font-medium text-muted">Nome de exibição no app</label>
           <input type="text" required value={nomeUsuario} onChange={(e) => setNomeUsuario(e.target.value)} className={campo} placeholder="Ex: Vittor" />
@@ -157,6 +185,18 @@ export default function PerfilConta() {
         <button type="submit" disabled={salvando} className="w-full rounded-xl bg-accent py-3 font-medium text-on-accent transition hover:opacity-90 disabled:opacity-50">
           {salvando ? "Salvando..." : "Salvar alterações"}
         </button>
+        {status && <p role="status" className={`rounded-xl px-3 py-2 text-sm ${status.tipo === "ok" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-rose-500/10 text-rose-700 dark:text-rose-400"}`}>{status.texto}</p>}
+      </form>
+
+      <form onSubmit={alterarSenha} className="card-glass space-y-4 p-5" aria-label="Alterar senha">
+        <div>
+          <h3 className="text-base font-bold">Segurança</h3>
+          <p className="text-xs text-muted">Troque a senha da sua conta (mínimo de 6 caracteres). Se você entra só com o Google, não precisa de senha.</p>
+        </div>
+        <CampoSenha id="nova-senha" rotulo="Nova senha" valor={novaSenha} onChange={setNovaSenha} autoComplete="new-password" mostrarRequisito invalido={tentouSenha} />
+        <CampoSenha id="repetir-senha" rotulo="Repita a nova senha" valor={repetirSenha} onChange={setRepetirSenha} autoComplete="new-password" />
+        {statusSenha && <p role="status" className={`rounded-xl px-3 py-2 text-sm ${statusSenha.tipo === "ok" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-rose-500/10 text-rose-700 dark:text-rose-400"}`}>{statusSenha.texto}</p>}
+        <button type="submit" disabled={salvandoSenha} className="w-full rounded-xl border border-line py-3 font-medium transition hover:bg-background disabled:opacity-50">{salvandoSenha ? "Salvando..." : "Alterar senha"}</button>
       </form>
     </div>
   );

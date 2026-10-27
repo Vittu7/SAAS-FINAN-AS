@@ -17,7 +17,7 @@ export type ItemMobile = {
   pessoa?: PessoaItem | null;
   /** Quando o lançamento foi feito por outra pessoa */
   autor?: PessoaItem | null;
-  repasse?: "pendente" | "pago" | null;
+  repasse?: "pendente" | "aguardando" | "pago" | null;
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
   progresso?: number; // 0 a 100 (parcelas)
   onEditar?: () => void;
@@ -81,7 +81,8 @@ export default function MobileLista({
                       <span className="mt-1 flex flex-wrap items-center gap-1.5">
                         {i.autor?.nome && <AutorTag nome={i.autor.nome} avatar={i.autor.avatar} cor={i.autor.cor} />}
                         {i.repasse === "pendente" && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Repasse pendente</span>}
-                        {i.repasse === "pago" && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Repassado</span>}
+                        {i.repasse === "aguardando" && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-400">Repassado · aguardando</span>}
+          {i.repasse === "pago" && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Concluído</span>}
                       </span>
                     )}
                     {i.progresso != null && (

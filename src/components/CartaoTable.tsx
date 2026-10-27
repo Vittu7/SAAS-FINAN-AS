@@ -418,7 +418,7 @@ export default function CartaoTable({
           subtitulo: [item.cartao, item.categoria].filter(Boolean).join(" · "),
           valor: item.valor,
           icone: ICONE_ABA.cartao,
-          autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : "pendente") : null, 
+          autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : item.repasseInformado ? "aguardando" : "pendente") : null, 
           pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, 
           tags: [item.cartao, item.categoria, item.responsavel],
           status: { texto: `${item.parcelaAtual ?? 1}/${item.parcelaTotal ?? 1}`, tom: "neutro" as const },

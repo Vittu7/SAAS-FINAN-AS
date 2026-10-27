@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, HandCoins, Lock, Settings2, Undo2 } from "lucide-react";
+import { ArrowRight, Check, HandCoins, Lock, Settings2, Undo2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Avatar, { AvatarPilha } from "@/components/Avatar";
 import AutorTag from "@/components/AutorTag";
@@ -15,14 +15,41 @@ import type { Membro } from "@/hooks/useFinanceStore";
 
 type Sub = "resumo" | "lancamentos" | "repasses";
 type Dados = { extrato: any[]; cartao: any[]; contas: any[]; config?: { salario?: number } };
-type Marcar = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], pago: boolean) => Promise<boolean>;
+type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir";
+type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], acao: AcaoRepasse) => Promise<boolean>;
 
 const ICONE_TIPO = { avista: ICONE_ABA.lancamentos, parcelada: ICONE_ABA.cartao, fixa: ICONE_ABA.contas } as const;
 const sel = "h-11 w-full rounded-xl border border-line bg-background px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
 
 /* ---------- Uma linha de lançamento do grupo ---------- */
-function LinhaGrupo({ l, meuId, onMarcar }: { l: LancGrupo; meuId: string; onMarcar?: (l: LancGrupo, pago: boolean) => void }) {
-  const souAutor = l.autorId === meuId;
+const ROTULO_SITUACAO = { pendente: "Pendente", aguardando: "Repassado · aguardando confirmação", concluido: "Concluído" } as const;
+const COR_SITUACAO = {
+  pendente: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  aguardando: "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+  concluido: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+} as const;
+
+/** Botão de ação conforme o papel da pessoa e a etapa do repasse. */
+function AcaoRepasseLinha({ l, meuId, onAcao }: { l: LancGrupo; meuId: string; onAcao: (l: LancGrupo, acao: AcaoRepasse) => void }) {
+  const base = "inline-flex h-9 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition active:scale-95";
+  const sec = `${base} text-muted ring-1 ring-line hover:bg-background`;
+  const prim = `${base} bg-accent text-on-accent`;
+
+  if (l.respId === meuId) {
+    // Quem DEVE: marca que repassou; a conclusão depende de quem recebeu
+    if (l.situacaoRepasse === "pendente") return <button type="button" onClick={() => onAcao(l, "informar")} className={prim}><Ico icon={HandCoins} size={13} />Repassei</button>;
+    if (l.situacaoRepasse === "aguardando") return <><span className="text-[11px] text-muted">Aguardando {l.autorNome}</span><button type="button" onClick={() => onAcao(l, "desinformar")} className={sec}><Ico icon={Undo2} size={13} />Desfazer</button></>;
+    return null;
+  }
+  if (l.autorId === meuId) {
+    // Quem RECEBEU: confirma o recebimento (única forma de concluir)
+    if (l.situacaoRepasse === "concluido") return <button type="button" onClick={() => onAcao(l, "reabrir")} className={sec}><Ico icon={Undo2} size={13} />Reabrir</button>;
+    return <button type="button" onClick={() => onAcao(l, "concluir")} className={l.situacaoRepasse === "aguardando" ? prim : sec}><Ico icon={Check} size={13} />Concluir</button>;
+  }
+  return null;
+}
+
+function LinhaGrupo({ l, meuId, onAcao }: { l: LancGrupo; meuId: string; onAcao?: (l: LancGrupo, acao: AcaoRepasse) => void }) {
   return (
     <li className="flex items-start gap-3 py-3">
       <PessoaIcone pessoa={{ nome: l.respNome, avatar: l.respAvatar, cor: l.respCor }} icone={ICONE_TIPO[l.tipo]} />
@@ -40,94 +67,91 @@ function LinhaGrupo({ l, meuId, onMarcar }: { l: LancGrupo; meuId: string; onMar
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <AutorTag nome={l.autorNome} avatar={l.autorAvatar} cor={l.autorCor} />
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${l.repassePago ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/15 text-amber-700 dark:text-amber-400"}`}>{l.repassePago ? "Repassado" : l.vencido ? "Repasse pendente" : "A vencer"}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${COR_SITUACAO[l.situacaoRepasse]}`}>{l.situacaoRepasse === "pendente" && !l.vencido ? "A vencer" : ROTULO_SITUACAO[l.situacaoRepasse]}</span>
           {l.contaPaga !== null && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${l.contaPaga ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-background text-muted ring-1 ring-line"}`}>{l.contaPaga ? "Conta paga" : "Conta a pagar"}</span>}
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
         <p className="text-sm font-semibold tabular-nums">{brl(l.valor)}</p>
-        {onMarcar && (souAutor ? (
-          <button type="button" onClick={() => onMarcar(l, !l.repassePago)} className={`inline-flex h-9 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition active:scale-95 ${l.repassePago ? "text-muted ring-1 ring-line hover:bg-background" : "bg-accent text-on-accent"}`}>
-            {l.repassePago ? <><Ico icon={Undo2} size={13} />Desfazer</> : <><Ico icon={HandCoins} size={13} />Recebi</>}
-          </button>
-        ) : !l.repassePago && <span className="text-[11px] text-muted">Aguardando {l.autorNome}</span>)}
+        {onAcao && <AcaoRepasseLinha l={l} meuId={meuId} onAcao={onAcao} />}
       </div>
     </li>
   );
 }
 
 /* ---------- Valores a repassar ---------- */
-function BlocoPessoa({ p, meuId, lado, onMarcar, onMarcarVarios }: { p: PendenciaPessoa; meuId: string; lado: "receber" | "repassar"; onMarcar: (l: LancGrupo, pago: boolean) => void; onMarcarVarios: (ls: LancGrupo[]) => void }) {
-  const [verPagos, setVerPagos] = useState(false);
+function BlocoPessoa({ p, meuId, lado, onAcao, onAcaoVarios }: { p: PendenciaPessoa; meuId: string; lado: "receber" | "repassar"; onAcao: (l: LancGrupo, acao: AcaoRepasse) => void; onAcaoVarios: (ls: LancGrupo[], acao: AcaoRepasse) => void }) {
+  const [verConcluidos, setVerConcluidos] = useState(false);
   const abertos = p.itens.filter((l) => !l.repassePago);
-  const pagos = p.itens.filter((l) => l.repassePago);
-  const vencidos = abertos.filter((l) => l.vencido);
+  const concluidos = p.itens.filter((l) => l.repassePago);
+  // Em lote: quem recebe conclui o que já venceu; quem deve marca como repassado o que ainda está pendente
+  const lote = lado === "receber" ? abertos.filter((l) => l.vencido) : abertos.filter((l) => l.vencido && l.situacaoRepasse === "pendente");
+  const acaoLote: AcaoRepasse = lado === "receber" ? "concluir" : "informar";
+  const rotuloLote = lado === "receber" ? "Concluir tudo" : "Repassei tudo";
   return (
     <section className="card-glass overflow-hidden">
       <header className="flex items-center gap-3 p-4">
         <Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="md" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold">{lado === "receber" ? `${p.nome} deve a você` : `Você deve a ${p.nome}`}</p>
-          <p className="text-xs text-muted">Agora <b className="text-ink">{brl(p.agora)}</b>{p.aVencer > 0 && <> · A vencer {brl(p.aVencer)}</>}{p.recebido > 0 && <> · Repassado {brl(p.recebido)}</>}</p>
+          <p className="text-xs text-muted">Em aberto <b className="text-ink">{brl(p.agora + p.aVencer)}</b>{p.aguardando > 0 && <> · Aguardando confirmação {brl(p.aguardando)}</>}{p.recebido > 0 && <> · Concluído {brl(p.recebido)}</>}</p>
         </div>
-        {lado === "receber" && vencidos.length > 1 && (
-          <button type="button" onClick={() => onMarcarVarios(vencidos)} className="hidden h-9 shrink-0 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent sm:block">Receber tudo ({vencidos.length})</button>
-        )}
+        {lote.length > 1 && <button type="button" onClick={() => onAcaoVarios(lote, acaoLote)} className="hidden h-9 shrink-0 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent sm:block">{rotuloLote} ({lote.length})</button>}
       </header>
-      {lado === "receber" && vencidos.length > 1 && (
-        <div className="px-4 pb-2 sm:hidden"><button type="button" onClick={() => onMarcarVarios(vencidos)} className="h-10 w-full rounded-lg bg-accent text-xs font-semibold text-on-accent">Marcar tudo como recebido ({vencidos.length})</button></div>
-      )}
+      {lote.length > 1 && <div className="px-4 pb-2 sm:hidden"><button type="button" onClick={() => onAcaoVarios(lote, acaoLote)} className="h-10 w-full rounded-lg bg-accent text-xs font-semibold text-on-accent">{rotuloLote} ({lote.length})</button></div>}
       <ul className="divide-y divide-line border-t border-line px-4">
-        {abertos.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onMarcar={onMarcar} />)}
-        {verPagos && pagos.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onMarcar={onMarcar} />)}
+        {abertos.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onAcao={onAcao} />)}
+        {verConcluidos && concluidos.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onAcao={onAcao} />)}
       </ul>
-      {pagos.length > 0 && (
-        <button type="button" onClick={() => setVerPagos((v) => !v)} className="w-full border-t border-line py-2.5 text-xs font-medium text-accent hover:bg-background">{verPagos ? "Ocultar já repassados" : `Ver já repassados (${pagos.length})`}</button>
+      {concluidos.length > 0 && (
+        <button type="button" onClick={() => setVerConcluidos((v) => !v)} className="w-full border-t border-line py-2.5 text-xs font-medium text-accent hover:bg-background">{verConcluidos ? "Ocultar concluídos" : `Ver concluídos (${concluidos.length})`}</button>
       )}
     </section>
   );
 }
 
-function AbaRepasses({ lista, meuId, onMarcar, onNova }: { lista: LancGrupo[]; meuId: string; onMarcar: Marcar; onNova: () => void }) {
+function AbaRepasses({ lista, meuId, onRepasse, onNova }: { lista: LancGrupo[]; meuId: string; onRepasse: Repasse; onNova: () => void }) {
   const r = useMemo(() => resumoRepasses(lista, meuId), [lista, meuId]);
-  const marcar = (l: LancGrupo, pago: boolean) => void onMarcar([{ origem: l.origem, id: l.id }], pago);
-  const marcarVarios = (ls: LancGrupo[]) => {
-    if (window.confirm(`Marcar ${ls.length} valores como recebidos?`)) void onMarcar(ls.map((l) => ({ origem: l.origem, id: l.id })), true);
+  const acao = (l: LancGrupo, a: AcaoRepasse) => void onRepasse([{ origem: l.origem, id: l.id }], a);
+  const acaoVarios = (ls: LancGrupo[], a: AcaoRepasse) => {
+    const msg = a === "concluir" ? `Confirmar o recebimento de ${ls.length} valores?` : `Marcar ${ls.length} valores como repassados?`;
+    if (window.confirm(msg)) void onRepasse(ls.map((l) => ({ origem: l.origem, id: l.id })), a);
   };
   const nada = r.aReceber.pessoas.length === 0 && r.aRepassar.pessoas.length === 0;
 
   if (nada) {
-    return <EstadoVazio icone={HandCoins} titulo="Nenhum valor a repassar" descricao="Quando você lança uma despesa e escolhe outra pessoa do grupo como responsável, o valor aparece aqui para ela repassar a você, e você acompanha e marca quando receber." passos={["Toque em Nova transação e escolha Saída", "Em Mais opções, marque a pessoa responsável pelo gasto", "Acompanhe aqui e marque quando receber"]} acao={{ rotulo: "Nova transação", onClick: onNova }} />;
+    return <EstadoVazio icone={HandCoins} titulo="Nenhum valor a repassar" descricao="Quando você lança uma despesa e escolhe outra pessoa do grupo como responsável, o valor aparece aqui. Ela marca como repassado e você confirma o recebimento." passos={["Toque em Nova transação e escolha Saída", "Em Mais opções, marque a pessoa responsável pelo gasto", "Quem deve marca “Repassei”; quem recebeu marca “Concluir”"]} acao={{ rotulo: "Nova transação", onClick: onNova }} />;
   }
 
   const card = (titulo: string, valor: number, sub: string, cor = "") => (
     <div className="card-glass p-4"><p className="text-xs text-muted">{titulo}</p><p className={`mt-1 text-2xl font-semibold tabular-nums ${cor}`}>{brl(valor)}</p><p className="mt-0.5 text-[11px] text-muted">{sub}</p></div>
   );
+  const sub = (l: typeof r.aReceber) => [l.aVencer > 0 && `+ ${brl(l.aVencer)} a vencer`, l.aguardando > 0 && `${brl(l.aguardando)} aguardando confirmação`].filter(Boolean).join(" · ") || "Em aberto agora";
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
-        {card("A receber", r.aReceber.agora, r.aReceber.aVencer > 0 ? `+ ${brl(r.aReceber.aVencer)} a vencer` : "Pendente agora", "text-emerald-700 dark:text-emerald-400")}
-        {card("A repassar", r.aRepassar.agora, r.aRepassar.aVencer > 0 ? `+ ${brl(r.aRepassar.aVencer)} a vencer` : "Pendente agora", "text-amber-700 dark:text-amber-400")}
-        {card("Já acertado", r.aReceber.recebido + r.aRepassar.recebido, "Recebido e repassado")}
+        {card("A receber", r.aReceber.agora, sub(r.aReceber), "text-emerald-700 dark:text-emerald-400")}
+        {card("A repassar", r.aRepassar.agora, sub(r.aRepassar), "text-amber-700 dark:text-amber-400")}
+        {card("Concluídos", r.aReceber.recebido + r.aRepassar.recebido, "Repasses confirmados")}
       </div>
+      <p className="rounded-xl bg-accent/8 px-3 py-2 text-xs text-muted">Como funciona: quem deve marca <b className="text-ink">Repassei</b> (fica aguardando). O repasse só é <b className="text-ink">concluído</b> quando quem recebeu confirma.</p>
       {r.aReceber.pessoas.length > 0 && (
-        <div className="space-y-3"><h3 className="px-1 text-sm font-bold">Valores a receber</h3>{r.aReceber.pessoas.map((p) => <BlocoPessoa key={p.pessoaId} p={p} meuId={meuId} lado="receber" onMarcar={marcar} onMarcarVarios={marcarVarios} />)}</div>
+        <div className="space-y-3"><h3 className="px-1 text-sm font-bold">Valores a receber</h3>{r.aReceber.pessoas.map((p) => <BlocoPessoa key={p.pessoaId} p={p} meuId={meuId} lado="receber" onAcao={acao} onAcaoVarios={acaoVarios} />)}</div>
       )}
       {r.aRepassar.pessoas.length > 0 && (
-        <div className="space-y-3"><h3 className="px-1 text-sm font-bold">Valores que você deve repassar</h3>{r.aRepassar.pessoas.map((p) => <BlocoPessoa key={p.pessoaId} p={p} meuId={meuId} lado="repassar" onMarcar={marcar} onMarcarVarios={marcarVarios} />)}
-          <p className="px-1 text-xs text-muted">Depois de repassar, peça para quem lançou confirmar o recebimento. Só ele pode dar baixa.</p></div>
+        <div className="space-y-3"><h3 className="px-1 text-sm font-bold">Valores que você deve repassar</h3>{r.aRepassar.pessoas.map((p) => <BlocoPessoa key={p.pessoaId} p={p} meuId={meuId} lado="repassar" onAcao={acao} onAcaoVarios={acaoVarios} />)}</div>
       )}
     </div>
   );
 }
 
 /* ---------- Lançamentos do grupo ---------- */
-function AbaLancamentos({ lista, membros, meuId, onMarcar }: { lista: LancGrupo[]; membros: Membro[]; meuId: string; onMarcar: Marcar }) {
+function AbaLancamentos({ lista, membros, meuId, onRepasse }: { lista: LancGrupo[]; membros: Membro[]; meuId: string; onRepasse: Repasse }) {
   const [f, setF] = useState<FiltroGrupo>(FILTRO_GRUPO_INICIAL);
   const filtrada = useMemo(() => filtrarGrupo(lista, f), [lista, f]);
   const total = filtrada.reduce((t, l) => t + l.valor, 0);
   const ativos = JSON.stringify(f) !== JSON.stringify(FILTRO_GRUPO_INICIAL);
-  const marcar = (l: LancGrupo, pago: boolean) => void onMarcar([{ origem: l.origem, id: l.id }], pago);
+  const acao = (l: LancGrupo, a: AcaoRepasse) => void onRepasse([{ origem: l.origem, id: l.id }], a);
 
   return (
     <div className="space-y-4">
@@ -147,7 +171,7 @@ function AbaLancamentos({ lista, membros, meuId, onMarcar }: { lista: LancGrupo[
             <option value="">Qualquer autor</option>{membros.map((m) => <option key={m.id} value={m.id}>Lançado por {m.nome}</option>)}
           </select>
           <select aria-label="Situação" value={f.situacao} onChange={(e) => setF({ ...f, situacao: e.target.value as FiltroGrupo["situacao"] })} className={sel}>
-            <option value="todas">Todas as situações</option><option value="repasse-pendente">Repasse pendente</option><option value="repasse-recebido">Repasse recebido</option><option value="conta-a-pagar">Conta fixa a pagar</option><option value="conta-paga">Conta fixa paga</option>
+            <option value="todas">Todas as situações</option><option value="repasse-pendente">Repasse pendente</option><option value="repasse-aguardando">Repassado (aguardando confirmação)</option><option value="repasse-concluido">Repasse concluído</option><option value="conta-a-pagar">Conta fixa a pagar</option><option value="conta-paga">Conta fixa paga</option>
           </select>
         </div>
       </section>
@@ -156,7 +180,7 @@ function AbaLancamentos({ lista, membros, meuId, onMarcar }: { lista: LancGrupo[
       ) : (
         <section className="card-glass px-4 py-1 md:px-5">
           <p className="border-b border-line py-3 text-xs text-muted">{filtrada.length} {filtrada.length === 1 ? "lançamento" : "lançamentos"} · total <b className="text-ink">{brl(total)}</b></p>
-          <ul className="anim-stagger divide-y divide-line">{filtrada.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onMarcar={marcar} />)}</ul>
+          <ul className="anim-stagger divide-y divide-line">{filtrada.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onAcao={acao} />)}</ul>
         </section>
       )}
     </div>
@@ -219,12 +243,13 @@ function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Memb
 
 /* ---------- Tela ---------- */
 export default function TelaGrupo({
-  dados, membros, userId, mes, onMarcarRepasses, onGerenciar, onNova, abaInicial = "resumo",
-}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onMarcarRepasses: Marcar; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub }) {
+  dados, membros, userId, mes, onRepasse, onGerenciar, onNova, abaInicial = "resumo",
+}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub }) {
   const [sub, setSub] = useState<Sub>(abaInicial);
   const meuId = userId || "";
   const lista = useMemo(() => lancamentosDoGrupo(dados), [dados]);
-  const pendentes = useMemo(() => lista.filter((l) => !l.repassePago && l.vencido && (l.autorId === meuId || l.respId === meuId)).length, [lista, meuId]);
+  // Ações minhas: devo marcar "Repassei" (pendente) ou devo confirmar um recebimento (aguardando)
+  const pendentes = useMemo(() => lista.filter((l) => l.vencido && ((l.respId === meuId && l.situacaoRepasse === "pendente") || (l.autorId === meuId && l.situacaoRepasse === "aguardando"))).length, [lista, meuId]);
   const chip = (a: boolean) => `relative h-10 flex-1 rounded-full text-sm font-semibold transition sm:flex-none sm:px-5 ${a ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`;
 
   if (membros.length === 0) {
@@ -245,8 +270,8 @@ export default function TelaGrupo({
       </div>
 
       {sub === "resumo" && <AbaResumo dados={dados} membros={membros} meuId={meuId} mes={mes} />}
-      {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} onMarcar={onMarcarRepasses} />}
-      {sub === "repasses" && <AbaRepasses lista={lista} meuId={meuId} onMarcar={onMarcarRepasses} onNova={onNova} />}
+      {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} onRepasse={onRepasse} />}
+      {sub === "repasses" && <AbaRepasses lista={lista} meuId={meuId} onRepasse={onRepasse} onNova={onNova} />}
     </div>
   );
 }

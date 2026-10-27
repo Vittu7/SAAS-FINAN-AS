@@ -14,6 +14,10 @@ import { mesAtual } from "./finance";
 type Item = Record<string, any>;
 export type OrigemGrupo = "extrato" | "cartao" | "contas";
 export type TipoGrupo = "avista" | "parcelada" | "fixa";
+/** pendente → (quem deve marca) aguardando → (quem recebeu confirma) concluido */
+export type SituacaoRepasse = "pendente" | "aguardando" | "concluido";
+
+export const situacaoDoRepasse = (pago: boolean, informado: boolean): SituacaoRepasse => (pago ? "concluido" : informado ? "aguardando" : "pendente");
 
 export type LancGrupo = {
   chave: string;
@@ -37,8 +41,13 @@ export type LancGrupo = {
   respNome: string;
   respAvatar: string | null;
   respCor: string | null;
+  /** Concluído: quem recebeu confirmou */
   repassePago: boolean;
   repassePagoEm: string | null;
+  /** Quem deve marcou "Repassado" (aguardando a confirmação de quem recebeu) */
+  repasseInformado: boolean;
+  repasseInformadoEm: string | null;
+  situacaoRepasse: SituacaoRepasse;
   /** Mês já chegou (vencido ou do mês atual)? Parcelas e contas futuras ficam "a vencer". */
   vencido: boolean;
 };
@@ -76,6 +85,9 @@ export function lancamentosDoGrupo(e: { extrato?: Item[]; cartao?: Item[]; conta
       respCor: i.responsavelCor ?? null,
       repassePago: Boolean(i.repasse_pago ?? i.repassePago),
       repassePagoEm: i.repasse_pago_em ?? null,
+      repasseInformado: Boolean(i.repasse_informado ?? i.repasseInformado),
+      repasseInformadoEm: i.repasse_informado_em ?? null,
+      situacaoRepasse: situacaoDoRepasse(Boolean(i.repasse_pago ?? i.repassePago), Boolean(i.repasse_informado ?? i.repasseInformado)),
       vencido: String(i.mes || "") <= mesRef,
     };
   };
@@ -93,7 +105,7 @@ export type FiltroGrupo = {
   /** vazio = todos */
   responsavelId: string;
   autorId: string;
-  situacao: "todas" | "repasse-pendente" | "repasse-recebido" | "conta-a-pagar" | "conta-paga";
+  situacao: "todas" | "repasse-pendente" | "repasse-aguardando" | "repasse-concluido" | "conta-a-pagar" | "conta-paga";
 };
 export const FILTRO_GRUPO_INICIAL: FiltroGrupo = { tipo: "todos", responsavelId: "", autorId: "", situacao: "todas" };
 
@@ -103,8 +115,9 @@ export function filtrarGrupo(lista: LancGrupo[], f: FiltroGrupo): LancGrupo[] {
     if (f.responsavelId && l.respId !== f.responsavelId) return false;
     if (f.autorId && l.autorId !== f.autorId) return false;
     switch (f.situacao) {
-      case "repasse-pendente": return !l.repassePago;
-      case "repasse-recebido": return l.repassePago;
+      case "repasse-pendente": return l.situacaoRepasse === "pendente";
+      case "repasse-aguardando": return l.situacaoRepasse === "aguardando";
+      case "repasse-concluido": return l.situacaoRepasse === "concluido";
       case "conta-a-pagar": return l.tipo === "fixa" && !l.contaPaga;
       case "conta-paga": return l.tipo === "fixa" && Boolean(l.contaPaga);
       default: return true;
@@ -121,16 +134,18 @@ export type PendenciaPessoa = {
   agora: number;
   /** pendente de meses futuros (parcelas e contas a vencer) */
   aVencer: number;
+  /** Parte do "agora/a vencer" que já foi marcada como repassada e espera a confirmação de quem recebe */
+  aguardando: number;
   recebido: number;
   itens: LancGrupo[];
 };
 
 export type ResumoRepasses = {
-  aReceber: { agora: number; aVencer: number; recebido: number; pessoas: PendenciaPessoa[] };
-  aRepassar: { agora: number; aVencer: number; recebido: number; pessoas: PendenciaPessoa[] };
+  aReceber: { agora: number; aVencer: number; aguardando: number; recebido: number; pessoas: PendenciaPessoa[] };
+  aRepassar: { agora: number; aVencer: number; aguardando: number; recebido: number; pessoas: PendenciaPessoa[] };
 };
 
-const vazio = () => ({ agora: 0, aVencer: 0, recebido: 0, pessoas: [] as PendenciaPessoa[] });
+const vazio = () => ({ agora: 0, aVencer: 0, aguardando: 0, recebido: 0, pessoas: [] as PendenciaPessoa[] });
 
 /** Quem me deve (eu lancei) e a quem eu devo (outra pessoa lançou para mim). */
 export function resumoRepasses(lista: LancGrupo[], meuId: string): ResumoRepasses {
@@ -138,13 +153,17 @@ export function resumoRepasses(lista: LancGrupo[], meuId: string): ResumoRepasse
   const montar = (lado: ResumoRepasses["aReceber"], l: LancGrupo, pessoa: { id: string; nome: string; avatar: string | null; cor: string | null }) => {
     let p = lado.pessoas.find((x) => x.pessoaId === pessoa.id);
     if (!p) {
-      p = { pessoaId: pessoa.id, nome: pessoa.nome, avatar: pessoa.avatar, cor: pessoa.cor, agora: 0, aVencer: 0, recebido: 0, itens: [] };
+      p = { pessoaId: pessoa.id, nome: pessoa.nome, avatar: pessoa.avatar, cor: pessoa.cor, agora: 0, aVencer: 0, aguardando: 0, recebido: 0, itens: [] };
       lado.pessoas.push(p);
     }
     p.itens.push(l);
     if (l.repassePago) { p.recebido = arred(p.recebido + l.valor); lado.recebido = arred(lado.recebido + l.valor); }
-    else if (l.vencido) { p.agora = arred(p.agora + l.valor); lado.agora = arred(lado.agora + l.valor); }
-    else { p.aVencer = arred(p.aVencer + l.valor); lado.aVencer = arred(lado.aVencer + l.valor); }
+    else {
+      // Só é "concluído" depois da confirmação de quem recebeu: até lá continua em aberto.
+      if (l.vencido) { p.agora = arred(p.agora + l.valor); lado.agora = arred(lado.agora + l.valor); }
+      else { p.aVencer = arred(p.aVencer + l.valor); lado.aVencer = arred(lado.aVencer + l.valor); }
+      if (l.situacaoRepasse === "aguardando") { p.aguardando = arred(p.aguardando + l.valor); lado.aguardando = arred(lado.aguardando + l.valor); }
+    }
   };
   for (const l of lista) {
     if (l.autorId === meuId) montar(r.aReceber, l, { id: l.respId, nome: l.respNome, avatar: l.respAvatar, cor: l.respCor });

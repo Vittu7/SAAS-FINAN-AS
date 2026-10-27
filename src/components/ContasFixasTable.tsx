@@ -354,7 +354,7 @@ export default function ContasFixasTable({
         }}
         itens={[...itens].sort((x: any, y: any) => Number(x.pago) - Number(y.pago)).map((item: any) => ({
           id: item.id, titulo: item.nome || "Sem nome", subtitulo: [item.categoria, item.formaPagamento || item.forma_pagamento].filter(Boolean).join(" · "),
-          valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : "pendente") : null, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
+          valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : item.repasseInformado ? "aguardando" : "pendente") : null, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
           status: item.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
           onAlternar: () => onTogglePago(item.id), rotuloAlternar: item.pago ? "Desmarcar" : "Marcar como paga",
           onEditar: () => setEditando(item), onRemover: () => onRemove(item.id),

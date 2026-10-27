@@ -280,7 +280,7 @@ export default function ExtratoTable({
 
       <MobileLista vazio="Nenhum lançamento neste mês." itens={itens.map((item: any) => ({
         id: item.id, titulo: item.descricao || "Sem descrição", subtitulo: [item.categoria, item.pagamento].filter(Boolean).join(" · "),
-        valor: item.valor, icone: ICONE_ABA.lancamentos, autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : "pendente") : null, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.pagamento, item.categoria, item.responsavel],
+        valor: item.valor, icone: ICONE_ABA.lancamentos, autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : item.repasseInformado ? "aguardando" : "pendente") : null, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.pagamento, item.categoria, item.responsavel],
         onEditar: onEdit ? () => setEditando(item) : undefined, onRemover: () => onRemove(item.id),
       }))} />
 

@@ -64,6 +64,7 @@ function enriquecer(row: any, membros: Membro[], meuId?: string | null): any {
     // Valor a repassar: o autor pagou e outra pessoa é a responsável
     repasseDevido: temAutor && temResp && row.owner_id !== row.responsavel_id && row.tipo !== "entrada",
     repassePago: Boolean(row.repasse_pago),
+    repasseInformado: Boolean(row.repasse_informado),
   };
 
   if (row.parcela_atual !== undefined) {
@@ -597,56 +598,52 @@ export function useFinanceStore() {
   };
 
   /**
-   * Confirma (ou desfaz) o recebimento de valores a repassar. Só o autor do lançamento pode.
-   * Não cria entrada nem saída: o repasse é só o acerto entre membros, então nada é contado duas vezes.
+   * Repasse em duas etapas (nunca cria entrada nem saída: é só o acerto entre membros):
+   *  - informar / desinformar: quem DEVE marca "Repassado" (fica aguardando confirmação);
+   *  - concluir / reabrir: quem LANÇOU confirma o recebimento ("Concluído").
+   * As permissões são conferidas no banco pela função atualizar_repasse.
    */
-  const marcarRepasses = async (
+  const atualizarRepasses = async (
     itens: { origem: Tabela; id: string }[],
-    pago: boolean,
+    acao: "informar" | "desinformar" | "concluir" | "reabrir",
   ): Promise<boolean> => {
     if (!userId || itens.length === 0) return false;
-    const carimbo = pago ? new Date().toISOString() : null;
+    const agora = new Date().toISOString();
 
     for (const origem of ["extrato", "cartao", "contas"] as Tabela[]) {
       const ids = itens.filter((i) => i.origem === origem).map((i) => i.id);
       if (ids.length === 0) continue;
 
-      const { data, error } = await supabase
-        .from(NOME_TABELA_DB[origem])
-        .update({ repasse_pago: pago, repasse_pago_em: carimbo })
-        .in("id", ids)
-        .eq("owner_id", userId)
-        .select("id");
+      const { data, error } = await supabase.rpc("atualizar_repasse", { p_tabela: NOME_TABELA_DB[origem], p_ids: ids, p_acao: acao });
 
       if (error) {
-        const faltaColuna = /repasse_pago/.test(error.message);
-        alert(
-          faltaColuna
-            ? "Para controlar repasses, execute o script supabase-04-grupo-repasses.sql no Supabase."
-            : "Erro ao atualizar o repasse: " + error.message,
-        );
+        const faltaScript = /atualizar_repasse|repasse_/.test(error.message) || error.code === "PGRST202" || error.code === "42883";
+        alert(faltaScript ? "Para usar os repasses, execute os scripts supabase-04 e supabase-05 no Supabase." : "Erro ao atualizar o repasse: " + error.message);
         return false;
       }
-      if (!data || data.length !== ids.length) {
-        alert("Só quem fez o lançamento pode confirmar o recebimento do repasse.");
+      if (Number(data) !== ids.length) {
+        alert(acao === "informar" || acao === "desinformar"
+          ? "Só quem é o responsável pelo valor pode marcar como repassado (e só antes de concluído)."
+          : "Só quem fez o lançamento pode confirmar o recebimento do repasse.");
         return false;
       }
 
-      const confirmados = new Set(ids);
+      const alvo = new Set(ids);
+      const patch: Record<string, any> =
+        acao === "informar" ? { repasse_informado: true, repasse_informado_em: agora, repasseInformado: true }
+        : acao === "desinformar" ? { repasse_informado: false, repasse_informado_em: null, repasseInformado: false }
+        : acao === "concluir" ? { repasse_pago: true, repasse_pago_em: agora, repassePago: true }
+        : { repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
       setEstado((atual) => ({
         ...atual,
-        [origem]: (atual[origem] as any[]).map((item) =>
-          confirmados.has(item.id)
-            ? { ...item, repasse_pago: pago, repasse_pago_em: carimbo, repassePago: pago }
-            : item,
-        ),
+        [origem]: (atual[origem] as any[]).map((item) => (alvo.has(item.id) ? { ...item, ...patch } : item)),
       }) as Estado);
     }
     return true;
   };
 
   return {
-    marcarRepasses,
+    atualizarRepasses,
     estado,
     pronto,
     userId,

@@ -474,7 +474,7 @@ export default function Home() {
                   membros={membros}
                   userId={userId}
                   mes={mes}
-                  onMarcarRepasses={loja.marcarRepasses}
+                  onRepasse={loja.atualizarRepasses}
                   onGerenciar={() => setModalGrupoAberto(true)}
                   onNova={() => abrirNova()}
                 />

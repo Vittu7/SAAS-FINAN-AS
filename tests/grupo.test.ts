@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro } from "../src/lib/grupo";
+import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro } from "../src/lib/grupo";
 import { calcularMes } from "../src/lib/calculos";
 
 const REF = "2026-10";
@@ -32,7 +32,9 @@ describe("lançamentos do grupo", () => {
     expect(f({ tipo: "parcelada" })).toEqual(["cartao:c1", "cartao:c2", "cartao:c3"]);
     expect(f({ responsavelId: "vitu" })).toEqual(["cartao:c3"]);
     expect(f({ autorId: "gisa" })).toEqual(["cartao:c3"]);
-    expect(f({ situacao: "repasse-recebido" })).toEqual(["contas:f1"]);
+    expect(f({ situacao: "repasse-concluido" })).toEqual(["contas:f1"]);
+    expect(f({ situacao: "repasse-pendente" })).toEqual(["cartao:c1", "cartao:c2", "cartao:c3", "extrato:e1"]);
+    expect(f({ situacao: "repasse-aguardando" })).toEqual([]);
     expect(f({ situacao: "conta-a-pagar" })).toEqual(["contas:f1"]);
   });
 });
@@ -59,6 +61,36 @@ describe("valores a repassar", () => {
   it("o gasto fica só com a responsável (nada em dobro no total do grupo)", () => {
     const grupo = calcularMes(E, { mes: REF });
     expect(grupo.saidas).toBe(120 + 200 + 500 + 90 + 100);
+  });
+});
+
+describe("repasse em duas etapas", () => {
+  it("pendente -> repassado (aguardando) -> concluído", () => {
+    expect(situacaoDoRepasse(false, false)).toBe("pendente");
+    expect(situacaoDoRepasse(false, true)).toBe("aguardando");
+    expect(situacaoDoRepasse(true, true)).toBe("concluido");
+    expect(situacaoDoRepasse(true, false)).toBe("concluido");
+  });
+  it("só é concluído depois da confirmação de quem recebeu: 'repassado' continua em aberto", () => {
+    const informado = { ...E, cartao: E.cartao.map((c: any) => (c.id === "c1" ? { ...c, repasse_informado: true } : c)) };
+    const lista = lancamentosDoGrupo(informado, REF);
+    expect(lista.find((l) => l.chave === "cartao:c1")!.situacaoRepasse).toBe("aguardando");
+    const gisa = resumoRepasses(lista, "gisa").aRepassar;
+    const vitu = resumoRepasses(lista, "vitu").aReceber;
+    expect(gisa.agora).toBe(620); // continua devendo até o Vitu confirmar
+    expect(gisa.aguardando).toBe(500);
+    expect(vitu.aguardando).toBe(500);
+    expect(gisa.recebido).toBe(100); // só o que foi concluído
+    const concluido = { ...E, cartao: E.cartao.map((c: any) => (c.id === "c1" ? { ...c, repasse_informado: true, repasse_pago: true } : c)) };
+    const g2 = resumoRepasses(lancamentosDoGrupo(concluido, REF), "gisa").aRepassar;
+    expect(g2.agora).toBe(120);
+    expect(g2.aguardando).toBe(0);
+    expect(g2.recebido).toBe(600);
+  });
+  it("informar e concluir não alteram entradas, saídas nem saldo", () => {
+    const base = calcularMes(E, { mes: REF });
+    const mexido = { ...E, cartao: E.cartao.map((c: any) => ({ ...c, repasse_informado: true, repasse_pago: true })) };
+    expect(calcularMes(mexido, { mes: REF })).toEqual(base);
   });
 });
 

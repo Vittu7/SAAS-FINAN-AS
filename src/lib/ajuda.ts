@@ -94,7 +94,8 @@ export const TUTORIAIS: Tutorial[] = [
     passos: [
       "Abra Grupo familiar. Sem grupo ainda? Toque em Gerenciar grupo para criar um ou entrar com o ID.",
       "Ao lançar uma despesa, abra Mais opções e escolha a pessoa responsável: o valor vai para Repasses dela.",
-      "Na aba Repasses, quem lançou marca “Recebi” quando a pessoa pagar. Isso não altera entradas nem saídas.",
+      "Na aba Repasses, quem deve marca “Repassei”: o valor fica aguardando confirmação.",
+      "Quem recebeu o dinheiro marca “Concluir”. O repasse só é concluído depois dessa confirmação, e nada disso altera entradas ou saídas.",
       "Na aba Lançamentos, filtre por tipo, responsável, autor e situação.",
       "Na aba Resumo, veja entradas, despesas e saldo de cada pessoa. Você pode ocultar o seu resumo.",
     ],
@@ -123,7 +124,7 @@ export const PERGUNTAS: Pergunta[] = [
   { id: "ocultar", pergunta: "Como escondo os valores da tela?", resposta: "Toque no ícone de olho, no topo da tela. Todos os valores e porcentagens viram pontinhos. A escolha fica salva neste aparelho." },
   { id: "exportar", pergunta: "Como exporto um relatório?", resposta: "Vá em Gráficos e relatórios, aba Relatórios, escolha o período e toque em Exportar Excel (CSV) ou Exportar PDF.", aba: "graficos" },
   { id: "aporte", pergunta: "Um aporte em investimento conta como gasto?", resposta: "Não. Aportes, resgates e rendimentos ficam nas caixinhas e não entram em Entradas nem em Saídas.", aba: "investimentos" },
-  { id: "repasse", pergunta: "O que é “Valores a repassar”?", resposta: "É o acerto entre membros. Se você lança uma compra e define outra pessoa como responsável, ela deve repassar esse valor a você. Marcar como recebido só dá baixa no acerto: não cria entrada nem saída, então nada é contado duas vezes.", aba: "grupo" },
+  { id: "repasse", pergunta: "O que é “Valores a repassar”?", resposta: "É o acerto entre membros. Se você lança uma compra e define outra pessoa como responsável, ela deve repassar esse valor a você. O acerto tem duas etapas: quem deve marca “Repassei” e quem recebeu confirma em “Concluir”. Só então fica concluído. Isso não cria entrada nem saída, então nada é contado duas vezes.", aba: "grupo" },
   { id: "resumo-oculto", pergunta: "Como oculto meu resumo financeiro do grupo?", resposta: "Em Grupo familiar > Resumo, no seu cartão, desligue “Mostrar meu resumo ao grupo”. Os outros deixam de ver suas entradas, despesas e saldo nessa tela.", aba: "grupo" },
   { id: "privado", pergunta: "Posso lançar algo que só eu veja?", resposta: "Sim. Em Nova transação, abra “Mais opções” e, em “Quem pode ver”, escolha “Só eu”." },
   { id: "instalar", pergunta: "Posso instalar o HomeCash no celular?", resposta: "Sim. Toque em Ajuda no topo da tela e abra a aba “Instalar no celular” para ver o passo a passo do seu aparelho." },

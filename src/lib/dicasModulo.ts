@@ -5,6 +5,6 @@ export const DICAS_MODULO: Record<string, { titulo: string; passos: string[]; tu
   contas: { titulo: "Como usar Contas fixas", tutorial: "fixas", passos: ["Cadastre em Nova transação > Saída > Fixa.", "Todo mês a conta reaparece nesta lista.", "Marque como paga quando pagar: o “Falta pagar” se atualiza."] },
   fatura: { titulo: "Como usar Cartões e Faturas", tutorial: "cartoes", passos: ["Toque em um cartão para ver a fatura dele.", "Use as setas para mudar de mês.", "A barra mostra quanto do limite já foi usado."] },
   graficos: { titulo: "Como usar Gráficos e relatórios", tutorial: "graficos", passos: ["Em Gráficos, veja a evolução e a divisão dos gastos.", "Em Relatórios, escolha o período e os filtros.", "Exporte em Excel (CSV) ou PDF."] },
-  grupo: { titulo: "Como usar o Grupo familiar", tutorial: "grupo", passos: ["Resumo: veja entradas, despesas e saldo de cada pessoa.", "Lançamentos: o que uma pessoa lançou para outra.", "Repasses: acompanhe e marque quando receber."] },
+  grupo: { titulo: "Como usar o Grupo familiar", tutorial: "grupo", passos: ["Resumo: veja entradas, despesas e saldo de cada pessoa.", "Lançamentos: o que uma pessoa lançou para outra.", "Repasses: quem deve marca “Repassei”; quem recebeu confirma em “Concluir”."] },
   lancamentos: { titulo: "Como usar a Tabela de lançamentos", tutorial: "extrato", passos: ["Veja os lançamentos à vista em formato de tabela.", "Edite ou remova pela linha.", "Para criar um novo, use o botão Nova transação."] },
 };

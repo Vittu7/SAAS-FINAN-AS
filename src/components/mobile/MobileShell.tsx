@@ -45,15 +45,15 @@ export function MobileHeader({
           <span className="min-w-0 truncate text-lg font-semibold">{titulo}</span>
         </div>
         <div className="flex items-center gap-2">
-        <BotaoOcultarValores className="!size-10 !rounded-full !border-0 shadow-sm ring-1 ring-line" />
-        <button
-          type="button"
-          onClick={onAbrirMenu}
-          aria-label="Abrir menu"
-          className="grid size-10 place-items-center rounded-full bg-surface shadow-sm ring-1 ring-line active:scale-95"
-        >
-          <Ico icon={Menu} />
-        </button>
+          <BotaoOcultarValores className="!size-10 !rounded-full !border-0 shadow-sm ring-1 ring-line" />
+          <button
+            type="button"
+            onClick={onAbrirMenu}
+            aria-label="Abrir menu"
+            className="grid size-10 place-items-center rounded-full bg-surface shadow-sm ring-1 ring-line active:scale-95"
+          >
+            <Ico icon={Menu} />
+          </button>
         </div>
       </div>
 

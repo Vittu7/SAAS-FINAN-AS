@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Mail, ShieldCheck, Sparkles, Users, WalletCards, X } from "lucide-react";
@@ -301,6 +302,10 @@ function LoginConteudo() {
               </form>
             </>
           )}
+
+          <p className="text-center text-xs text-muted">
+            Ao continuar, você concorda com a <Link href="/privacidade" className="font-medium text-accent hover:underline">Política de Privacidade</Link>.
+          </p>
         </div>
       </section>
     </main>

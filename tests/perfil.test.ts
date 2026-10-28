@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { garantirPerfil, salvarPerfil, nomePadrao } from "../src/lib/perfil";
+import { garantirPerfil, salvarPerfil, nomePadrao, perfilParaExibicao } from "../src/lib/perfil";
 
 /** Banco falso mínimo: uma tabela "perfis" com regra opcional que nega UPDATE (simula RLS). */
 function criarBanco({ negarUpdate = false, negarInsert = false } = {}) {
@@ -66,5 +66,33 @@ describe("perfil", () => {
   it("avisa claramente quando o banco não grava (em vez de fingir que salvou)", async () => {
     const { client } = criarBanco({ negarUpdate: true });
     await expect(salvarPerfil(client, user, { nome: "X" })).rejects.toThrow(/não confirmou o salvamento/);
+  });
+});
+
+describe("perfil exibido na barra/menu do celular", () => {
+  it("conta nova SEM grupo usa a própria linha de perfil (antes ficava sem nome e aparecia \"?\")", () => {
+    const eu = perfilParaExibicao(user, { nome_usuario: "Maria", avatar_url: "http://f/nova.jpg", cor: "#10B981" });
+    expect(eu).toEqual({ id: "u1", nome: "Maria", avatar: "http://f/nova.jpg", cor: "#10B981" });
+  });
+
+  it("depois de trocar a foto, a nova URL é a exibida", () => {
+    const antes = perfilParaExibicao(user, { nome_usuario: "Maria", avatar_url: null });
+    const depois = perfilParaExibicao(user, { nome_usuario: "Maria", avatar_url: "http://f/trocada.jpg" });
+    expect(antes.avatar).toBeNull();
+    expect(depois.avatar).toBe("http://f/trocada.jpg");
+  });
+
+  it("nome vazio na linha cai no nome padrão (nunca fica sem nome)", () => {
+    expect(perfilParaExibicao(user, { nome_usuario: "  ", avatar_url: null }).nome).toBe("Maria silva");
+  });
+
+  it("foto removida pelo usuário não volta a ser a do Google", () => {
+    const comGoogle = { ...user, user_metadata: { picture: "http://google/p.jpg" } };
+    expect(perfilParaExibicao(comGoogle, { nome_usuario: "Maria", avatar_url: null }).avatar).toBeNull();
+  });
+
+  it("sem linha no banco (falha de leitura) usa nome e foto do Google", () => {
+    const comGoogle = { ...user, user_metadata: { full_name: "Maria Silva", picture: "http://google/p.jpg" } };
+    expect(perfilParaExibicao(comGoogle, null)).toEqual({ id: "u1", nome: "Maria Silva", avatar: "http://google/p.jpg", cor: null });
   });
 });

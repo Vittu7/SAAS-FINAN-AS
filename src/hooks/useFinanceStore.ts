@@ -11,7 +11,7 @@ import type {
   Tabela,
 } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import { garantirPerfil } from "@/lib/perfil";
+import { garantirPerfil, perfilParaExibicao, type PerfilExibicao } from "@/lib/perfil";
 
 const VAZIO: Estado = {
   extrato: [],
@@ -82,6 +82,7 @@ export function useFinanceStore() {
   const [userId, setUserId] = useState<string | null>(null);
   const [grupoId, setGrupoId] = useState<string | null>(null);
   const [membros, setMembros] = useState<Membro[]>([]);
+  const [meuPerfil, setMeuPerfil] = useState<PerfilExibicao | null>(null);
 
   const carregarDados = useCallback(async () => {
     const {
@@ -100,9 +101,12 @@ export function useFinanceStore() {
 
     const { data: perfil } = await supabase
       .from("perfis")
-      .select("id, grupo_id")
+      .select("id, grupo_id, nome_usuario, avatar_url, cor")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    // Meu nome/foto/cor: independem de eu ter grupo (conta nova ainda não tem)
+    setMeuPerfil(perfilParaExibicao(user, perfil));
 
     const { data: cfg } = await supabase
       .from("configuracoes")
@@ -648,6 +652,7 @@ export function useFinanceStore() {
     pronto,
     userId,
     membros,
+    meuPerfil,
     adicionarExtrato,
     adicionarCartao,
     adicionarConta,

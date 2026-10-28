@@ -124,7 +124,7 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, [router]);
 
-  const { estado, userId, membros } = loja;
+  const { estado, userId, membros, meuPerfil } = loja;
   const dashboard = useDashboardPreferences(userId);
   const onb = useOnboarding(userId);
   const { pagamento: formasPagamento } = useOpcoes();
@@ -271,7 +271,7 @@ export default function Home() {
   const repasses = resumoRepasses(lancamentosDoGrupo(estado), userId || "");
   const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
   const dica = DICAS_MODULO[aba];
-  const nomeUsuario = membros.find((m) => m.id === userId)?.nome?.split(" ")[0];
+  const nomeUsuario = (membros.find((m) => m.id === userId)?.nome ?? meuPerfil?.nome)?.split(" ")[0];
   // Em Configurações nada depende de mês nem de visualização por pessoa; em Faturas o mês já tem seletor próprio
   const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
   const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
@@ -555,10 +555,10 @@ export default function Home() {
       </main>
 
       {/* Fora do container centralizado: barra fixa no rodapé e menu lateral */}
-      <MobileBottomNav perfil={membros.find((m) => m.id === userId) ? { nome: membros.find((m) => m.id === userId)!.nome, avatar: membros.find((m) => m.id === userId)!.avatar, cor: membros.find((m) => m.id === userId)!.cor } : undefined} aba={aba} onAba={irPara} onNova={() => abrirNova()} onGrupo={() => abrirGrupo()} />
+      <MobileBottomNav perfil={meuPerfil ?? undefined} aba={aba} onAba={irPara} onNova={() => abrirNova()} onGrupo={() => abrirGrupo()} />
       <MobileMenu
         abaAtiva={aba}
-        perfil={(() => { const eu = membros.find((m) => m.id === userId); return eu ? { nome: eu.nome, avatar: eu.avatar, cor: eu.cor } : undefined; })()}
+        perfil={meuPerfil ?? undefined}
         onAba={irPara}
         onAjustes={(secao) => { setSecaoAjustes(secao); irPara("ajustes"); }}
         aberto={menuMobile}

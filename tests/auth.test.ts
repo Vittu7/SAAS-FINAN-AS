@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { validarSenha, traduzirErroAuth, interpretarCadastro, lembrarConta, contasLembradas, esquecerConta, SENHA_MIN, emailValido } from "../src/lib/auth";
+import { traduzirErroAuth, erroDaUrl, limparContasLembradas } from "../src/lib/auth";
 
 beforeEach(() => {
   const mem = new Map<string, string>();
@@ -7,61 +7,40 @@ beforeEach(() => {
     getItem: (k: string) => mem.get(k) ?? null,
     setItem: (k: string, v: string) => void mem.set(k, v),
     removeItem: (k: string) => void mem.delete(k),
-    dump: () => [...mem.values()].join("|"),
   };
 });
 
-describe("senha", () => {
-  it("exige no mínimo 6 caracteres", () => {
-    expect(SENHA_MIN).toBe(6);
-    expect(validarSenha("12345")).toMatch(/pelo menos 6 caracteres/);
-    expect(validarSenha("")).not.toBeNull();
-    expect(validarSenha("123456")).toBeNull();
-    expect(validarSenha("uma senha bem maior")).toBeNull();
-  });
-});
-
-describe("mensagens de erro", () => {
+describe("mensagens de erro (login só com Google)", () => {
   it("traduz os erros mais comuns", () => {
-    expect(traduzirErroAuth(new Error("Invalid login credentials"))).toBe("E-mail ou senha incorretos.");
-    expect(traduzirErroAuth({ message: "Email not confirmed" })).toMatch(/não foi confirmado/);
-    expect(traduzirErroAuth({ message: "User already registered" })).toMatch(/já está cadastrado/);
-    expect(traduzirErroAuth({ message: "Password should be at least 6 characters" })).toMatch(/pelo menos 6/);
+    expect(traduzirErroAuth({ message: "missing OAuth secret" })).toMatch(/Google ainda não está configurado/);
+    expect(traduzirErroAuth({ message: "Unsupported provider: provider is not enabled" })).toMatch(/Google ainda não está configurado/);
+    expect(traduzirErroAuth({ message: "Signups not allowed for this instance" })).toMatch(/cadastro está desativado/);
     expect(traduzirErroAuth({ message: "email rate limit exceeded" })).toMatch(/Muitas tentativas/);
-    expect(traduzirErroAuth({ message: "Error sending confirmation email" })).toMatch(/enviar o e-mail/);
     expect(traduzirErroAuth({ message: "Database error saving new user" })).toMatch(/erro no servidor/);
+    expect(traduzirErroAuth({ message: "Failed to fetch" })).toMatch(/Sem conexão/);
   });
-  it("valida e-mail", () => {
-    expect(emailValido("a@b.co")).toBe(true);
-    expect(emailValido("a@b")).toBe(false);
-  });
-});
-
-describe("resposta do cadastro", () => {
-  it("sem sessão = precisa confirmar o e-mail", () => {
-    expect(interpretarCadastro({ user: { identities: [{}] }, session: null })).toBe("confirmar-email");
-  });
-  it("com sessão = já entrou (confirmação desativada no servidor)", () => {
-    expect(interpretarCadastro({ user: { identities: [{}] }, session: {} })).toBe("logado");
-  });
-  it("e-mail já existente é detectado", () => {
-    expect(interpretarCadastro({ user: { identities: [] }, session: null })).toBe("ja-cadastrado");
+  it("não mostra mensagens de senha ou confirmação de e-mail", () => {
+    expect(traduzirErroAuth({ message: "Invalid login credentials" })).toBe("Invalid login credentials");
   });
 });
 
-describe("contas lembradas neste aparelho", () => {
-  it("guarda só e-mail, nome e foto — nunca senha", () => {
-    lembrarConta({ email: "Ana@Mail.com", nome: "Ana", avatar: "http://x/a.jpg", senha: "segredo123", password: "segredo123" } as any);
-    const salvo = (localStorage as any).dump();
-    expect(salvo).not.toContain("segredo123");
-    expect(contasLembradas()).toEqual([{ email: "ana@mail.com", nome: "Ana", avatar: "http://x/a.jpg" }]);
+describe("erro devolvido na URL após voltar do Google", () => {
+  it("lê o erro da query string", () => {
+    expect(erroDaUrl("?error=access_denied&error_description=User+denied", "")).toMatch(/cancelado|denied/i);
   });
-  it("não duplica, limita e permite remover", () => {
-    for (let i = 0; i < 7; i++) lembrarConta({ email: `u${i}@x.com`, nome: `U${i}`, avatar: null });
-    lembrarConta({ email: "u6@x.com", nome: "Novo nome", avatar: null });
-    expect(contasLembradas()).toHaveLength(5);
-    expect(contasLembradas()[0].nome).toBe("Novo nome");
-    esquecerConta("U6@x.com");
-    expect(contasLembradas().some((c) => c.email === "u6@x.com")).toBe(false);
+  it("lê o erro do fragmento (#)", () => {
+    expect(erroDaUrl("", "#error=server_error&error_description=Database+error+saving+new+user")).toMatch(/erro no servidor/);
+  });
+  it("sem erro devolve null", () => {
+    expect(erroDaUrl("", "")).toBeNull();
+    expect(erroDaUrl("?foo=1", "#access_token=abc")).toBeNull();
+  });
+});
+
+describe("limpeza do login antigo", () => {
+  it("apaga a lista de contas lembradas (e-mails guardados no aparelho)", () => {
+    localStorage.setItem("hc:contas-lembradas", JSON.stringify([{ email: "a@b.com", nome: "A", avatar: null }]));
+    limparContasLembradas();
+    expect(localStorage.getItem("hc:contas-lembradas")).toBeNull();
   });
 });

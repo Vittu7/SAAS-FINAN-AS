@@ -1,7 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Chaves injetadas diretamente para garantir o funcionamento local do SaaS
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://iitgqormevgnxikwyvu.supabase.co";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpdGdxb3JtZXZnbnhpa3d5dnUiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTcyMzg1NjI5NSwiZXhwIjoyMDM5NDMyMjk1fQ.exemplo_chave_padrao";
+// URL e chave pública (anon) do projeto, definidas em .env.local e nas variáveis de ambiente da Vercel:
+//   NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("Supabase não configurado: defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY (login com o Google não funciona sem elas).");
+}
+
+// Valores provisórios só evitam que o build quebre; o login só funciona com as variáveis reais.
+export const supabase = createClient(supabaseUrl || "https://projeto-nao-configurado.supabase.co", supabaseAnonKey || "chave-nao-configurada");

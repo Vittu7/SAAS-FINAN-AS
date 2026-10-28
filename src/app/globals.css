@@ -224,15 +224,21 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
   opacity: 0;
   transition: opacity 250ms ease;
 }
 
+/* Mantém o conteúdo acima do fundo decorativo */
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* Aurora */
 :root[data-bg="aurora"] body::before {
-  opacity: 0.10;
+  opacity: 0.20;
   background:
     radial-gradient(55% 45% at 10% 0%,
       var(--accent),

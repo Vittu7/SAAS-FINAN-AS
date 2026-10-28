@@ -25,6 +25,26 @@ export function nomePadrao(user: Usuario): string {
 
 export const avatarDoProvedor = (user: Usuario): string | null => user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
 
+export type PerfilExibicao = { id: string; nome: string; avatar: string | null; cor: string | null };
+
+/**
+ * Nome, foto e cor do usuário logado para mostrar na interface (barra e menu do celular).
+ * Vem da linha dele em "perfis" e NÃO da lista de membros do grupo: quem acabou de criar a conta
+ * ainda não tem grupo, então não aparece em nenhuma lista de membros (e a foto ficava como "?").
+ */
+export function perfilParaExibicao(
+  user: Usuario,
+  linha?: { nome_usuario?: string | null; avatar_url?: string | null; cor?: string | null } | null,
+): PerfilExibicao {
+  if (!linha) return { id: user.id, nome: nomePadrao(user), avatar: avatarDoProvedor(user), cor: null };
+  return {
+    id: user.id,
+    nome: linha.nome_usuario?.trim() || nomePadrao(user),
+    avatar: linha.avatar_url || null, // foto removida pelo usuário continua removida
+    cor: linha.cor || null,
+  };
+}
+
 /** Busca o perfil; se ainda não existir, cria. Nunca sobrescreve um perfil existente. */
 export async function garantirPerfil(client: Cliente, user: Usuario): Promise<PerfilBasico> {
   const buscar = async () => {

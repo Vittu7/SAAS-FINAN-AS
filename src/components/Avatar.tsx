@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UserRound } from "lucide-react";
 
 /** Tamanhos padrão do sistema: use sempre estes nomes em vez de números soltos. */
 export const TAMANHOS_AVATAR = { xs: 22, sm: 28, md: 40, lg: 56, xl: 96 } as const;
@@ -28,7 +29,7 @@ export default function Avatar({ src, nome, cor, tamanho = "md", anel = false, c
     setFalhou(false);
   }, [src]);
 
-  const inicial = (nome?.trim()?.[0] || "?").toUpperCase();
+  const inicial = nome?.trim()?.[0]?.toUpperCase() || null;
   const mostrarImagem = !!src && !falhou;
   const corPessoa = cor || "#10B981";
 
@@ -48,8 +49,10 @@ export default function Avatar({ src, nome, cor, tamanho = "md", anel = false, c
       {mostrarImagem ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src as string} alt="" className="h-full w-full object-cover" onError={() => setFalhou(true)} />
-      ) : (
+      ) : inicial ? (
         inicial
+      ) : (
+        <UserRound size={Math.round(t * 0.55)} aria-hidden />
       )}
     </div>
   );

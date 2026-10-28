@@ -6,8 +6,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Avatar from "@/components/Avatar";
-import CampoSenha from "@/components/auth/CampoSenha";
-import { traduzirErroAuth, validarSenha } from "@/lib/auth";
 import { avatarDoProvedor, avisarPerfilAtualizado, enviarFotoPerfil, garantirPerfil, nomePadrao, salvarPerfil } from "@/lib/perfil";
 
 export default function PerfilConta() {
@@ -21,11 +19,6 @@ export default function PerfilConta() {
   const [salvando, setSalvando] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [status, setStatus] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
-  const [novaSenha, setNovaSenha] = useState("");
-  const [repetirSenha, setRepetirSenha] = useState("");
-  const [tentouSenha, setTentouSenha] = useState(false);
-  const [salvandoSenha, setSalvandoSenha] = useState(false);
-  const [statusSenha, setStatusSenha] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
   const inputFoto = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -108,22 +101,6 @@ export default function PerfilConta() {
     }
   };
 
-  const alterarSenha = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setTentouSenha(true);
-    const msg = validarSenha(novaSenha);
-    if (msg) return setStatusSenha({ tipo: "erro", texto: msg });
-    if (novaSenha !== repetirSenha) return setStatusSenha({ tipo: "erro", texto: "As senhas não são iguais." });
-    setSalvandoSenha(true);
-    const { error } = await supabase.auth.updateUser({ password: novaSenha });
-    setSalvandoSenha(false);
-    if (error) return setStatusSenha({ tipo: "erro", texto: traduzirErroAuth(error) });
-    setNovaSenha("");
-    setRepetirSenha("");
-    setTentouSenha(false);
-    setStatusSenha({ tipo: "ok", texto: "Senha alterada com sucesso." });
-  };
-
   if (carregando) {
     return <p className="py-6 text-sm text-muted">Carregando perfil...</p>;
   }
@@ -174,7 +151,7 @@ export default function PerfilConta() {
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted">E-mail de login</label>
+            <label className="mb-1 block text-xs font-medium text-muted">Conta Google (e-mail)</label>
             <input type="text" disabled value={email} className={`${campo} cursor-not-allowed text-muted`} />
           </div>
           <div>
@@ -186,17 +163,6 @@ export default function PerfilConta() {
           {salvando ? "Salvando..." : "Salvar alterações"}
         </button>
         {status && <p role="status" className={`rounded-xl px-3 py-2 text-sm ${status.tipo === "ok" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-rose-500/10 text-rose-700 dark:text-rose-400"}`}>{status.texto}</p>}
-      </form>
-
-      <form onSubmit={alterarSenha} className="card-glass space-y-4 p-5" aria-label="Alterar senha">
-        <div>
-          <h3 className="text-base font-bold">Segurança</h3>
-          <p className="text-xs text-muted">Troque a senha da sua conta (mínimo de 6 caracteres). Se você entra só com o Google, não precisa de senha.</p>
-        </div>
-        <CampoSenha id="nova-senha" rotulo="Nova senha" valor={novaSenha} onChange={setNovaSenha} autoComplete="new-password" mostrarRequisito invalido={tentouSenha} />
-        <CampoSenha id="repetir-senha" rotulo="Repita a nova senha" valor={repetirSenha} onChange={setRepetirSenha} autoComplete="new-password" />
-        {statusSenha && <p role="status" className={`rounded-xl px-3 py-2 text-sm ${statusSenha.tipo === "ok" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-rose-500/10 text-rose-700 dark:text-rose-400"}`}>{statusSenha.texto}</p>}
-        <button type="submit" disabled={salvandoSenha} className="w-full rounded-xl border border-line py-3 font-medium transition hover:bg-background disabled:opacity-50">{salvandoSenha ? "Salvando..." : "Alterar senha"}</button>
       </form>
     </div>
   );

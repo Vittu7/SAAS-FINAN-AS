@@ -5,6 +5,7 @@ import { Ico } from "@/components/icons";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Avatar from "./Avatar";
+import { oferecerInclusaoNoGrupo } from "@/lib/lancamentosGrupo";
 
 const PALETA_CORES = [
   "#10B981", // Verde
@@ -26,6 +27,8 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   const [corConvidado, setCorConvidado] = useState("#10B981");
   const [adicionandoConvidado, setAdicionandoConvidado] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  const [excluindoGrupo, setExcluindoGrupo] = useState(false);
+  const [confirmaNome, setConfirmaNome] = useState("");
 
   useEffect(() => {
     carregarPerfilEMembros();
@@ -84,30 +87,18 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     try {
       if (modo === "criar") {
-        const { data: grupo, error: erroGrupo } = await supabase
-          .from("grupos_familiares")
-          .insert([{ nome: inputValor }])
-          .select()
-          .single();
+        // A criação roda numa função do banco (criar_grupo_familiar): cria o grupo e já coloca você nele como gestor
+        const { data: grupoId, error: erroGrupo } = await supabase.rpc("criar_grupo_familiar", { p_nome: inputValor });
+        if (erroGrupo || !grupoId) throw erroGrupo || new Error("Não foi possível criar o grupo.");
 
-        if (erroGrupo) throw erroGrupo;
-
-        const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
-        await supabase.from("perfis").upsert({
-          id: user?.id,
-          user_id: user?.id,
-          nome_usuario: nomePadrao,
-          grupo_id: grupo.id,
-          cargo: "gestor",
-          cor: "#10B981",
-        });
-
-        alert("Grupo criado com sucesso!");
+        const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, String(grupoId)) : null;
+        alert("Grupo criado com sucesso!" + (aviso ? "\n\n" + aviso : ""));
+        window.dispatchEvent(new Event("homecash:perfil"));
       }
 
       if (modo === "entrar") {
         const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
-        await supabase.from("perfis").upsert({
+        const { error: erroPerfil } = await supabase.from("perfis").upsert({
           id: user?.id,
           user_id: user?.id,
           nome_usuario: nomePadrao,
@@ -115,8 +106,11 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
           cargo: "membro",
           cor: "#6366F1",
         });
+        if (erroPerfil) throw erroPerfil;
 
-        alert("Você entrou no grupo!");
+        const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, inputValor) : null;
+        alert("Você entrou no grupo!" + (aviso ? "\n\n" + aviso : ""));
+        window.dispatchEvent(new Event("homecash:perfil"));
       }
 
       await carregarPerfilEMembros();
@@ -154,11 +148,44 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     setCarregando(false);
   };
 
-  const removerMembro = async (membroId: string) => {
-    if (!confirm("Deseja remover esta pessoa do grupo?")) return;
-    await supabase.from("perfis").delete().eq("id", membroId);
-    carregarPerfilEMembros();
+  // Só o gestor remove (a regra também é imposta no banco, pela função remover_membro_grupo):
+  // convidado sem conta é apagado; quem tem conta apenas sai do grupo (a conta e os dados dela continuam).
+  const removerMembro = async (membro: any) => {
+    const texto = membro.eh_convidado
+      ? `Remover o convidado "${membro.nome_usuario}" do grupo?`
+      : `Remover "${membro.nome_usuario}" do grupo?\n\nA conta e os lançamentos dela continuam existindo, mas ela deixa de ver o grupo.`;
+    if (!confirm(texto)) return;
+
+    const { error } = await supabase.rpc("remover_membro_grupo", { p_membro: membro.id });
+    if (error) {
+      alert("Não foi possível remover: " + error.message);
+      return;
+    }
+    await carregarPerfilEMembros();
+    window.dispatchEvent(new Event("homecash:perfil"));
   };
+
+  // Excluir o grupo (só o gestor; a regra também é imposta no banco pela função excluir_grupo_familiar).
+  // Todos saem do grupo, convidados sem conta são apagados e os lançamentos continuam com cada dono.
+  const excluirGrupo = async () => {
+    setCarregando(true);
+    const { error } = await supabase.rpc("excluir_grupo_familiar");
+    setCarregando(false);
+    if (error) {
+      alert("Não foi possível excluir o grupo: " + error.message);
+      return;
+    }
+    setExcluindoGrupo(false);
+    setConfirmaNome("");
+    setMembros([]);
+    setModo("menu");
+    await carregarPerfilEMembros();
+    window.dispatchEvent(new Event("homecash:perfil"));
+    alert("Grupo excluído.");
+  };
+
+  const souGestor = meuPerfil?.cargo === "gestor";
+  const nomeDoGrupo: string = meuPerfil?.grupos_familiares?.nome || "";
 
   return (
     <div className="fixed inset-0 z-[10030] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -268,6 +295,12 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                       <div>
                         <p className="font-medium text-xs flex items-center gap-1.5">
                           {m.nome_usuario}
+                          {m.cargo === "gestor" && (
+                            <span className="text-[9px] bg-accent/10 text-accent border border-accent/30 px-1 py-0.2 rounded">
+                              Gestor
+                            </span>
+                          )}
+                          {m.id === meuPerfil.id && <span className="text-[9px] text-muted">(você)</span>}
                           {m.eh_convidado && (
                             <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.2 rounded">
                               Convidado
@@ -277,9 +310,9 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                       </div>
                     </div>
 
-                    {m.id !== meuPerfil.id && (
+                    {souGestor && m.id !== meuPerfil.id && (
                       <button
-                        onClick={() => removerMembro(m.id)}
+                        onClick={() => removerMembro(m)}
                         className="inline-flex items-center gap-1 text-xs text-red-400 hover:underline"
                       >
                         <Ico icon={Trash2} size={13} />Remover
@@ -289,6 +322,57 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             </div>
+
+            {/* Excluir grupo (só o gestor, com confirmação digitando o nome) */}
+            {souGestor && (
+              <div className="border-t border-line pt-4">
+                {!excluindoGrupo ? (
+                  <button
+                    onClick={() => setExcluindoGrupo(true)}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/30 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10"
+                  >
+                    <Ico icon={Trash2} size={14} />Excluir grupo
+                  </button>
+                ) : (
+                  <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+                    <p className="text-sm font-semibold text-red-400">Excluir o grupo &quot;{nomeDoGrupo}&quot;?</p>
+                    <p className="text-xs text-muted">
+                      Todas as pessoas saem do grupo e os convidados sem conta são apagados. Os lançamentos de cada pessoa continuam com ela,
+                      mas deixam de ser compartilhados (os repasses também). Isso não pode ser desfeito.
+                    </p>
+                    <label className="block text-xs font-medium text-muted">
+                      Para confirmar, digite o nome do grupo: <span className="font-bold text-ink">{nomeDoGrupo}</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={confirmaNome}
+                      onChange={(e) => setConfirmaNome(e.target.value)}
+                      className="w-full rounded-lg border border-line bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExcluindoGrupo(false);
+                          setConfirmaNome("");
+                        }}
+                        className="flex-1 rounded-lg border border-line py-2 text-xs hover:bg-muted/10"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={excluirGrupo}
+                        disabled={carregando || !nomeDoGrupo || confirmaNome.trim().toLowerCase() !== nomeDoGrupo.trim().toLowerCase()}
+                        className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {carregando ? "Excluindo..." : "Excluir definitivamente"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : modo === "menu" ? (
           <div className="space-y-3">

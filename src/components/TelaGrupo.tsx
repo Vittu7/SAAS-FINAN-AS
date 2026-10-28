@@ -214,7 +214,7 @@ function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Memb
             <article key={m.id} className="card-glass space-y-4 p-5">
               <header className="flex items-center gap-3">
                 <Avatar src={m.avatar} nome={m.nome} cor={m.cor} tamanho="lg" anel />
-                <div className="min-w-0"><p className="truncate text-base font-bold">{m.nome}{eu && <span className="ml-2 text-xs font-medium text-accent">você</span>}</p><p className="text-xs text-muted">{m.cargo === "admin" ? "Administrador" : "Membro"}</p></div>
+                <div className="min-w-0"><p className="truncate text-base font-bold">{m.nome}{eu && <span className="ml-2 text-xs font-medium text-accent">você</span>}</p><p className="text-xs text-muted">{m.cargo === "gestor" || m.cargo === "admin" ? "Gestor" : m.convidado ? "Convidado" : "Membro"}</p></div>
               </header>
               {oculto ? (
                 <p className="flex items-center gap-2 rounded-xl bg-background p-4 text-sm text-muted"><Ico icon={Lock} size={16} />{m.nome} escolheu não exibir o resumo financeiro.</p>

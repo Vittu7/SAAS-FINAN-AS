@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { oferecerInclusaoNoGrupo } from "@/lib/lancamentosGrupo";
 
 export default function FamiliaPage() {
   const router = useRouter();
@@ -34,24 +35,12 @@ export default function FamiliaPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 1. Cria o grupo novo
-      const { data: grupo, error: erroGrupo } = await supabase
-        .from("grupos_familiares")
-        .insert([{ nome: nomeGrupo }])
-        .select()
-        .single();
+      // Cria o grupo e coloca você nele como gestor (função criar_grupo_familiar no banco)
+      const { data: grupoId, error: erroGrupo } = await supabase.rpc("criar_grupo_familiar", { p_nome: nomeGrupo });
+      if (erroGrupo || !grupoId) throw erroGrupo || new Error("Não foi possível criar o grupo.");
 
-      if (erroGrupo) throw erroGrupo;
-
-      // 2. Atualiza o seu perfil para ser o Gestor deste grupo
-      const { error: erroPerfil } = await supabase
-        .from("perfis")
-        .update({ grupo_id: grupo.id, cargo: "gestor" })
-        .eq("id", user?.id);
-
-      if (erroPerfil) throw erroPerfil;
-
-      alert("Grupo familiar criado com sucesso!");
+      const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, String(grupoId)) : null;
+      alert("Grupo familiar criado com sucesso!" + (aviso ? "\n\n" + aviso : ""));
       carregarPerfil(); // Recarrega a tela
     } catch (error: any) {
       alert("Erro ao criar grupo: " + error.message);

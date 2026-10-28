@@ -304,7 +304,7 @@ function LoginConteudo() {
           )}
 
           <p className="text-center text-xs text-muted">
-            Ao continuar, você concorda com a <Link href="/privacidade" className="font-medium text-accent hover:underline">Política de Privacidade</Link>.
+            Ao continuar, você concorda com os <Link href="/termos" className="font-medium text-accent hover:underline">Termos de Serviço</Link> e com a <Link href="/privacidade" className="font-medium text-accent hover:underline">Política de Privacidade</Link>.
           </p>
         </div>
       </section>

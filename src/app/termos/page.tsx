@@ -1,0 +1,152 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { EMAIL_CONTATO, LEGAL_ATUALIZADO_EM, RESPONSAVEL } from "@/lib/legal";
+
+export const metadata: Metadata = {
+  title: "Termos de Serviço | HomeCash",
+  description: "Regras de uso do HomeCash.",
+  robots: { index: true, follow: true },
+};
+
+function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-xl font-bold">{titulo}</h2>
+      <div className="space-y-3 text-[15px] leading-relaxed text-muted [&_b]:font-semibold [&_b]:text-ink [&_li]:ml-5 [&_li]:list-disc [&_ul]:space-y-1.5">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+export default function TermosDeServico() {
+  const contato = (
+    <a className="font-medium text-accent hover:underline" href={`mailto:${EMAIL_CONTATO}`}>
+      {EMAIL_CONTATO}
+    </a>
+  );
+
+  return (
+    <main className="min-h-dvh bg-background px-5 py-10 text-ink sm:px-8">
+      <article className="mx-auto max-w-3xl space-y-8">
+        <header className="space-y-3">
+          <Link href="/login" className="inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline">
+            ← Voltar para o HomeCash
+          </Link>
+          <h1 className="text-3xl font-bold tracking-tight">Termos de Serviço</h1>
+          <p className="text-sm text-muted">Última atualização: {LEGAL_ATUALIZADO_EM}</p>
+          <p className="text-[15px] leading-relaxed text-muted">
+            Estes termos explicam as regras para usar o <b className="font-semibold text-ink">HomeCash</b>, um aplicativo para organizar as
+            finanças pessoais e da família. Ao criar uma conta ou usar o aplicativo, você concorda com eles. Se não concordar, não use o
+            serviço.
+          </p>
+        </header>
+
+        <Secao titulo="1. O que é o HomeCash">
+          <p>
+            O HomeCash permite registrar entradas e saídas, contas fixas, cartões, caixinhas e aportes, acompanhar gráficos e relatórios e,
+            se você quiser, dividir o controle com a sua família em um grupo. É mantido por <b>{RESPONSAVEL}</b>.
+          </p>
+          <p>
+            O HomeCash é uma <b>ferramenta de organização</b>. Ele não é banco, corretora, instituição financeira nem consultoria, e nada
+            no aplicativo é recomendação de investimento, contábil, tributária ou jurídica. As decisões sobre o seu dinheiro são suas.
+          </p>
+        </Secao>
+
+        <Secao titulo="2. Sua conta">
+          <ul>
+            <li>O acesso é feito com a sua conta Google. Você é responsável por manter essa conta segura.</li>
+            <li>Você precisa ter 18 anos ou mais e informar dados verdadeiros.</li>
+            <li>Cada conta é pessoal. Não compartilhe o seu acesso; para dividir finanças, use o grupo familiar.</li>
+            <li>Avise-nos se suspeitar de uso indevido da sua conta.</li>
+          </ul>
+        </Secao>
+
+        <Secao titulo="3. Seus dados e a exatidão das informações">
+          <p>
+            Os valores e lançamentos são digitados por você, então a exatidão deles depende de você. O HomeCash faz cálculos a partir
+            dessas informações e não se responsabiliza por resultados baseados em dados incorretos ou incompletos. Você continua dono
+            dos seus dados. Como tratamos essas informações está na{" "}
+            <Link href="/privacidade" className="font-medium text-accent hover:underline">Política de Privacidade</Link>.
+          </p>
+        </Secao>
+
+        <Secao titulo="4. Grupo familiar">
+          <p>
+            Ao entrar em um grupo, você concorda que os outros participantes vejam o seu nome, a sua foto e os lançamentos
+            compartilhados ou de repasse entre vocês. Compartilhe o código de convite apenas com quem você confia. Quem cria o grupo e
+            quem participa são responsáveis pelas combinações feitas entre si; o HomeCash apenas oferece a ferramenta de registro.
+          </p>
+        </Secao>
+
+        <Secao titulo="5. Uso aceitável">
+          <p>Você concorda em não:</p>
+          <ul>
+            <li>usar o aplicativo para fraude, lavagem de dinheiro ou qualquer atividade ilegal;</li>
+            <li>tentar acessar contas ou dados de outras pessoas, ou burlar a segurança do serviço;</li>
+            <li>enviar vírus, sobrecarregar o serviço ou fazer engenharia reversa para fins abusivos;</li>
+            <li>enviar fotos ou textos ilegais, ofensivos ou que violem direitos de terceiros;</li>
+            <li>criar contas automatizadas ou em massa.</li>
+          </ul>
+        </Secao>
+
+        <Secao titulo="6. Disponibilidade e mudanças no serviço">
+          <p>
+            O HomeCash é oferecido <b>gratuitamente e no estado em que se encontra</b>. Buscamos mantê-lo no ar e funcionando bem, mas
+            não garantimos funcionamento ininterrupto ou livre de erros. Podemos atualizar, alterar, limitar ou encerrar funcionalidades,
+            inclusive por manutenção ou por dependermos de serviços de terceiros (como Supabase, Vercel e Google). Se o serviço for
+            encerrado, avisaremos com antecedência razoável para que você possa guardar os seus dados.
+          </p>
+          <p>
+            Como em qualquer sistema online, recomendamos que você guarde por conta própria uma cópia das informações que considera
+            importantes.
+          </p>
+        </Secao>
+
+        <Secao titulo="7. Propriedade intelectual">
+          <p>
+            O nome HomeCash, a marca, o visual e o código do aplicativo pertencem ao responsável pelo serviço. Você recebe o direito
+            pessoal e limitado de usar o aplicativo; isso não transfere nenhuma propriedade a você. O conteúdo que você cadastra
+            continua sendo seu, e você nos autoriza apenas a armazená-lo e exibi-lo para prestar o serviço.
+          </p>
+        </Secao>
+
+        <Secao titulo="8. Limitação de responsabilidade">
+          <p>
+            Na máxima extensão permitida pela lei, o HomeCash não responde por prejuízos indiretos, perda de lucros ou de oportunidades,
+            nem por perdas decorrentes de erros nos dados informados, de decisões financeiras tomadas com base no aplicativo, de falhas
+            de serviços de terceiros ou de acesso indevido causado por descuido com a sua conta Google. Nada nestes termos exclui
+            direitos que a lei, inclusive o Código de Defesa do Consumidor, garanta a você.
+          </p>
+        </Secao>
+
+        <Secao titulo="9. Encerramento da conta">
+          <p>
+            Você pode parar de usar o HomeCash quando quiser e pedir a exclusão da sua conta e dos seus dados pelo e-mail {contato}.
+            Podemos suspender ou encerrar contas que violem estes termos ou a lei, ou que coloquem o serviço ou outras pessoas em risco.
+          </p>
+        </Secao>
+
+        <Secao titulo="10. Mudanças nestes termos">
+          <p>
+            Podemos atualizar estes termos. A data no topo mostra a última revisão e, em mudanças importantes, avisaremos dentro do
+            aplicativo. Continuar usando o HomeCash depois da atualização significa que você aceita a nova versão.
+          </p>
+        </Secao>
+
+        <Secao titulo="11. Lei aplicável e contato">
+          <p>
+            Estes termos seguem as leis do Brasil. Fica eleito o foro do domicílio do usuário para resolver qualquer disputa, conforme a
+            legislação de defesa do consumidor. Dúvidas ou solicitações: {contato}.
+          </p>
+        </Secao>
+
+        <footer className="border-t border-line pt-6 text-sm text-muted">
+          <Link href="/privacidade" className="font-medium text-accent hover:underline">Política de Privacidade</Link>
+          {" · "}
+          {contato}
+        </footer>
+      </article>
+    </main>
+  );
+}

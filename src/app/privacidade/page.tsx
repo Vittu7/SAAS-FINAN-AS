@@ -1,20 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EMAIL_CONTATO, LEGAL_ATUALIZADO_EM as ATUALIZADA_EM, RESPONSAVEL } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "Política de Privacidade | HomeCash",
   description: "Como o HomeCash coleta, usa e protege os seus dados.",
   robots: { index: true, follow: true },
 };
-
-/* ============================================================
-   PREENCHA ANTES DE PUBLICAR: estes dois dados aparecem na página.
-   O Google exige um meio de contato real na política de privacidade.
-   ============================================================ */
-const RESPONSAVEL = "HomeCash";
-const EMAIL_CONTATO = "homecashofc@gmail.com";
-
-const ATUALIZADA_EM = "27 de outubro de 2026";
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
@@ -179,6 +171,8 @@ export default function PoliticaDePrivacidade() {
 
         <footer className="border-t border-line pt-6 text-sm text-muted">
           Dúvidas? <a className="font-medium text-accent hover:underline" href={`mailto:${EMAIL_CONTATO}`}>{EMAIL_CONTATO}</a>
+          {" · "}
+          <Link href="/termos" className="font-medium text-accent hover:underline">Termos de Serviço</Link>
         </footer>
       </article>
     </main>

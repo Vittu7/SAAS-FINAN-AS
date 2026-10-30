@@ -286,7 +286,7 @@ export function MobileMenu({
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-2">
           {([
-            ["Cartões e contas", [["fatura", "Cartões e Faturas"], ["cartao", "Contas parceladas"], ["contas", "Contas fixas"], ["lancamentos", "Tabela de lançamentos"]]],
+            ["Cartões e contas", [["fatura", "Cartões e Faturas"], ["cartao", "Contas parceladas"], ["contas", "Contas fixas"], ["lancamentos", "Lançamentos do mês"]]],
             ["Análises", [["graficos", "Gráficos e relatórios"], ["investimentos", "Investimentos"]]],
           ] as [string, [Aba, string][]][]).map(([titulo, itens]) => (
             <section key={titulo}>

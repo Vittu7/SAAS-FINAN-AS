@@ -7,7 +7,9 @@ import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import { SeletorOpcao } from "@/components/SeletorOpcao";
 import { useOpcoes } from "@/lib/useOpcoes";
-import { parseValor, rotuloMes } from "@/lib/finance";
+import { brl, parseValor, rotuloMes } from "@/lib/finance";
+import { tipoDaConta, verificarDisponibilidade } from "@/lib/contas";
+import type { Estado } from "@/lib/types";
 import type { Membro } from "@/hooks/useFinanceStore";
 
 /** ÚNICO lugar para criar lançamentos: entrada, saída à vista, compra parcelada ou conta fixa. */
@@ -21,6 +23,7 @@ const campo = "h-11 w-full rounded-xl border border-line bg-background px-3 text
 const rotulo = "mb-1 block text-xs font-medium text-muted";
 
 export default function NovaTransacao({
+  estado,
   mes,
   membros,
   userId,
@@ -31,6 +34,8 @@ export default function NovaTransacao({
   onAdicionarCartao,
   onAdicionarConta,
 }: {
+  /** Base completa (sem filtros de tela): saldo e limite não dependem da visualização escolhida. */
+  estado: Estado;
   mes: string;
   membros: Membro[];
   userId: string | null;
@@ -57,10 +62,17 @@ export default function NovaTransacao({
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
+  const saida = tipo === "saida";
   const meu = membros.find((m) => m.id === userId);
   const meuNome = meu?.nome || "Usuário";
-  const cartoes = useMemo(() => formas.filter((f) => f.eh_cartao), [formas]);
-  const listaForma = como === "parcelado" ? (cartoes.length ? cartoes : formas) : formas;
+  const cartoes = useMemo(() => formas.filter((f) => tipoDaConta(f) === "credito"), [formas]);
+
+  // Entrada nunca cai em cartão de crédito; parcelado só em crédito.
+  const listaForma = useMemo(() => {
+    if (!saida) return formas.filter((f) => tipoDaConta(f) !== "credito");
+    if (como === "parcelado") return cartoes.length ? cartoes : formas;
+    return formas;
+  }, [formas, cartoes, saida, como]);
 
   useEffect(() => {
     if (quem.length === 0) setQuem([meuNome]);
@@ -70,7 +82,12 @@ export default function NovaTransacao({
     if (!listaForma.some((f) => f.nome === forma)) setForma(listaForma[0]?.nome || "");
   }, [listaForma, forma]);
 
-  const saida = tipo === "saida";
+  const contaSel = formas.find((f) => f.nome === forma);
+  const valorNum = parseValor(valor);
+  // Conta fixa só desconta quando for marcada como paga: não valida na criação.
+  const valida = saida ? como !== "fixa" : true;
+  const disp = contaSel && valida ? verificarDisponibilidade(estado, contaSel, valorNum, { userId, mes }) : null;
+
   const cor = saida ? "bg-rose-700 text-white" : "bg-emerald-700 text-white";
 
   const alternarQuem = (nome: string) =>
@@ -81,6 +98,13 @@ export default function NovaTransacao({
     const total = parseValor(valor);
     if (!total) return setErro("Digite um valor maior que zero.");
     if (!descricao.trim()) return setErro("Escreva uma descrição curta.");
+
+    // Aviso (não bloqueia): saldo do débito ou limite do crédito insuficiente
+    if (saida && como !== "fixa" && contaSel) {
+      const v = verificarDisponibilidade(estado, contaSel, total, { userId, mes });
+      if (!v.ok && !window.confirm(`O valor excede o ${v.rotulo.toLowerCase()} de ${contaSel.nome} em ${brl(v.faltante)}. Lançar mesmo assim?`)) return;
+    }
+
     setErro("");
     setSalvando(true);
 
@@ -92,7 +116,8 @@ export default function NovaTransacao({
 
     try {
       if (!saida) {
-        await onAdicionarExtrato({ mes, tipo: "entrada", pagamento: "Entrada", categoria: categoria || "Salário", valor: total, descricao: descricao.trim(), responsavel: meuNome, privado, compartilhado_com });
+        // A entrada agora registra em qual conta o dinheiro entrou
+        await onAdicionarExtrato({ mes, tipo: "entrada", pagamento: forma || "Entrada", categoria: categoria || "Salário", valor: total, descricao: descricao.trim(), responsavel: meuNome, privado, compartilhado_com });
       } else if (como === "avista") {
         for (const r of responsaveis)
           await onAdicionarExtrato({ mes, pagamento: forma || "Geral", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), responsavel: r, privado, compartilhado_com });
@@ -157,7 +182,7 @@ export default function NovaTransacao({
             </div>
             <p className="mt-1.5 text-xs text-muted">
               {como === "avista" && "Gasto do dia a dia (Pix, débito, dinheiro, cartão à vista)."}
-              {como === "parcelado" && "Compra dividida: as parcelas seguintes são criadas nos próximos meses."}
+              {como === "parcelado" && "Compra dividida no cartão de crédito: as parcelas seguintes são criadas nos próximos meses."}
               {como === "fixa" && "Conta que se repete todo mês (aluguel, internet, assinaturas)."}
             </p>
           </div>
@@ -165,32 +190,52 @@ export default function NovaTransacao({
 
         {saida && como === "parcelado" && cartoes.length === 0 && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm" role="note">
-            <p className="font-semibold">Você ainda não cadastrou um cartão.</p>
+            <p className="font-semibold">Você ainda não cadastrou um cartão de crédito.</p>
             <p className="mt-0.5 text-muted">Cadastre o cartão primeiro; leva menos de um minuto.</p>
             <button type="button" onClick={() => setCadastrandoCartao(true)} className="mt-2 h-10 rounded-lg bg-accent px-4 text-sm font-semibold text-on-accent">Cadastrar cartão</button>
           </div>
         )}
 
         {saida ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <span className={rotulo}>{como === "parcelado" ? "Cartão" : "Forma de pagamento"}</span>
-              <SeletorOpcao opcoes={listaForma} valor={forma} onChange={setForma} />
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <span className={rotulo}>{como === "parcelado" ? "Cartão de crédito" : "Forma de pagamento"}</span>
+                <SeletorOpcao opcoes={listaForma} valor={forma} onChange={setForma} />
+              </div>
+              <div>
+                <span className={rotulo}>Categoria</span>
+                <SeletorOpcao opcoes={categorias} valor={categoria} onChange={setCategoria} />
+              </div>
             </div>
-            <div>
-              <span className={rotulo}>Categoria</span>
-              <SeletorOpcao opcoes={categorias} valor={categoria} onChange={setCategoria} />
-            </div>
-          </div>
+            {disp && contaSel && disp.disponivel !== null && (
+              <p role={disp.ok ? undefined : "alert"} className={`-mt-1 text-xs ${disp.ok ? "text-muted" : "text-rose-600 dark:text-rose-400"}`}>
+                {disp.tipo === "credito" ? "Usará o crédito" : "Usará o saldo"} de {contaSel.nome} · {disp.rotulo}: <b>{brl(disp.disponivel)}</b>
+                {!disp.ok && <> · faltam {brl(disp.faltante)}</>}
+              </p>
+            )}
+          </>
         ) : (
-          <div>
-            <span className={rotulo}>Tipo de entrada</span>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIAS_ENTRADA.map((c) => (
-                <button key={c} type="button" aria-pressed={(categoria || "Salário") === c} onClick={() => setCategoria(c)} className={`h-9 rounded-full px-4 text-sm font-medium transition ${(categoria || "Salário") === c ? "bg-emerald-700 text-white" : "bg-background text-muted ring-1 ring-line"}`}>{c}</button>
-              ))}
+          <>
+            <div>
+              <span className={rotulo}>Tipo de entrada</span>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIAS_ENTRADA.map((c) => (
+                  <button key={c} type="button" aria-pressed={(categoria || "Salário") === c} onClick={() => setCategoria(c)} className={`h-9 rounded-full px-4 text-sm font-medium transition ${(categoria || "Salário") === c ? "bg-emerald-700 text-white" : "bg-background text-muted ring-1 ring-line"}`}>{c}</button>
+                ))}
+              </div>
             </div>
-          </div>
+            <div>
+              <span className={rotulo}>Em qual conta o dinheiro entrou?</span>
+              <SeletorOpcao opcoes={listaForma} valor={forma} onChange={setForma} placeholder="Selecione a conta" />
+              {disp?.tipo === "debito" && disp.disponivel !== null && (
+                <p className="mt-1.5 text-xs text-muted">
+                  Saldo atual: <b className="text-ink">{brl(disp.disponivel)}</b>
+                  {valorNum > 0 && <> · depois da entrada: <b className="text-ink">{brl(disp.disponivel + valorNum)}</b></>}
+                </p>
+              )}
+            </div>
+          </>
         )}
 
         {saida && como === "parcelado" && (

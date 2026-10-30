@@ -8,6 +8,7 @@ import DialogResponsivo from "./DialogResponsivo";
 import { brl, parseValor } from "@/lib/finance";
 import { type Opcao, useOpcoes } from "@/lib/useOpcoes";
 import { gradienteCartao } from "@/lib/cartao";
+import { tipoDaConta, type TipoCartao } from "@/lib/contas";
 
 type Aba = "cartoes" | "pagamentos" | "categorias";
 
@@ -23,13 +24,21 @@ type Formulario = {
   id: string | null; // null = novo
   nome: string;
   cor: string;
-  ehCartao: boolean;
+  /** null = forma de pagamento sem controle (Pix, dinheiro, boleto...) */
+  tipoCartao: TipoCartao | null;
   limite: string;
+  saldo: string;
 };
 
-
 function formularioVazio(aba: Aba): Formulario {
-  return { id: null, nome: "", cor: aba === "cartoes" ? "#6366F1" : "#64748B", ehCartao: aba === "cartoes", limite: "" };
+  return {
+    id: null,
+    nome: "",
+    cor: aba === "cartoes" ? "#6366F1" : "#64748B",
+    tipoCartao: aba === "cartoes" ? "credito" : null,
+    limite: "",
+    saldo: "",
+  };
 }
 
 export default function GerenciarOpcoesModal({
@@ -79,19 +88,20 @@ export default function GerenciarOpcoesModal({
   }, [onClose, modo]);
 
   const lista = useMemo(() => {
+    // A aba "Cartões" reúne crédito e débito; "Formas de pagamento" fica com o que não tem controle
     const base =
       aba === "categorias"
         ? categoria
         : aba === "cartoes"
-          ? pagamento.filter((i) => Boolean(i.eh_cartao))
-          : pagamento.filter((i) => !i.eh_cartao);
+          ? pagamento.filter((i) => tipoDaConta(i) !== null)
+          : pagamento.filter((i) => tipoDaConta(i) === null);
     const termo = busca.trim().toLowerCase();
     return termo ? base.filter((i) => i.nome.toLowerCase().includes(termo)) : base;
   }, [aba, categoria, pagamento, busca]);
 
   const contagem: Record<Aba, number> = {
-    cartoes: pagamento.filter((i) => i.eh_cartao).length,
-    pagamentos: pagamento.filter((i) => !i.eh_cartao).length,
+    cartoes: pagamento.filter((i) => tipoDaConta(i) !== null).length,
+    pagamentos: pagamento.filter((i) => tipoDaConta(i) === null).length,
     categorias: categoria.length,
   };
 
@@ -110,8 +120,9 @@ export default function GerenciarOpcoesModal({
       id: item.id,
       nome: item.nome,
       cor: item.cor || "#64748B",
-      ehCartao: Boolean(item.eh_cartao),
+      tipoCartao: tipoDaConta(item),
       limite: item.limite ? String(item.limite).replace(".", ",") : "",
+      saldo: item.saldo_inicial ? String(item.saldo_inicial).replace(".", ",") : "",
     });
   };
 
@@ -122,7 +133,8 @@ export default function GerenciarOpcoesModal({
 
     const ehPagamento = aba !== "categorias";
     const limite = parseValor(form.limite);
-    if (ehPagamento && form.ehCartao && limite <= 0) {
+    const saldo = parseValor(form.saldo);
+    if (ehPagamento && form.tipoCartao === "credito" && limite <= 0) {
       return setErro("Informe um limite maior que zero para o cartão de crédito.");
     }
 
@@ -136,14 +148,20 @@ export default function GerenciarOpcoesModal({
         await atualizarPagamento(form.id, {
           nome: form.nome,
           cor: form.cor,
-          eh_cartao: form.ehCartao,
-          limite: form.ehCartao ? limite : 0,
+          tipo_cartao: form.tipoCartao,
+          limite: form.tipoCartao === "credito" ? limite : 0,
+          saldo_inicial: form.tipoCartao === "debito" ? saldo : 0,
         });
         // Se a conta virou (ou deixou de ser) cartão, acompanhe na aba certa
-        const novaAba: Aba = form.ehCartao ? "cartoes" : "pagamentos";
+        const novaAba: Aba = form.tipoCartao ? "cartoes" : "pagamentos";
         if (novaAba !== aba) setAba(novaAba);
       } else {
-        await adicionarPagamento(form.nome, { isCartaoCredito: form.ehCartao, limiteTotal: limite, cor: form.cor });
+        await adicionarPagamento(form.nome, {
+          tipoCartao: form.tipoCartao,
+          limiteTotal: limite,
+          saldoInicial: saldo,
+          cor: form.cor,
+        });
       }
       setForm(null);
       onAtualizar?.();
@@ -326,6 +344,7 @@ function BotoesAcao({ nome, bloqueado, onEditar, onExcluir, claro }: { nome: str
 
 function CartaoItem({ item, bloqueado, onEditar, onExcluir }: { item: Opcao; bloqueado: boolean; onEditar: () => void; onExcluir: () => void }) {
   // Mesma aparência dos cartões da Home, das Contas parceladas e das Faturas: usa a cor cadastrada.
+  const debito = tipoDaConta(item) === "debito";
   return (
     <div
       className="flex h-full min-w-0 flex-col justify-between gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-md"
@@ -333,12 +352,12 @@ function CartaoItem({ item, bloqueado, onEditar, onExcluir }: { item: Opcao; blo
     >
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 truncate text-base font-semibold">{item.nome}</p>
-        <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[11px] font-semibold">Crédito</span>
+        <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[11px] font-semibold">{debito ? "Débito" : "Crédito"}</span>
       </div>
       <div className="grid min-w-0 gap-3">
         <div>
-          <p className="text-[11px] text-white/70">Limite total</p>
-          <p className="text-lg font-bold">{brl(Number(item.limite || 0))}</p>
+          <p className="text-[11px] text-white/70">{debito ? "Saldo inicial" : "Limite total"}</p>
+          <p className="text-lg font-bold">{brl(Number((debito ? item.saldo_inicial : item.limite) || 0))}</p>
         </div>
         <BotoesAcao claro nome={item.nome} bloqueado={bloqueado} onEditar={onEditar} onExcluir={onExcluir} />
       </div>
@@ -386,12 +405,12 @@ function FormularioDialog({
   return (
     <DialogResponsivo titulo={titulo} onFechar={onCancelar}>
       <form onSubmit={onSalvar} className="min-w-0">
-        {ehPagamento && form.ehCartao && (
+        {ehPagamento && form.tipoCartao && (
           <div className="mb-4 overflow-hidden rounded-2xl p-4 text-white shadow-md" style={{ background: gradienteCartao(form.cor) }}>
-            <p className="text-[11px] text-white/70">Prévia do cartão</p>
+            <p className="text-[11px] text-white/70">Prévia do cartão · {form.tipoCartao === "credito" ? "Crédito" : "Débito"}</p>
             <p className="mt-4 truncate font-semibold">{form.nome.trim() || "Nome do cartão"}</p>
-            <p className="text-[11px] text-white/70 mt-3">Limite total</p>
-            <p className="text-lg font-bold">{brl(parseValor(form.limite))}</p>
+            <p className="text-[11px] text-white/70 mt-3">{form.tipoCartao === "credito" ? "Limite total" : "Saldo inicial"}</p>
+            <p className="text-lg font-bold">{brl(parseValor(form.tipoCartao === "credito" ? form.limite : form.saldo))}</p>
           </div>
         )}
 
@@ -410,27 +429,49 @@ function FormularioDialog({
           </label>
 
           {ehPagamento && (
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-3">
-              <span>
-                <span className="block text-sm font-medium text-ink">É cartão de crédito</span>
-                <span className="block text-xs text-muted">Tem limite e fatura mensal</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={form.ehCartao}
-                onChange={(e) => setForm({ ...form, ehCartao: e.target.checked })}
-                className="size-5 accent-[var(--accent)]"
-              />
-            </label>
+            <div>
+              <span className="mb-1.5 block text-xs font-medium text-muted">Tipo</span>
+              <div className="grid grid-cols-3 gap-1 rounded-xl bg-background p-1 ring-1 ring-line" role="group" aria-label="Tipo da forma de pagamento">
+                {([[null, "Outra forma"], ["debito", "Débito"], ["credito", "Crédito"]] as const).map(([id, r]) => (
+                  <button
+                    key={r}
+                    type="button"
+                    aria-pressed={form.tipoCartao === id}
+                    onClick={() => setForm({ ...form, tipoCartao: id })}
+                    className={`h-9 rounded-lg text-xs font-semibold ${form.tipoCartao === id ? "bg-accent text-on-accent" : "text-muted"}`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {form.tipoCartao === "credito" && "Tem limite e fatura mensal."}
+                {form.tipoCartao === "debito" && "Usa o saldo da conta: entradas somam e saídas descontam."}
+                {form.tipoCartao === null && "Sem controle de saldo ou limite (Pix, dinheiro, boleto...)."}
+              </p>
+            </div>
           )}
 
-          {ehPagamento && form.ehCartao && (
+          {ehPagamento && form.tipoCartao === "credito" && (
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-muted">Limite total (R$)</span>
               <input
                 inputMode="decimal"
                 value={form.limite}
                 onChange={(e) => setForm({ ...form, limite: e.target.value })}
+                placeholder="0,00"
+                className={campo}
+              />
+            </label>
+          )}
+
+          {ehPagamento && form.tipoCartao === "debito" && (
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-muted">Saldo atual da conta (R$)</span>
+              <input
+                inputMode="decimal"
+                value={form.saldo}
+                onChange={(e) => setForm({ ...form, saldo: e.target.value })}
                 placeholder="0,00"
                 className={campo}
               />

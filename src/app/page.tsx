@@ -53,6 +53,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes, MobileSaldo } from "@/components/mobile/MobileShell";
 import CaixinhasDestaque from "@/components/CaixinhasDestaque";
+import SaldosContas from "@/components/SaldosContas";
 
 type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
 
@@ -420,6 +421,7 @@ export default function Home() {
               {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} onAbrirExtrato={setDetalheExtrato} /></div>}
               <MobileRecentes recentes={recentes} onAba={irPara} />
               {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
+              {dashboard.preferencias.faturas && <SaldosContas estado={estado} userId={userId} mes={mes} />}
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 {dashboard.preferencias.graficos && <div id="graficos" className="min-w-0"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
                 {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0"><InvestimentosReservaCard /></div>}
@@ -572,6 +574,7 @@ export default function Home() {
       <CompletarPerfilModal />
       {novaAberta && (
         <NovaTransacao
+          estado={estado}
           mes={mes}
           membros={membros}
           userId={userId}

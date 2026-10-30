@@ -5,6 +5,7 @@ import { useState } from "react";
 import { parseValor } from "@/lib/finance";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { SeletorOpcao } from "@/components/SeletorOpcao";
+import { tipoDaConta } from "@/lib/contas";
 
 type TipoLancamento = "extrato" | "cartao" | "contas";
 
@@ -25,6 +26,12 @@ export default function EditarLancamentoModal({
   onClose: () => void;
 }) {
   const { pagamento: opcoesPagamento, categoria: opcoesCategoria } = useOpcoes();
+
+  const ehEntrada = tipo === "extrato" && item.tipo === "entrada";
+  // Entrada nunca pode ser movida para cartão de crédito
+  const listaFormas = ehEntrada
+    ? opcoesPagamento.filter((o) => tipoDaConta(o) !== "credito")
+    : opcoesPagamento;
 
   const [mes, setMes] = useState<string>(item.mes || "");
   const [forma, setForma] = useState<string>(
@@ -108,7 +115,7 @@ export default function EditarLancamentoModal({
     if (tipo === "extrato") {
       patch = {
         mes,
-        pagamento: forma || "Geral",
+        pagamento: forma || (ehEntrada ? "Entrada" : "Geral"),
         categoria: categoria || "Outros",
         descricao: descricao.trim(),
         valor,
@@ -182,10 +189,10 @@ export default function EditarLancamentoModal({
 
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">
-              Forma de pagamento
+              {ehEntrada ? "Conta que recebeu" : "Forma de pagamento"}
             </label>
             <SeletorOpcao
-              opcoes={opcoesPagamento}
+              opcoes={listaFormas}
               valor={forma}
               onChange={setForma}
             />

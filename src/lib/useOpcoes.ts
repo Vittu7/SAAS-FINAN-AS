@@ -7,13 +7,21 @@ export interface Opcao {
   id: string;
   nome: string;
   cor: string;
+  /** true = cartão de crédito (mantido por compatibilidade; derivado de tipo_cartao no banco) */
   eh_cartao?: boolean | null;
   limite?: number | null;
+  /** "credito" | "debito" | null (forma sem controle: Pix, dinheiro...) */
+  tipo_cartao?: "credito" | "debito" | null;
+  /** Saldo inicial da conta de débito */
+  saldo_inicial?: number | null;
 }
 
 type DadosPagamento = {
+  /** compatibilidade com chamadas antigas */
   isCartaoCredito?: boolean;
+  tipoCartao?: "credito" | "debito" | null;
   limiteTotal?: number;
+  saldoInicial?: number;
   cor?: string;
 };
 
@@ -118,21 +126,26 @@ export function useOpcoes() {
     }
 
     const { userId, grupoId } = await obterContexto();
+    const tipo = dados.tipoCartao ?? (dados.isCartaoCredito ? "credito" : null);
 
     const { error } = await supabase.from("opcoes_pagamento").insert({
       user_id: userId,
       grupo_id: grupoId,
       nome,
       cor: dados.cor || COR_PADRAO,
-      eh_cartao: Boolean(dados.isCartaoCredito),
-      limite: dados.isCartaoCredito
-        ? Math.max(0, Number(dados.limiteTotal || 0))
-        : 0,
+      tipo_cartao: tipo,
+      eh_cartao: tipo === "credito",
+      limite: tipo === "credito" ? Math.max(0, Number(dados.limiteTotal || 0)) : 0,
+      saldo_inicial: tipo === "debito" ? Math.max(0, Number(dados.saldoInicial || 0)) : 0,
     });
 
     if (error) {
       if (error.code === "23505") {
         throw new Error("Já existe uma forma de pagamento com esse nome.");
+      }
+
+      if (error.code === "PGRST204" || error.code === "42703") {
+        throw new Error("Falta rodar a migração 05_cartao_debito_credito.sql no Supabase.");
       }
 
       throw error;
@@ -143,7 +156,7 @@ export function useOpcoes() {
 
   const atualizarPagamento = async (
     id: string,
-    patch: Partial<Pick<Opcao, "nome" | "cor" | "eh_cartao" | "limite">>,
+    patch: Partial<Pick<Opcao, "nome" | "cor" | "eh_cartao" | "limite" | "tipo_cartao" | "saldo_inicial">>,
   ) => {
     const dados: Record<string, unknown> = { ...patch };
 
@@ -155,8 +168,19 @@ export function useOpcoes() {
       }
     }
 
+    // Mantém eh_cartao (= crédito), limite e saldo coerentes com o tipo
+    if ("tipo_cartao" in dados) {
+      dados.eh_cartao = dados.tipo_cartao === "credito";
+      if (dados.tipo_cartao !== "credito") dados.limite = 0;
+      if (dados.tipo_cartao !== "debito") dados.saldo_inicial = 0;
+    }
+
     if (dados.limite !== undefined) {
       dados.limite = Math.max(0, Number(dados.limite || 0));
+    }
+
+    if (dados.saldo_inicial !== undefined) {
+      dados.saldo_inicial = Math.max(0, Number(dados.saldo_inicial || 0));
     }
 
     const { data, error } = await supabase
@@ -172,6 +196,10 @@ export function useOpcoes() {
     if (error) {
       if (error.code === "23505") {
         throw new Error("Já existe uma forma de pagamento com esse nome.");
+      }
+
+      if (error.code === "PGRST204" || error.code === "42703") {
+        throw new Error("Falta rodar a migração 05_cartao_debito_credito.sql no Supabase.");
       }
 
       throw error;

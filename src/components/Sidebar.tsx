@@ -37,7 +37,7 @@ const SECOES: { titulo: string; itens: { id: string; rotulo: string }[] }[] = [
       { id: "fatura", rotulo: "Cartões e Faturas" },
       { id: "cartao", rotulo: "Contas parceladas" },
       { id: "contas", rotulo: "Contas fixas" },
-      { id: "lancamentos", rotulo: "Tabela de lançamentos" },
+      { id: "lancamentos", rotulo: "Lançamentos do mês" },
     ],
   },
   {

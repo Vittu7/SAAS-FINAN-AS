@@ -79,7 +79,7 @@ function LoginConteudo() {
 
         <div className="relative max-w-md space-y-8">
           <h2 className="text-4xl font-bold leading-tight">
-            O dinheiro da casa, organizado em um só lugar.
+            O dinheiro da casa, organizado em um só lugar!
           </h2>
 
           <ul className="space-y-4 text-base">

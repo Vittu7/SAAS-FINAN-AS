@@ -15,26 +15,18 @@ import DialogResponsivo from "@/components/DialogResponsivo";
 
 type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
 
-/* ---------- Cabeçalho do app no celular ---------- */
+/* ---------- Cabeçalho do app no celular (o filtro de responsáveis fica abaixo, na página) ---------- */
 export function MobileHeader({
   titulo,
   mes,
   setMes,
-  membroSelecionado,
-  setMembroSelecionado,
-  listaMembros,
   onAbrirMenu,
   mostrarMes = true,
-  mostrarVisualizacao = true,
 }: {
   mostrarMes?: boolean;
-  mostrarVisualizacao?: boolean;
   titulo: string;
   mes: string;
   setMes: (m: string) => void;
-  membroSelecionado: string;
-  setMembroSelecionado: (m: string) => void;
-  listaMembros: string[];
   onAbrirMenu: () => void;
 }) {
   return (
@@ -57,43 +49,17 @@ export function MobileHeader({
         </div>
       </div>
 
-      {(mostrarMes || mostrarVisualizacao) && <div className="mt-3 flex items-center gap-2">
-        {mostrarMes && <div className="flex h-9 flex-1 items-center justify-between rounded-full bg-surface px-1 ring-1 ring-line">
-          <button
-            type="button"
-            aria-label="Mês anterior"
-            onClick={() => setMes(addMeses(mes, -1))}
-            className="grid size-7 place-items-center rounded-full text-muted active:bg-background"
-          >
+      {mostrarMes && (
+        <div className="mt-3 flex h-9 items-center justify-between rounded-full bg-surface px-1 ring-1 ring-line">
+          <button type="button" aria-label="Mês anterior" onClick={() => setMes(addMeses(mes, -1))} className="grid size-7 place-items-center rounded-full text-muted active:bg-background">
             <Ico icon={ChevronLeft} size={18} />
           </button>
-          <span className="text-sm font-medium capitalize" aria-live="polite">
-            {rotuloMes(mes)}
-          </span>
-          <button
-            type="button"
-            aria-label="Próximo mês"
-            onClick={() => setMes(addMeses(mes, 1))}
-            className="grid size-7 place-items-center rounded-full text-muted active:bg-background"
-          >
+          <span className="text-sm font-medium capitalize" aria-live="polite">{rotuloMes(mes)}</span>
+          <button type="button" aria-label="Próximo mês" onClick={() => setMes(addMeses(mes, 1))} className="grid size-7 place-items-center rounded-full text-muted active:bg-background">
             <Ico icon={ChevronRight} size={18} />
           </button>
-        </div>}
-        {mostrarVisualizacao && <select
-          aria-label="Visualização"
-          value={membroSelecionado}
-          onChange={(e) => setMembroSelecionado(e.target.value)}
-          className="h-9 max-w-[42%] rounded-full bg-surface px-3 text-xs font-medium text-ink outline-none ring-1 ring-line"
-        >
-          <option value="EU">Somente eu</option>
-          <option value="TODOS">Todo o grupo</option>
-          {listaMembros.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>}
-      </div>}
+        </div>
+      )}
     </header>
   );
 }
@@ -286,7 +252,7 @@ export function MobileMenu({
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-2">
           {([
-            ["Cartões e contas", [["fatura", "Cartões e Faturas"], ["cartao", "Contas parceladas"], ["contas", "Contas fixas"], ["lancamentos", "Lançamentos do mês"]]],
+            ["Cartões e contas", [["fatura", "Cartões e Faturas"], ["cartao", "Contas parceladas"], ["contas", "Contas fixas"], ["lancamentos", "Tabela de lançamentos"]]],
             ["Análises", [["graficos", "Gráficos e relatórios"], ["investimentos", "Investimentos"]]],
           ] as [string, [Aba, string][]][]).map(([titulo, itens]) => (
             <section key={titulo}>

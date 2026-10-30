@@ -10,13 +10,15 @@ import type { Resumo } from "@/lib/finance";
 
 /** Tela própria de Gráficos, com a aba Relatórios (filtros por período e exportação). */
 export default function TelaGraficos({
-  estadoCompleto, mes, resumo, itens, onAbrirExtrato,
+  estadoCompleto, mes, resumo, itens, onAbrirExtrato, rotuloResponsaveis,
 }: {
   estadoCompleto: { extrato: any[]; cartao: any[]; contas: any[]; config: { salario?: number } };
   mes: string;
   resumo: Resumo;
   itens: { extrato: any[]; cartao: any[]; contas: any[] };
   onAbrirExtrato: (tipo: TipoResumo) => void;
+  /** Pessoas do filtro global, só para o rótulo dos relatórios exportados */
+  rotuloResponsaveis?: string;
 }) {
   const [sub, setSub] = useState<"graficos" | "relatorios">("graficos");
   const chip = (ativo: boolean) => `h-10 flex-1 rounded-full text-sm font-semibold transition sm:flex-none sm:px-6 ${ativo ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`;
@@ -36,7 +38,7 @@ export default function TelaGraficos({
           <ResponsavelPanel resumo={resumo} itens={itens} />
         </>
       ) : (
-        <RelatorioFinanceiro estado={estadoCompleto} mes={mes} />
+        <RelatorioFinanceiro estado={estadoCompleto} mes={mes} rotuloResponsaveis={rotuloResponsaveis} />
       )}
     </div>
   );

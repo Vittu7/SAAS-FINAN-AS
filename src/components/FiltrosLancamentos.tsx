@@ -1,13 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import FiltroResponsaveis from "@/components/FiltroResponsaveis";
-import type { PessoaVisual } from "@/components/Avatar";
 
 export type FiltrosLancamentoState = {
   busca: string;
-  /** Pessoas selecionadas (vazio = todas) */
-  responsavel: string[];
   categoria: string;
   pagamento: string;
   tipo: string;
@@ -20,7 +16,6 @@ export type FiltrosLancamentoState = {
 
 export const FILTROS_INICIAIS: FiltrosLancamentoState = {
   busca: "",
-  responsavel: [],
   categoria: "",
   pagamento: "",
   tipo: "todos",
@@ -32,9 +27,6 @@ export const FILTROS_INICIAIS: FiltrosLancamentoState = {
 type Props = {
   filtros: FiltrosLancamentoState;
   setFiltros: (filtros: FiltrosLancamentoState) => void;
-  responsaveis: string[];
-  /** Foto e cor de cada pessoa (opcional) */
-  pessoas?: PessoaVisual[];
   categorias: string[];
   pagamentos: string[];
   mostrarTipo?: boolean;
@@ -43,11 +35,10 @@ type Props = {
   mostrarAutoria?: boolean;
 };
 
+/** Filtros de lista. Responsáveis não ficam aqui: o filtro de pessoas é único e global, no topo da tela. */
 export default function FiltrosLancamentos({
   filtros,
   setFiltros,
-  responsaveis,
-  pessoas = [],
   categorias,
   pagamentos,
   mostrarTipo = false,
@@ -56,10 +47,10 @@ export default function FiltrosLancamentos({
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const ativos = Object.entries(filtros).filter(([chave, valor]) =>
-    chave === "tipo" || chave === "status" || chave === "autoria" ? valor !== "todos" : Array.isArray(valor) ? valor.length > 0 : Boolean(valor),
+    chave === "tipo" || chave === "status" || chave === "autoria" ? valor !== "todos" : Boolean(valor),
   ).length;
 
-  const atualizar = (campo: Exclude<keyof FiltrosLancamentoState, "responsavel" | "autoria">, valor: string) =>
+  const atualizar = (campo: Exclude<keyof FiltrosLancamentoState, "autoria">, valor: string) =>
     setFiltros({ ...filtros, [campo]: valor } as FiltrosLancamentoState);
 
   const selectClass = "min-w-0 rounded-lg border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
@@ -69,7 +60,7 @@ export default function FiltrosLancamentos({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Filtros</h2>
-          <p className="text-xs text-muted">Encontre lançamentos por descrição, pessoa ou tipo e ordene por valor.</p>
+          <p className="text-xs text-muted">Encontre lançamentos por descrição, tipo ou forma de pagamento e ordene por valor.</p>
         </div>
         <button
           type="button"
@@ -81,13 +72,6 @@ export default function FiltrosLancamentos({
         </button>
       </div>
       <div className={`${aberto ? "grid" : "hidden"} mt-3 grid-cols-1 gap-3 sm:grid-cols-2 md:grid md:grid-cols-3 xl:grid-cols-6`}>
-        <div className="col-span-full">
-          <FiltroResponsaveis
-            pessoas={responsaveis.map((nome) => pessoas.find((p) => p.nome === nome) ?? { nome })}
-            selecionados={filtros.responsavel}
-            onChange={(nomes) => setFiltros({ ...filtros, responsavel: nomes })}
-          />
-        </div>
         {mostrarAutoria && (
           <div className="col-span-full flex gap-1 rounded-full bg-background p-1 ring-1 ring-line sm:w-fit" role="group" aria-label="Quem lançou">
             {([["todos", "Todos"], ["mim", "Lançados por mim"], ["grupo", "Lançados pelo grupo"]] as const).map(([id, r]) => (

@@ -40,6 +40,7 @@ import InvestimentosReservaCard from "@/components/InvestimentosReservaCard";
 import GrupoModal from "@/components/GrupoModal";
 import Sidebar from "@/components/Sidebar";
 import FiltrosLancamentos, { FILTROS_INICIAIS, type FiltrosLancamentoState } from "@/components/FiltrosLancamentos";
+import FiltroResponsaveis, { TOKEN_EU } from "@/components/FiltroResponsaveis";
 import { ordenarPorValor } from "@/lib/extrato";
 import { useFinanceStore } from "@/hooks/useFinanceStore";
 import {
@@ -64,7 +65,7 @@ export default function Home() {
 
   const [verificandoAuth, setVerificandoAuth] = useState(true);
   const [modalGrupoAberto, setModalGrupoAberto] = useState(false);
-  const [membroSelecionado, setMembroSelecionado] = useState("EU"); // Privacidade: começa mostrando só os seus registros
+  const [pessoasSel, setPessoasSel] = useState<string[]>([TOKEN_EU]); // Privacidade: começa mostrando só os seus registros
   const [sidebarExpandida, setSidebarExpandida] = useState(true);
   const [mes, setMes] = useState("");
   const [aba, setAba] = useState<AbaId>("inicio");
@@ -155,32 +156,36 @@ export default function Home() {
     irPara("ajuda");
   };
 
+  const pessoaEu = membros.find((m) => m.id === userId);
+
+  // Filtro único de responsáveis (global): vazio = todo o grupo; "Somente eu" soma o que é meu
+  // (responsável ou lançado por mim); as demais pessoas entram pelo nome.
   const passaFiltro = useCallback(
     (item: any) => {
-      if (membroSelecionado === "TODOS") return true;
-      // "Somente eu": o que é meu (responsável) e também o que EU lancei para outras pessoas
-      if (membroSelecionado === "EU") return item.responsavel_id === userId || item.owner_id === userId;
-      return item.responsavel === membroSelecionado;
+      if (pessoasSel.length === 0) return true;
+      if (pessoasSel.includes(TOKEN_EU) && (item.responsavel_id === userId || item.owner_id === userId)) return true;
+      return pessoasSel.some((t) => t !== TOKEN_EU && item.responsavel === t);
     },
-    [membroSelecionado, userId]
+    [pessoasSel, userId]
   );
+  const nomesSelecionados = pessoasSel.map((t) => (t === TOKEN_EU ? pessoaEu?.nome || "Eu" : t));
 
-  const nomesOutrosMembros = useMemo(
-    () => membros.filter((membro) => membro.id !== userId).map((membro) => membro.nome),
-    [membros, userId]
-  );
 
   const estadoFiltrado = useMemo(() => {
-    // Na visão "Somente eu", o que lancei para outra pessoa aparece nas listas (identificado),
-    // mas não entra nos MEUS totais: o gasto é de quem é responsável e o repasse não conta duas vezes.
-    const marcar = (item: any) => (membroSelecionado === "EU" && item.lancadoParaOutro ? { ...item, foraDoMeuSaldo: true } : item);
+    // O que eu lancei para outra pessoa só entra nos MEUS totais quando essa pessoa não está selecionada:
+    // evita contar o mesmo repasse duas vezes.
+    const nomesSel = pessoasSel.filter((t) => t !== TOKEN_EU);
+    const marcar = (item: any) =>
+      pessoasSel.includes(TOKEN_EU) && item.lancadoParaOutro && !nomesSel.includes(item.responsavel)
+        ? { ...item, foraDoMeuSaldo: true }
+        : item;
     return {
       ...estado,
       extrato: estado.extrato.filter(passaFiltro).map(marcar),
       cartao: estado.cartao.filter(passaFiltro).map(marcar),
       contas: estado.contas.filter(passaFiltro).map(marcar),
     };
-  }, [estado, passaFiltro, membroSelecionado]);
+  }, [estado, passaFiltro, pessoasSel]);
 
   const arraysMensais = useMemo(
     () => ({
@@ -194,7 +199,6 @@ export default function Home() {
   const opcoesFiltro = useMemo(() => {
     const todos: any[] = [...arraysMensais.extrato, ...arraysMensais.cartao, ...arraysMensais.contas];
     return {
-      responsaveis: [...new Set<string>(todos.map((item) => String(item.responsavel || "").trim()).filter(Boolean))].sort(),
       categorias: [...new Set<string>(todos.map((item) => String(item.categoria || "").trim()).filter(Boolean))].sort(),
       pagamentos: [...new Set<string>(todos.map((item) => String(item.pagamento || item.forma_pagamento || item.cartao || "").trim()).filter(Boolean))].sort(),
     };
@@ -206,7 +210,6 @@ export default function Home() {
       if (aba === "extrato" && filtros.tipo !== "todos" && filtros.tipo !== origem) return false;
       const descricao = String(item.descricao || item.nome || "").toLocaleLowerCase("pt-BR");
       if (filtros.busca && !descricao.includes(filtros.busca.trim().toLocaleLowerCase("pt-BR"))) return false;
-      if (filtros.responsavel.length > 0 && !filtros.responsavel.includes(item.responsavel)) return false;
       if (filtros.autoria === "mim" && item.owner_id && item.owner_id !== userId) return false;
       if (filtros.autoria === "grupo" && !(item.owner_id && item.owner_id !== userId)) return false;
       if (filtros.categoria && item.categoria !== filtros.categoria) return false;
@@ -277,7 +280,7 @@ export default function Home() {
   const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
   const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
   const rotuloVisualizacao =
-    membroSelecionado === "EU" ? "Somente eu" : membroSelecionado === "TODOS" ? "Todo o grupo" : membroSelecionado;
+    pessoasSel.length === 0 ? "Todo o grupo" : pessoasSel.length === 1 && pessoasSel[0] === TOKEN_EU ? "Somente eu" : nomesSelecionados.join(", ");
   const mostrarFiltros = !mostrarPainel && !(aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" ? nadaVisivel : false) && aba !== "ajustes" && aba !== "fatura" && aba !== "graficos" && aba !== "investimentos" && aba !== "ajuda";
 
   return (
@@ -285,9 +288,6 @@ export default function Home() {
       <Sidebar
         onAbrirGrupo={() => abrirGrupo()}
         onNova={() => abrirNova()}
-        membroSelecionado={membroSelecionado}
-        setMembroSelecionado={setMembroSelecionado}
-        listaMembros={nomesOutrosMembros}
         abaAtiva={aba}
         onSelecionarAba={(id) => setAba(id as AbaId)}
         onAlterarExpandido={setSidebarExpandida}
@@ -312,12 +312,8 @@ export default function Home() {
                 : "Contas fixas"
             }
             mostrarMes={mostrarMesNoCabecalho}
-            mostrarVisualizacao={mostrarVisualizacao}
             mes={mes}
             setMes={setMes}
-            membroSelecionado={membroSelecionado}
-            setMembroSelecionado={setMembroSelecionado}
-            listaMembros={nomesOutrosMembros}
             onAbrirMenu={() => setMenuMobile(true)}
           />
 
@@ -356,20 +352,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2">
-              {mostrarVisualizacao && <select
-                aria-label="Visualização"
-                value={membroSelecionado}
-                onChange={(e) => setMembroSelecionado(e.target.value)}
-                className="h-10 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink outline-none focus:ring-2 focus:ring-accent"
-              >
-                <option value="EU">Somente eu</option>
-                <option value="TODOS">Todo o grupo</option>
-                {nomesOutrosMembros.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>}
+              
 
               {mostrarMesNoCabecalho && <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
                 <button
@@ -435,6 +418,15 @@ export default function Home() {
             </div>
           )}
 
+          {mostrarVisualizacao && aba !== "fatura" && membros.length > 1 && (
+            <FiltroResponsaveis
+              eu={{ nome: pessoaEu?.nome || "Eu", avatar: pessoaEu?.avatar, cor: pessoaEu?.cor }}
+              outros={membros.filter((m) => m.id !== userId).map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
+              selecionados={pessoasSel}
+              onChange={setPessoasSel}
+            />
+          )}
+
           {mostrarFiltros && (
             <button
               type="button"
@@ -451,8 +443,6 @@ export default function Home() {
               <FiltrosLancamentos
                 filtros={filtros}
                 setFiltros={setFiltros}
-                responsaveis={opcoesFiltro.responsaveis}
-                pessoas={membros.map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
                 mostrarAutoria={membros.length > 1}
                 categorias={opcoesFiltro.categorias}
                 pagamentos={opcoesFiltro.pagamentos}
@@ -489,6 +479,7 @@ export default function Home() {
               {aba === "graficos" && !nadaVisivel && (
                 <TelaGraficos
                   estadoCompleto={estadoFiltrado}
+                  rotuloResponsaveis={rotuloVisualizacao}
                   mes={mes}
                   resumo={resumo}
                   itens={{ extrato, cartao, contas }}

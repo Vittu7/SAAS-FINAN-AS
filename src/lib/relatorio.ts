@@ -8,7 +8,14 @@ import { arred, calcularMes, ehEntrada, semDuplicados } from "./calculos";
 type Item = Record<string, any>;
 type Fonte = { extrato?: Item[]; cartao?: Item[]; contas?: Item[]; config?: { salario?: number } };
 
-export type FiltroRelatorio = { de: string; ate: string; responsaveis?: string[]; categoria?: string };
+export type FiltroRelatorio = {
+  de: string;
+  ate: string;
+  responsaveis?: string[];
+  /** Só para exibição (CSV/PDF): pessoas do filtro global já aplicado nos dados. Não altera o cálculo. */
+  rotuloResponsaveis?: string;
+  categoria?: string;
+};
 
 export type MovimentoRelatorio = {
   mes: string;
@@ -138,7 +145,7 @@ export function relatorioParaCSV(r: Relatorio): string {
   const linhas = [
     l("Relatório financeiro HomeCash"),
     l("Período", `${mesCurto(r.filtro.de)} a ${mesCurto(r.filtro.ate)}`),
-    l("Responsáveis", r.filtro.responsaveis?.length ? r.filtro.responsaveis.join(", ") : "Todos"),
+    l("Responsáveis", r.filtro.rotuloResponsaveis || (r.filtro.responsaveis?.length ? r.filtro.responsaveis.join(", ") : "Todos")),
     l("Categoria", r.filtro.categoria || "Todas"),
     l("Gerado em", r.geradoEm),
     "",
@@ -176,7 +183,7 @@ th,td{padding:4px 6px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-a
 .e{color:#047857}.s{color:#be123c}tr{page-break-inside:avoid}@media print{body{margin:10mm}}
 </style></head><body>
 <h1>Relatório financeiro HomeCash</h1>
-<p>Período: ${mesCurto(r.filtro.de)} a ${mesCurto(r.filtro.ate)} · Responsáveis: ${esc(r.filtro.responsaveis?.length ? r.filtro.responsaveis.join(", ") : "Todos")} · Categoria: ${esc(r.filtro.categoria || "Todas")}</p>
+<p>Período: ${mesCurto(r.filtro.de)} a ${mesCurto(r.filtro.ate)} · Responsáveis: ${esc(r.filtro.rotuloResponsaveis || (r.filtro.responsaveis?.length ? r.filtro.responsaveis.join(", ") : "Todos"))} · Categoria: ${esc(r.filtro.categoria || "Todas")}</p>
 <p>Gerado em ${esc(r.geradoEm)}</p>
 <div class="cards">
 <div class="c">Entradas<b class="e">${moeda(r.totais.entradas)}</b></div>

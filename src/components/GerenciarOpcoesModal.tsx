@@ -28,6 +28,10 @@ type Formulario = {
   tipoCartao: TipoCartao | null;
   limite: string;
   saldo: string;
+  /** Só em cadastro novo: cria duas contas ligadas, crédito e débito */
+  ambos: boolean;
+  /** Tipo que o cadastro já tinha (ao editar). Permite adicionar o outro tipo ao mesmo cartão */
+  tipoOriginal: TipoCartao | null;
 };
 
 function formularioVazio(aba: Aba): Formulario {
@@ -38,6 +42,8 @@ function formularioVazio(aba: Aba): Formulario {
     tipoCartao: aba === "cartoes" ? "credito" : null,
     limite: "",
     saldo: "",
+    ambos: false,
+    tipoOriginal: null,
   };
 }
 
@@ -123,6 +129,8 @@ export default function GerenciarOpcoesModal({
       tipoCartao: tipoDaConta(item),
       limite: item.limite ? String(item.limite).replace(".", ",") : "",
       saldo: item.saldo_inicial ? String(item.saldo_inicial).replace(".", ",") : "",
+      ambos: false,
+      tipoOriginal: tipoDaConta(item),
     });
   };
 
@@ -134,7 +142,7 @@ export default function GerenciarOpcoesModal({
     const ehPagamento = aba !== "categorias";
     const limite = parseValor(form.limite);
     const saldo = parseValor(form.saldo);
-    if (ehPagamento && form.tipoCartao === "credito" && limite <= 0) {
+    if (ehPagamento && (form.tipoCartao === "credito" || form.ambos) && limite <= 0) {
       return setErro("Informe um limite maior que zero para o cartão de crédito.");
     }
 
@@ -152,9 +160,31 @@ export default function GerenciarOpcoesModal({
           limite: form.tipoCartao === "credito" ? limite : 0,
           saldo_inicial: form.tipoCartao === "debito" ? saldo : 0,
         });
+        // Cartão existente que também será do outro tipo: cria a conta irmã (a original não é renomeada,
+        // para não perder o vínculo com os lançamentos já feitos)
+        if (form.ambos) {
+          const base = form.nome.trim().replace(/\s+(Crédito|Débito)$/i, "");
+          try {
+            if (form.tipoCartao === "credito") {
+              await adicionarPagamento(`${base} Débito`, { tipoCartao: "debito", saldoInicial: saldo, cor: form.cor });
+            } else {
+              await adicionarPagamento(`${base} Crédito`, { tipoCartao: "credito", limiteTotal: limite, cor: form.cor });
+            }
+          } catch (e) {
+            throw new Error(`As alterações foram salvas, mas a conta adicional falhou: ${e instanceof Error ? e.message : "erro"}`);
+          }
+        }
         // Se a conta virou (ou deixou de ser) cartão, acompanhe na aba certa
         const novaAba: Aba = form.tipoCartao ? "cartoes" : "pagamentos";
         if (novaAba !== aba) setAba(novaAba);
+      } else if (form.ambos) {
+        // Crédito e débito: duas contas ligadas, sem ambiguidade nos lançamentos
+        await adicionarPagamento(`${form.nome.trim()} Crédito`, { tipoCartao: "credito", limiteTotal: limite, cor: form.cor });
+        try {
+          await adicionarPagamento(`${form.nome.trim()} Débito`, { tipoCartao: "debito", saldoInicial: saldo, cor: form.cor });
+        } catch (e) {
+          throw new Error(`O crédito foi criado, mas o débito falhou: ${e instanceof Error ? e.message : "erro"}. Cadastre o débito separadamente.`);
+        }
       } else {
         await adicionarPagamento(form.nome, {
           tipoCartao: form.tipoCartao,
@@ -431,28 +461,29 @@ function FormularioDialog({
           {ehPagamento && (
             <div>
               <span className="mb-1.5 block text-xs font-medium text-muted">Tipo</span>
-              <div className="grid grid-cols-3 gap-1 rounded-xl bg-background p-1 ring-1 ring-line" role="group" aria-label="Tipo da forma de pagamento">
-                {([[null, "Outra forma"], ["debito", "Débito"], ["credito", "Crédito"]] as const).map(([id, r]) => (
+              <div className="flex gap-1 rounded-xl bg-background p-1 ring-1 ring-line" role="group" aria-label="Tipo da forma de pagamento">
+                {([[null, "Outra forma"], ["debito", "Débito"], ["credito", "Crédito"], ...(aba === "cartoes" && (!form.id || form.tipoOriginal) ? [["ambos", "Crédito e débito"]] : [])] as [string | null, string][]).map(([id, r]) => (
                   <button
                     key={r}
                     type="button"
-                    aria-pressed={form.tipoCartao === id}
-                    onClick={() => setForm({ ...form, tipoCartao: id })}
-                    className={`h-9 rounded-lg text-xs font-semibold ${form.tipoCartao === id ? "bg-accent text-on-accent" : "text-muted"}`}
+                    aria-pressed={id === "ambos" ? form.ambos : !form.ambos && form.tipoCartao === id}
+                    onClick={() => setForm(id === "ambos" ? { ...form, tipoCartao: form.tipoOriginal ?? "credito", ambos: true } : { ...form, tipoCartao: id as TipoCartao | null, ambos: false })}
+                    className={`h-9 flex-1 rounded-lg px-1 text-xs font-semibold ${(id === "ambos" ? form.ambos : !form.ambos && form.tipoCartao === id) ? "bg-accent text-on-accent" : "text-muted"}`}
                   >
                     {r}
                   </button>
                 ))}
               </div>
               <p className="mt-1.5 text-xs text-muted">
-                {form.tipoCartao === "credito" && "Tem limite e fatura mensal."}
-                {form.tipoCartao === "debito" && "Usa o saldo da conta: entradas somam e saídas descontam."}
+                {form.ambos && (form.id ? "Mantém esta conta como está e cria a outra (crédito ou débito) ao lado dela. Os lançamentos antigos continuam nesta conta." : "Cria duas contas: “Nome Crédito” (limite e fatura) e “Nome Débito” (saldo).")}
+                {!form.ambos && form.tipoCartao === "credito" && "Tem limite e fatura mensal."}
+                {!form.ambos && form.tipoCartao === "debito" && "Usa o saldo da conta: entradas somam e saídas descontam."}
                 {form.tipoCartao === null && "Sem controle de saldo ou limite (Pix, dinheiro, boleto...)."}
               </p>
             </div>
           )}
 
-          {ehPagamento && form.tipoCartao === "credito" && (
+          {ehPagamento && (form.tipoCartao === "credito" || form.ambos) && (
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-muted">Limite total (R$)</span>
               <input
@@ -465,7 +496,7 @@ function FormularioDialog({
             </label>
           )}
 
-          {ehPagamento && form.tipoCartao === "debito" && (
+          {ehPagamento && (form.tipoCartao === "debito" || form.ambos) && (
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-muted">Saldo atual da conta (R$)</span>
               <input

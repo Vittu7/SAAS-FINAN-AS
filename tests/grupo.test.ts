@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro } from "../src/lib/grupo";
+import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas } from "../src/lib/grupo";
 import { calcularMes } from "../src/lib/calculos";
 
 const REF = "2026-10";
@@ -105,5 +105,23 @@ describe("resumo por membro", () => {
   it("itens 'fora do meu saldo' não entram no cálculo pessoal", () => {
     const r = calcularMes({ extrato: [{ id: "x", mes: REF, valor: 80, foraDoMeuSaldo: true }, { id: "y", mes: REF, valor: 20 }] }, { mes: REF });
     expect(r.saidas).toBe(20);
+  });
+});
+
+describe("filtro global de responsáveis no módulo Grupo", () => {
+  const lista = lancamentosDoGrupo(E, REF);
+  const membros = [{ id: "vitu", nome: "Vitu" }, { id: "gisa", nome: "Gisa" }, { id: "ana", nome: "Ana" }];
+  const chaves = (ids: Set<string> | null) => filtrarGrupoPorPessoas(lista, ids).map((l) => l.chave).sort();
+
+  it("lista vazia = todo o grupo (sem filtro)", () => {
+    expect(idsDaSelecao([], membros, "vitu", "__EU__")).toBeNull();
+    expect(chaves(null)).toHaveLength(lista.length);
+  });
+  it("converte 'somente eu' e nomes em ids", () => {
+    expect([...idsDaSelecao(["__EU__", "Gisa"], membros, "vitu", "__EU__")!].sort()).toEqual(["gisa", "vitu"]);
+  });
+  it("mantém o que tem a pessoa como responsável ou autor", () => {
+    expect(chaves(idsDaSelecao(["Gisa"], membros, "vitu", "__EU__"))).toEqual(["cartao:c1", "cartao:c2", "cartao:c3", "contas:f1", "extrato:e1"]);
+    expect(chaves(idsDaSelecao(["Ana"], membros, "vitu", "__EU__"))).toEqual([]);
   });
 });

@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import DialogResponsivo from "@/components/DialogResponsivo";
+import { useOpcoes } from "@/lib/useOpcoes";
+import { calcularSaldoConta, tipoDaConta } from "@/lib/contas";
 import { ArrowRight, Check, HandCoins, Lock, Settings2, Undo2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Avatar, { AvatarPilha } from "@/components/Avatar";
@@ -10,13 +13,50 @@ import PessoaIcone from "@/components/PessoaIcone";
 import { Ico, ICONE_ABA, ICONES } from "@/components/icons";
 import { brl, rotuloMes } from "@/lib/finance";
 import { avisarPerfilAtualizado } from "@/lib/perfil";
-import { FILTRO_GRUPO_INICIAL, filtrarGrupo, lancamentosDoGrupo, resumoPorMembro, resumoRepasses, type FiltroGrupo, type LancGrupo, type PendenciaPessoa } from "@/lib/grupo";
+import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, resumoPorMembro, resumoRepasses, type FiltroGrupo, type LancGrupo, type PendenciaPessoa } from "@/lib/grupo";
 import type { Membro } from "@/hooks/useFinanceStore";
 
 type Sub = "resumo" | "lancamentos" | "repasses";
 type Dados = { extrato: any[]; cartao: any[]; contas: any[]; config?: { salario?: number } };
 type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir";
-type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], acao: AcaoRepasse) => Promise<boolean>;
+type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], acao: AcaoRepasse, conta?: string | null) => Promise<boolean>;
+
+/* ---------- Escolha da conta que recebe o repasse ---------- */
+function EscolherContaRepasse({ lista, dados, userId, mes, onConfirmar, onFechar }: { lista: LancGrupo[]; dados: Dados; userId: string; mes: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
+  const { pagamento } = useOpcoes();
+  const contas = useMemo(() => pagamento.filter((o) => tipoDaConta(o) === "debito"), [pagamento]);
+  const [escolhida, setEscolhida] = useState<string>("");
+  const total = lista.reduce((t, l) => t + l.valor, 0);
+  const sel = escolhida || contas[0]?.nome || "";
+  return (
+    <DialogResponsivo titulo="Em qual conta o valor entrou?" onFechar={onFechar}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted">Confirmar recebimento de <b className="text-ink">{brl(total)}</b>{lista.length > 1 ? ` (${lista.length} lançamentos)` : ""}. O valor soma no saldo da conta escolhida.</p>
+        {contas.length === 0 ? (
+          <p className="rounded-xl bg-background p-3 text-sm text-muted">Você ainda não tem conta de débito cadastrada. Você pode confirmar o recebimento mesmo assim, sem registrar em nenhuma conta.</p>
+        ) : (
+          <div role="radiogroup" aria-label="Conta de destino" className="space-y-2">
+            {contas.map((c) => {
+              const saldo = calcularSaldoConta(dados as any, c, { userId, ateMes: mes }).saldo;
+              return (
+                <label key={c.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm ${sel === c.nome ? "border-accent bg-accent/10" : "border-line"}`}>
+                  <input type="radio" name="conta-repasse" checked={sel === c.nome} onChange={() => setEscolhida(c.nome)} className="accent-[var(--accent)]" />
+                  <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: c.cor }} />
+                  <span className="min-w-0 flex-1 truncate font-medium">{c.nome}</span>
+                  <span className="shrink-0 text-xs text-muted">saldo {brl(saldo)}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={() => onConfirmar(null)} className="h-11 rounded-xl border border-line px-4 text-sm font-medium hover:bg-background">Confirmar sem registrar em conta</button>
+          {contas.length > 0 && <button type="button" onClick={() => onConfirmar(sel)} className="h-11 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent">Confirmar recebimento</button>}
+        </div>
+      </div>
+    </DialogResponsivo>
+  );
+}
 
 const ICONE_TIPO = { avista: ICONE_ABA.lancamentos, parcelada: ICONE_ABA.cartao, fixa: ICONE_ABA.contas } as const;
 const sel = "h-11 w-full rounded-xl border border-line bg-background px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
@@ -115,12 +155,13 @@ function AbaRepasses({ lista, meuId, onRepasse, onNova }: { lista: LancGrupo[]; 
   const acao = (l: LancGrupo, a: AcaoRepasse) => void onRepasse([{ origem: l.origem, id: l.id }], a);
   const acaoVarios = (ls: LancGrupo[], a: AcaoRepasse) => {
     const msg = a === "concluir" ? `Confirmar o recebimento de ${ls.length} valores?` : `Marcar ${ls.length} valores como repassados?`;
-    if (window.confirm(msg)) void onRepasse(ls.map((l) => ({ origem: l.origem, id: l.id })), a);
+    // Concluir já abre a escolha da conta (que serve de confirmação); só "Repassei tudo" pede confirmação aqui
+    if (a === "concluir" || window.confirm(msg)) void onRepasse(ls.map((l) => ({ origem: l.origem, id: l.id })), a);
   };
   const nada = r.aReceber.pessoas.length === 0 && r.aRepassar.pessoas.length === 0;
 
   if (nada) {
-    return <EstadoVazio icone={HandCoins} titulo="Nenhum valor a repassar" descricao="Quando você lança uma despesa e escolhe outra pessoa do grupo como responsável, o valor aparece aqui. Ela marca como repassado e você confirma o recebimento." passos={["Toque em Nova transação e escolha Saída", "Em Mais opções, marque a pessoa responsável pelo gasto", "Quem deve marca “Repassei”; quem recebeu marca “Concluir”"]} acao={{ rotulo: "Nova transação", onClick: onNova }} />;
+    return <EstadoVazio icone={HandCoins} titulo="Nenhum valor a repassar" descricao="Nenhum repasse neste mês. Quando você lança uma despesa e escolhe outra pessoa do grupo como responsável, o valor aparece aqui. Ela marca como repassado e você confirma o recebimento." passos={["Toque em Nova transação e escolha Saída", "Em Mais opções, marque a pessoa responsável pelo gasto", "Quem deve marca “Repassei”; quem recebeu marca “Concluir”"]} acao={{ rotulo: "Nova transação", onClick: onNova }} />;
   }
 
   const card = (titulo: string, valor: number, sub: string, cor = "") => (
@@ -146,7 +187,7 @@ function AbaRepasses({ lista, meuId, onRepasse, onNova }: { lista: LancGrupo[]; 
 }
 
 /* ---------- Lançamentos do grupo ---------- */
-function AbaLancamentos({ lista, membros, meuId, onRepasse }: { lista: LancGrupo[]; membros: Membro[]; meuId: string; onRepasse: Repasse }) {
+function AbaLancamentos({ lista, membros, meuId, mes, onRepasse }: { lista: LancGrupo[]; membros: Membro[]; meuId: string; mes: string; onRepasse: Repasse }) {
   const [f, setF] = useState<FiltroGrupo>(FILTRO_GRUPO_INICIAL);
   const filtrada = useMemo(() => filtrarGrupo(lista, f), [lista, f]);
   const total = filtrada.reduce((t, l) => t + l.valor, 0);
@@ -157,7 +198,7 @@ function AbaLancamentos({ lista, membros, meuId, onRepasse }: { lista: LancGrupo
     <div className="space-y-4">
       <section className="card-glass space-y-3 p-4 md:p-5" aria-label="Filtros dos lançamentos do grupo">
         <div className="flex items-center justify-between">
-          <div><h3 className="text-base font-bold">Lançamentos do grupo</h3><p className="text-xs text-muted">O que uma pessoa lançou para outra ser a responsável.</p></div>
+          <div><h3 className="text-base font-bold">Lançamentos do grupo</h3><p className="text-xs text-muted">O que uma pessoa lançou para outra ser a responsável em {rotuloMes(mes)}.</p></div>
           {ativos && <button type="button" onClick={() => setF(FILTRO_GRUPO_INICIAL)} className="text-xs font-medium text-accent hover:underline">Limpar filtros</button>}
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -243,13 +284,22 @@ function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Memb
 
 /* ---------- Tela ---------- */
 export default function TelaGrupo({
-  dados, membros, userId, mes, onRepasse, onGerenciar, onNova, abaInicial = "resumo",
-}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub }) {
+  dados, membros, userId, mes, onRepasse, onGerenciar, onNova, abaInicial = "resumo", pessoasFiltradas = null,
+}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub; /** ids das pessoas do filtro de responsáveis; null = todo o grupo */ pessoasFiltradas?: Set<string> | null }) {
   const [sub, setSub] = useState<Sub>(abaInicial);
   const meuId = userId || "";
-  const lista = useMemo(() => lancamentosDoGrupo(dados), [dados]);
+  // Lançamentos e repasses mostram só o mês selecionado (o mês atual, por padrão), sem misturar períodos
+  const lista = useMemo(() => filtrarGrupoPorPessoas(lancamentosDoGrupo(dados), pessoasFiltradas).filter((l) => l.mes === mes), [dados, pessoasFiltradas, mes]);
+  const membrosVisiveis = useMemo(() => (pessoasFiltradas ? membros.filter((m) => pessoasFiltradas.has(m.id)) : membros), [membros, pessoasFiltradas]);
   // Ações minhas: devo marcar "Repassei" (pendente) ou devo confirmar um recebimento (aguardando)
   const pendentes = useMemo(() => lista.filter((l) => l.vencido && ((l.respId === meuId && l.situacaoRepasse === "pendente") || (l.autorId === meuId && l.situacaoRepasse === "aguardando"))).length, [lista, meuId]);
+  // Confirmar recebimento ("concluir") pergunta antes em qual conta de débito o valor entrou
+  const [pedindoConta, setPedindoConta] = useState<{ itens: { origem: "extrato" | "cartao" | "contas"; id: string }[] } | null>(null);
+  const repasseComConta: Repasse = async (itens, acao, conta) => {
+    if (acao === "concluir" && conta === undefined) { setPedindoConta({ itens }); return true; }
+    return onRepasse(itens, acao, conta);
+  };
+  const lancamentosPedidos = pedindoConta ? lista.filter((l) => pedindoConta.itens.some((i) => i.origem === l.origem && i.id === l.id)) : [];
   const chip = (a: boolean) => `relative h-10 flex-1 rounded-full text-sm font-semibold transition sm:flex-none sm:px-5 ${a ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`;
 
   if (membros.length === 0) {
@@ -269,9 +319,19 @@ export default function TelaGrupo({
         <button type="button" role="tab" aria-selected={sub === "repasses"} onClick={() => setSub("repasses")} className={chip(sub === "repasses")}>Repasses{pendentes > 0 && <span className="ml-1.5 inline-grid min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">{pendentes}</span>}</button>
       </div>
 
-      {sub === "resumo" && <AbaResumo dados={dados} membros={membros} meuId={meuId} mes={mes} />}
-      {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} onRepasse={onRepasse} />}
-      {sub === "repasses" && <AbaRepasses lista={lista} meuId={meuId} onRepasse={onRepasse} onNova={onNova} />}
+      {sub === "resumo" && <AbaResumo dados={dados} membros={membrosVisiveis} meuId={meuId} mes={mes} />}
+      {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} mes={mes} onRepasse={repasseComConta} />}
+      {sub === "repasses" && <AbaRepasses lista={lista} meuId={meuId} onRepasse={repasseComConta} onNova={onNova} />}
+      {pedindoConta && (
+        <EscolherContaRepasse
+          lista={lancamentosPedidos}
+          dados={dados}
+          userId={meuId}
+          mes={mes}
+          onFechar={() => setPedindoConta(null)}
+          onConfirmar={(conta) => { const itens = pedindoConta.itens; setPedindoConta(null); void onRepasse(itens, "concluir", conta); }}
+        />
+      )}
     </div>
   );
 }

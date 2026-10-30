@@ -125,6 +125,26 @@ export function filtrarGrupo(lista: LancGrupo[], f: FiltroGrupo): LancGrupo[] {
   });
 }
 
+/**
+ * Converte o filtro global de responsáveis (token "somente eu" + nomes) em ids de membros.
+ * Lista vazia = todo o grupo (retorna `null`, que significa "sem filtro").
+ */
+export function idsDaSelecao(selecao: string[], membros: { id: string; nome: string }[], meuId: string, tokenEu: string): Set<string> | null {
+  if (selecao.length === 0) return null;
+  const ids = new Set<string>();
+  for (const t of selecao) {
+    if (t === tokenEu) ids.add(meuId);
+    else for (const m of membros) if (m.nome === t) ids.add(m.id);
+  }
+  return ids;
+}
+
+/** Mantém os lançamentos em que alguma das pessoas selecionadas é o responsável ou o autor. */
+export function filtrarGrupoPorPessoas(lista: LancGrupo[], ids: Set<string> | null): LancGrupo[] {
+  if (!ids) return lista;
+  return lista.filter((l) => ids.has(l.respId) || ids.has(l.autorId));
+}
+
 export type PendenciaPessoa = {
   pessoaId: string;
   nome: string;

@@ -24,7 +24,7 @@ import DicaModulo from "@/components/DicaModulo";
 import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
-import { lancamentosDoGrupo, resumoRepasses } from "@/lib/grupo";
+import { idsDaSelecao, lancamentosDoGrupo, resumoRepasses } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
@@ -66,6 +66,7 @@ export default function Home() {
   const [verificandoAuth, setVerificandoAuth] = useState(true);
   const [modalGrupoAberto, setModalGrupoAberto] = useState(false);
   const [pessoasSel, setPessoasSel] = useState<string[]>([TOKEN_EU]); // Privacidade: começa mostrando só os seus registros
+  const [filtroRespAberto, setFiltroRespAberto] = useState(false); // filtro de responsáveis recolhido por padrão
   const [sidebarExpandida, setSidebarExpandida] = useState(true);
   const [mes, setMes] = useState("");
   const [aba, setAba] = useState<AbaId>("inicio");
@@ -276,9 +277,11 @@ export default function Home() {
   const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
   const dica = DICAS_MODULO[aba];
   const nomeUsuario = membros.find((m) => m.id === userId)?.nome?.split(" ")[0];
-  // Em Configurações nada depende de mês nem de visualização por pessoa; em Faturas o mês já tem seletor próprio
-  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
-  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda" && aba !== "grupo";
+  // O filtro de responsáveis aparece em todo módulo com lançamentos por pessoa (inclusive Grupo familiar e Faturas).
+  // Fica de fora só onde não há responsável: Configurações, Investimentos (caixinhas) e Ajuda.
+  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda";
+  const pessoasFiltradas = idsDaSelecao(pessoasSel, membros, userId || "", TOKEN_EU);
+  const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda";
   const rotuloVisualizacao =
     pessoasSel.length === 0 ? "Todo o grupo" : pessoasSel.length === 1 && pessoasSel[0] === TOKEN_EU ? "Somente eu" : nomesSelecionados.join(", ");
   const mostrarFiltros = !mostrarPainel && !(aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" ? nadaVisivel : false) && aba !== "ajustes" && aba !== "fatura" && aba !== "graficos" && aba !== "investimentos" && aba !== "ajuda";
@@ -294,9 +297,8 @@ export default function Home() {
       />
 
       <main
-        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${
-          sidebarExpandida ? "md:pl-60" : "md:pl-16"
-        }`}
+        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${sidebarExpandida ? "md:pl-60" : "md:pl-16"
+          }`}
       >
         <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
@@ -304,12 +306,12 @@ export default function Home() {
               aba === "grupo" ? "Grupo familiar" : aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
-                ? "Extrato"
-                : aba === "lancamentos"
-                ? "Lançamentos do mês"
-                : aba === "cartao"
-                ? "Contas parceladas"
-                : "Contas fixas"
+                  ? "Extrato"
+                  : aba === "lancamentos"
+                    ? "Lançamentos do mês"
+                    : aba === "cartao"
+                      ? "Contas parceladas"
+                      : "Contas fixas"
             }
             mostrarMes={mostrarMesNoCabecalho}
             mes={mes}
@@ -323,36 +325,36 @@ export default function Home() {
                 {aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                   ? "Olá 👋 Visão geral"
                   : aba === "extrato"
-                  ? "Extrato"
-                  : aba === "lancamentos"
-                  ? "Lançamentos do mês"
-                  : aba === "cartao"
-                  ? "Contas parceladas"
-                  : "Contas fixas"}
+                    ? "Extrato"
+                    : aba === "lancamentos"
+                      ? "Lançamentos do mês"
+                      : aba === "cartao"
+                        ? "Contas parceladas"
+                        : "Contas fixas"}
               </h1>
               <p className="mt-1 text-sm text-muted">
                 {mostrarPainel
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
-                  ? "Todas as movimentações do mês em um só lugar."
-                  : aba === "grupo"
-                  ? "Resumo por pessoa, lançamentos entre membros e valores a repassar."
-                  : aba === "ajuda"
-                  ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
-                  : aba === "graficos"
-                  ? "Veja para onde o dinheiro vai e gere relatórios por período."
-                  : aba === "investimentos"
-                  ? "Caixinhas, reserva de emergência, aportes e rendimentos."
-                  : aba === "ajustes"
-                  ? "Perfil, plano, aparência, cadastros e tela inicial."
-                  : aba === "fatura"
-                  ? "Escolha um cartão para ver a fatura do mês."
-                  : "Cadastre, consulte e edite seus registros."}
+                    ? "Todas as movimentações do mês em um só lugar."
+                    : aba === "grupo"
+                      ? "Resumo por pessoa, lançamentos entre membros e valores a repassar."
+                      : aba === "ajuda"
+                        ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
+                        : aba === "graficos"
+                          ? "Veja para onde o dinheiro vai e gere relatórios por período."
+                          : aba === "investimentos"
+                            ? "Caixinhas, reserva de emergência, aportes e rendimentos."
+                            : aba === "ajustes"
+                              ? "Perfil, plano, aparência, cadastros e tela inicial."
+                              : aba === "fatura"
+                                ? "Escolha um cartão para ver a fatura do mês."
+                                : "Cadastre, consulte e edite seus registros."}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              
+
 
               {mostrarMesNoCabecalho && <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
                 <button
@@ -383,6 +385,17 @@ export default function Home() {
               <ThemeToggle />
             </div>
           </header>
+
+          {mostrarVisualizacao && membros.length > 1 && (
+            <FiltroResponsaveis
+              eu={{ nome: pessoaEu?.nome || "Eu", avatar: pessoaEu?.avatar, cor: pessoaEu?.cor }}
+              outros={membros.filter((m) => m.id !== userId).map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
+              selecionados={pessoasSel}
+              onChange={setPessoasSel}
+              aberto={filtroRespAberto}
+              onAlternarAberto={() => setFiltroRespAberto((v) => !v)}
+            />
+          )}
 
           {mostrarPainel && (
             <div className="anim-stagger space-y-5">
@@ -416,15 +429,6 @@ export default function Home() {
                 </button>
               </div>
             </div>
-          )}
-
-          {mostrarVisualizacao && aba !== "fatura" && membros.length > 1 && (
-            <FiltroResponsaveis
-              eu={{ nome: pessoaEu?.nome || "Eu", avatar: pessoaEu?.avatar, cor: pessoaEu?.cor }}
-              outros={membros.filter((m) => m.id !== userId).map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
-              selecionados={pessoasSel}
-              onChange={setPessoasSel}
-            />
           )}
 
           {mostrarFiltros && (
@@ -463,6 +467,7 @@ export default function Home() {
                   key={grupoSub}
                   abaInicial={grupoSub}
                   dados={estado}
+                  pessoasFiltradas={pessoasFiltradas}
                   membros={membros}
                   userId={userId}
                   mes={mes}
@@ -487,7 +492,7 @@ export default function Home() {
                 />
               )}
               {aba === "investimentos" && <TelaInvestimentos />}
-              {aba === "fatura" && <FaturaCartao estado={estado} mes={mes} setMes={setMes} />}
+              {aba === "fatura" && <FaturaCartao estado={estado} estadoLista={estadoFiltrado} mes={mes} setMes={setMes} />}
               {aba === "extrato" && nadaVisivel && (
                 <EstadoVazio icone={ICONE_ABA.extrato} titulo="Seu extrato está vazio" descricao="O extrato reúne tudo o que você lançar: entradas, compras, parcelas e contas fixas." passos={["Toque em Nova transação", "Escolha Entrada ou Saída e preencha o valor", "Salve e o lançamento aparece aqui"]} acao={{ rotulo: "Fazer o primeiro lançamento", onClick: () => abrirNova() }} />
               )}

@@ -13,7 +13,7 @@ import { gradienteCartao } from '@/lib/cartao';
 import type { Estado } from '@/lib/types';
 
 /** Mesmo visual da tela de Contas parceladas: carrossel de cartões + lista em painel. */
-export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; mes: string; setMes: (mes: string) => void }) {
+export default function FaturaCartao({ estado, estadoLista, mes, setMes }: { estado: Estado; /** Estado já filtrado por responsável: vale para a lista de compras. O limite dos cartões usa sempre o `estado` completo. */ estadoLista?: Estado; mes: string; setMes: (mes: string) => void }) {
   const { pagamento, corPagamento, recarregar } = useOpcoes();
   // Cartões com a maior fatura do mês aparecem primeiro
   const cartoes = pagamento
@@ -30,7 +30,7 @@ export default function FaturaCartao({ estado, mes, setMes }: { estado: Estado; 
       {cadastrando && <CadastrarCartaoModal onFechar={() => setCadastrando(false)} onConcluir={() => recarregar()} />}
     </>
   );
-  const fatura = calcularFatura(estado, escolhido.nome, mes, Number(escolhido.limite) || 0);
+  const fatura = calcularFatura(estadoLista ?? estado, escolhido.nome, mes, Number(escolhido.limite) || 0);
 
   return (
     <div className="space-y-6 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">

@@ -11,10 +11,6 @@ export type Caixinha = {
   rendimento: string;
   meta: number;
   saldo: number;
-  aporteAutoAtivo: boolean;
-  aporteAutoValor: number;
-  /** 'YYYY-MM' do último mês em que a sugestão de aporte automático foi confirmada ou dispensada */
-  ultimoMesAuto: string | null;
   exibirNaHome: boolean;
   cor: string;
   /** Onde o dinheiro está guardado (ex.: Nubank, Caixa) */
@@ -33,6 +29,8 @@ export type Movimento = {
   data: string;
   descricao: string;
   origem: OrigemMovimento;
+  /** Conta de débito usada: o aporte sai do saldo dela e o resgate volta para ela ("" = nenhuma) */
+  conta: string;
 };
 
 /** Dados do formulário de cadastro/edição. `saldo` é o saldo desejado (na edição, a diferença vira um ajuste no histórico). */
@@ -42,8 +40,6 @@ export type DadosCaixinha = {
   rendimento: string;
   meta: number;
   saldo: number;
-  aporteAutoAtivo: boolean;
-  aporteAutoValor: number;
   exibirNaHome: boolean;
   cor: string;
   banco: string;
@@ -57,6 +53,7 @@ export type NovoMovimento = {
   data: string;
   descricao?: string;
   origem?: OrigemMovimento;
+  conta?: string;
 };
 
 export const TIPOS_RENDIMENTO: { id: TipoRendimento; nome: string }[] = [
@@ -79,9 +76,6 @@ export const caixinhaDeLinha = (l: Linha): Caixinha => ({
   rendimento: String(l.rendimento ?? ""),
   meta: Number(l.meta) || 0,
   saldo: Number(l.saldo) || 0,
-  aporteAutoAtivo: Boolean(l.aporte_auto_ativo),
-  aporteAutoValor: Number(l.aporte_auto_valor) || 0,
-  ultimoMesAuto: l.ultimo_mes_auto ? String(l.ultimo_mes_auto) : null,
   exibirNaHome: Boolean(l.exibir_na_home),
   cor: String(l.cor || CORES_CAIXINHA[0]),
   banco: String(l.banco ?? ""),
@@ -97,6 +91,7 @@ export const movimentoDeLinha = (l: Linha): Movimento => ({
   data: String(l.data ?? "").slice(0, 10),
   descricao: String(l.descricao ?? ""),
   origem: l.origem === "automatico" ? "automatico" : "manual",
+  conta: String(l.conta ?? ""),
 });
 
 export const arred2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -117,11 +112,6 @@ export const dataBR = (iso: string) => iso.slice(0, 10).split("-").reverse().joi
 
 /** Número → texto de campo ("1234.5" → "1234,5"; zero → vazio). */
 export const decimalTexto = (n: number) => (n ? String(n).replace(".", ",") : "");
-
-/** Caixinhas com aporte automático ainda não tratado (confirmado ou dispensado) no mês informado. */
-export function sugestoesDoMes(caixinhas: Caixinha[], mes: string = mesAtual()): Caixinha[] {
-  return caixinhas.filter((c) => c.aporteAutoAtivo && c.aporteAutoValor > 0 && (c.ultimoMesAuto ?? "") < mes);
-}
 
 /** Rótulo curto de onde o dinheiro está: "CDB · Nubank". */
 export function rotuloLocal(c: Pick<Caixinha, "banco" | "tipoRendimento">): string {

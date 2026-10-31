@@ -76,6 +76,8 @@ export type Resumo = {
   /** Contas fixas ainda não pagas (informativo) */
   faltaPagar: number;
   usandoSalarioConfigurado: boolean;
+  /** Quanto sobrou dos meses anteriores e já está somado em `entradas` e `sobra` */
+  sobraAnterior: number;
   porResponsavel: Record<string, number>;
   porOrigem: { extrato: number; cartao: number; contas: number };
 };
@@ -89,6 +91,7 @@ export function resumoDoMes(e: Estado, mes: string): Resumo {
     sobra: r.saldoRestante,
     faltaPagar: r.faltaPagar,
     usandoSalarioConfigurado: r.fallbackSalario,
+    sobraAnterior: 0,
     porResponsavel: r.porResponsavel,
     porOrigem: r.porOrigem,
   };

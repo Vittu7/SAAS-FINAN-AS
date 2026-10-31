@@ -145,6 +145,49 @@ export function filtrarGrupoPorPessoas(lista: LancGrupo[], ids: Set<string> | nu
   return lista.filter((l) => ids.has(l.respId) || ids.has(l.autorId));
 }
 
+export const PREFIXO_REPASSE = "repasse:";
+
+/**
+ * COMPRA COMPARTILHADA (ex.: R$ 5.000 no meu cartão, R$ 2.500 meus e R$ 2.500 de X):
+ * - a compra inteira continua no cartão e na fatura (são duas linhas, uma por responsável);
+ * - o meu gasto pessoal é só a minha parte (R$ 2.500): a parte de X é um valor ADIANTADO, "a receber";
+ * - quando X repassa e eu confirmo, o dinheiro entra na conta escolhida (saldo da conta) e aparece no extrato
+ *   como "Repasse recebido", mas NÃO soma nas entradas nem no "sobrou" do mês: ele só quita o valor que X devia.
+ *   Somar de novo faria o "sobrou" parecer R$ 2.500 maior do que é (a saída da parte de X nunca contou para mim).
+ * Por isso a linha automática nasce com foraDoMeuSaldo (listada, mas fora dos totais).
+ * Não gera linha quando a pessoa que deve também está na seleção (o gasto já é contado uma vez só).
+ */
+export function entradasDeRepasse(
+  e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
+  opts: { meuId: string; meuNome: string; incluiEu: boolean; nomesSelecionados: string[] },
+): Item[] {
+  if (!opts.incluiEu || !opts.meuId) return [];
+  const saida: Item[] = [];
+  for (const o of ["extrato", "cartao", "contas"] as OrigemGrupo[]) {
+    for (const i of semDuplicados(e[o] || [], o)) {
+      if (i.tipo === "entrada" || i.owner_id !== opts.meuId) continue;
+      if (!i.responsavel_id || i.responsavel_id === opts.meuId) continue;
+      if (!(i.repasse_pago ?? i.repassePago)) continue;
+      if (opts.nomesSelecionados.includes(i.responsavel)) continue;
+      saida.push({
+        id: `${PREFIXO_REPASSE}${o}:${i.id}`,
+        mes: i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes),
+        tipo: "entrada",
+        valor: num(i.valor),
+        descricao: `Repasse recebido (quita o a receber) · ${(o === "contas" ? i.nome : i.descricao ?? i.nome) || "lançamento"} (${i.responsavel || "Membro"})`,
+        categoria: "Repasse",
+        pagamento: i.repasse_conta || "",
+        owner_id: opts.meuId,
+        responsavel_id: opts.meuId,
+        responsavel: opts.meuNome,
+        repasseSintetico: true,
+        foraDoMeuSaldo: true, // quita o "a receber"; não soma em entradas nem no sobrou
+      });
+    }
+  }
+  return saida;
+}
+
 export type PendenciaPessoa = {
   pessoaId: string;
   nome: string;

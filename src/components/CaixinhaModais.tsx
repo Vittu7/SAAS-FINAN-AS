@@ -6,6 +6,8 @@ import { useState } from "react";
 import DialogResponsivo from "./DialogResponsivo";
 import { botaoPrimario, campo } from "./ui";
 import { brl, parseValor } from "@/lib/finance";
+import { useOpcoes } from "@/lib/useOpcoes";
+import { tipoDaConta } from "@/lib/contas";
 import {
   CORES_CAIXINHA,
   ROTULO_MOVIMENTO,
@@ -22,6 +24,24 @@ import {
 } from "@/lib/caixinhas";
 
 const rotulo = "mb-1 block text-xs font-medium text-muted";
+/** Escolha da conta de débito (saldo) que paga o aporte ou recebe o resgate. */
+function SeletorConta({ valor, onChange, rotuloCampo, ajuda }: { valor: string; onChange: (v: string) => void; rotuloCampo: string; ajuda: string }) {
+  const { pagamento } = useOpcoes();
+  const contas = pagamento.filter((o) => tipoDaConta(o) === "debito");
+  if (contas.length === 0 && !valor) return null;
+  return (
+    <label className="block">
+      <span className={rotulo}>{rotuloCampo}</span>
+      <select className={campo} value={valor} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Não usar saldo de nenhuma conta</option>
+        {contas.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+        {valor && !contas.some((c) => c.nome === valor) && <option value={valor}>{valor} (conta removida)</option>}
+      </select>
+      <span className="mt-1 block text-xs text-muted">{ajuda}</span>
+    </label>
+  );
+}
+
 const botaoSecundario = "h-9 rounded-lg border border-line px-3 text-sm text-muted transition hover:text-ink";
 
 function Segmentado<T extends string>({
@@ -92,8 +112,6 @@ export function FormularioCaixinha({
   const [tipoRend, setTipoRend] = useState<TipoRendimento | "">(inicial?.tipoRendimento ?? "");
   const [meta, setMeta] = useState(inicial ? decimalTexto(inicial.meta) : "");
   const [saldo, setSaldo] = useState(inicial ? decimalTexto(inicial.saldo) : "");
-  const [autoAtivo, setAutoAtivo] = useState(inicial?.aporteAutoAtivo ?? false);
-  const [autoValor, setAutoValor] = useState(inicial ? decimalTexto(inicial.aporteAutoValor) : "");
   const [exibirHome, setExibirHome] = useState(inicial?.exibirNaHome ?? !!comoReserva);
   const [cor, setCor] = useState(inicial?.cor ?? CORES_CAIXINHA[0]);
   const [erro, setErro] = useState("");
@@ -105,11 +123,6 @@ export function FormularioCaixinha({
       setErro("Dê um nome para a caixinha.");
       return;
     }
-    const valorAuto = parseValor(autoValor);
-    if (autoAtivo && valorAuto <= 0) {
-      setErro("Informe o valor do aporte mensal.");
-      return;
-    }
     setSalvando(true);
     setErro("");
     const msg = await onSalvar({
@@ -118,8 +131,6 @@ export function FormularioCaixinha({
       rendimento,
       meta: parseValor(meta),
       saldo: parseValor(saldo),
-      aporteAutoAtivo: autoAtivo,
-      aporteAutoValor: valorAuto,
       exibirNaHome: exibirHome,
       cor,
       banco,
@@ -206,20 +217,6 @@ export function FormularioCaixinha({
         </div>
         {inicial && <p className="-mt-2 text-xs text-muted">Se você mudar o saldo, a diferença entra no histórico como “Ajuste de saldo”.</p>}
 
-        <div className="space-y-3 rounded-xl bg-background p-3">
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>Aporte automático mensal</span>
-            <input type="checkbox" checked={autoAtivo} onChange={(e) => setAutoAtivo(e.target.checked)} className="size-4 accent-[var(--accent)]" />
-          </label>
-          {autoAtivo && (
-            <label className="block">
-              <span className={rotulo}>Valor fixo planejado por mês</span>
-              <CampoReais valor={autoValor} onChange={setAutoValor} />
-              <span className="mt-1 block text-xs text-muted">No início de cada mês você recebe uma sugestão para confirmar este aporte.</span>
-            </label>
-          )}
-        </div>
-
         <label className="flex items-center justify-between gap-3 rounded-xl bg-background p-3 text-sm">
           <span>Exibir esta caixinha no painel da Home</span>
           <input type="checkbox" checked={exibirHome} onChange={(e) => setExibirHome(e.target.checked)} className="size-4 accent-[var(--accent)]" />
@@ -290,6 +287,7 @@ export function MovimentoDialog({
   const [valor, setValor] = useState("");
   const [data, setData] = useState(hojeISO());
   const [descricao, setDescricao] = useState("");
+  const [conta, setConta] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -308,7 +306,7 @@ export function MovimentoDialog({
     }
     setSalvando(true);
     setErro("");
-    const msg = await onRegistrar({ caixinhaId: destino, tipo, valor: v, data, descricao: descricao.trim() || undefined });
+    const msg = await onRegistrar({ caixinhaId: destino, tipo, valor: v, data, descricao: descricao.trim() || undefined, conta: tipo === "rendimento" ? undefined : conta || undefined });
     setSalvando(false);
     if (msg) setErro(msg);
     else onFechar();
@@ -350,6 +348,15 @@ export function MovimentoDialog({
             <input type="date" className={campo} value={data} max="2100-12-31" onChange={(e) => setData(e.target.value)} />
           </label>
         </div>
+
+        {tipo !== "rendimento" && (
+          <SeletorConta
+            valor={conta}
+            onChange={setConta}
+            rotuloCampo={tipo === "aporte" ? "Pagar com o saldo da conta" : "Devolver para a conta"}
+            ajuda={tipo === "aporte" ? "O valor sai do saldo da conta de débito escolhida." : "O valor volta para o saldo da conta de débito escolhida."}
+          />
+        )}
 
         <label className="block">
           <span className={rotulo}>Observação (opcional)</span>

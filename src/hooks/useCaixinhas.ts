@@ -8,7 +8,6 @@ import {
   caixinhaDeLinha,
   hojeISO,
   movimentoDeLinha,
-  sugestoesDoMes,
   sugestoesRendimento,
   type Caixinha,
   type DadosCaixinha,
@@ -25,6 +24,9 @@ function traduzirErro(e: ErroSupabase): string {
   if (!e) return "";
   if (e.code === "42P01" || e.code === "PGRST205") {
     return "As tabelas de caixinhas ainda não existem. Rode a migração 03_caixinhas.sql no Supabase.";
+  }
+  if ((e.code === "PGRST204" || e.code === "42703") && /conta/.test(e.message)) {
+    return "Falta a coluna da conta no banco. Rode o script supabase-07-caixinha-conta.sql no Supabase.";
   }
   if (e.code === "PGRST204" || e.code === "42703") {
     return "Faltam colunas novas no banco. Rode a migração 04_caixinhas_rendimentos.sql no Supabase.";
@@ -44,6 +46,7 @@ async function inserirMovimento(userId: string, m: NovoMovimento): Promise<strin
     data: m.data,
     descricao: m.descricao ?? null,
     origem: m.origem ?? "manual",
+    ...(m.conta ? { conta: m.conta } : {}),
   });
   return error ? traduzirErro(error) : null;
 }
@@ -97,7 +100,6 @@ export function useCaixinhas() {
     return () => window.removeEventListener(EVENTO_CAIXINHAS, aoMudar);
   }, [carregar]);
 
-  const sugestoes = useMemo(() => sugestoesDoMes(caixinhas), [caixinhas]);
   const lembretesRendimento = useMemo(() => sugestoesRendimento(caixinhas), [caixinhas]);
 
   const registrarMovimento = async (m: NovoMovimento): Promise<string | null> => {
@@ -134,14 +136,13 @@ export function useCaixinhas() {
         eh_reserva_emergencia: d.ehReserva,
         rendimento: d.rendimento.trim() || null,
         meta: d.meta,
-        aporte_auto_ativo: d.aporteAutoAtivo && d.aporteAutoValor > 0,
-        aporte_auto_valor: d.aporteAutoValor,
+        aporte_auto_ativo: false,
+        aporte_auto_valor: 0,
         exibir_na_home: d.exibirNaHome,
         cor: d.cor,
         banco: d.banco.trim() || null,
         tipo_rendimento: d.tipoRendimento,
-        // lembretes (aporte automático e rendimento) começam no mês seguinte ao cadastro
-        ultimo_mes_auto: mesAtual(),
+        // o lembrete de rendimento começa no mês seguinte ao cadastro
         ultimo_mes_rendimento: mesAtual(),
       })
       .select("id")
@@ -171,7 +172,6 @@ export function useCaixinhas() {
     const atual = caixinhas.find((c) => c.id === id);
     if (!atual) return "Caixinha não encontrada.";
 
-    const ativarAuto = d.aporteAutoAtivo && d.aporteAutoValor > 0;
     const { error } = await supabase
       .from("caixinhas")
       .update({
@@ -179,14 +179,11 @@ export function useCaixinhas() {
         eh_reserva_emergencia: d.ehReserva,
         rendimento: d.rendimento.trim() || null,
         meta: d.meta,
-        aporte_auto_ativo: ativarAuto,
-        aporte_auto_valor: d.aporteAutoValor,
+        aporte_auto_ativo: false, // o aporte automático foi removido do sistema
         exibir_na_home: d.exibirNaHome,
         cor: d.cor,
         banco: d.banco.trim() || null,
         tipo_rendimento: d.tipoRendimento,
-        // ao ligar o aporte automático agora, a primeira sugestão vem no mês seguinte
-        ...(ativarAuto && !atual.aporteAutoAtivo ? { ultimo_mes_auto: mesAtual() } : {}),
       })
       .eq("id", id);
     if (error) return traduzirErro(error);
@@ -216,31 +213,6 @@ export function useCaixinhas() {
     return null;
   };
 
-  /** Registra o aporte automático do mês e marca o mês como tratado. */
-  const confirmarSugestao = async (c: Caixinha): Promise<string | null> => {
-    if (!userId) return "Entre na sua conta.";
-    const msg = await inserirMovimento(userId, {
-      caixinhaId: c.id,
-      tipo: "aporte",
-      valor: c.aporteAutoValor,
-      data: hojeISO(),
-      descricao: "Aporte automático mensal",
-      origem: "automatico",
-    });
-    if (msg) return msg;
-    const { error } = await supabase.from("caixinhas").update({ ultimo_mes_auto: mesAtual() }).eq("id", c.id);
-    notificar();
-    return error ? traduzirErro(error) : null;
-  };
-
-  /** "Agora não": some até o mês seguinte, sem registrar nada. */
-  const dispensarSugestao = async (c: Caixinha): Promise<string | null> => {
-    const { error } = await supabase.from("caixinhas").update({ ultimo_mes_auto: mesAtual() }).eq("id", c.id);
-    if (error) return traduzirErro(error);
-    notificar();
-    return null;
-  };
-
   /** Registra o rendimento do mês informado pelo usuário. */
   const registrarRendimento = (c: Caixinha, valor: number) =>
     registrarMovimento({ caixinhaId: c.id, tipo: "rendimento", valor, data: hojeISO(), descricao: "Rendimento do mês" });
@@ -257,7 +229,6 @@ export function useCaixinhas() {
     userId,
     caixinhas,
     movimentos,
-    sugestoes,
     lembretesRendimento,
     carregando,
     erro,
@@ -266,8 +237,6 @@ export function useCaixinhas() {
     excluir,
     registrarMovimento,
     excluirMovimento,
-    confirmarSugestao,
-    dispensarSugestao,
     registrarRendimento,
     dispensarRendimento,
   };

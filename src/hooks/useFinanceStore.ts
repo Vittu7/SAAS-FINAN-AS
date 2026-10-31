@@ -442,6 +442,7 @@ export function useFinanceStore() {
     id: string,
     patch: Record<string, any>,
   ): Promise<boolean> => {
+    if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: não existe no banco
     const { responsavel, ...resto } = patch;
     const patchBanco: Record<string, any> = { ...resto };
 
@@ -482,6 +483,7 @@ export function useFinanceStore() {
   };
 
   const remover = async (tabela: Tabela, id: string) => {
+    if (String(id).startsWith("repasse:")) return; // entrada automática de repasse: some quando o repasse é reaberto
     const { data, error } = await supabase
       .from(NOME_TABELA_DB[tabela])
       .delete()
@@ -606,7 +608,7 @@ export function useFinanceStore() {
   const atualizarRepasses = async (
     itens: { origem: Tabela; id: string }[],
     acao: "informar" | "desinformar" | "concluir" | "reabrir",
-    /** Só em "concluir": nome da conta de débito que recebeu o valor (null = não registrar em conta) */
+    /** "concluir": conta de débito que recebeu o valor. "informar": conta de débito de onde saiu o repasse. null = sem conta */
     conta: string | null = null,
   ): Promise<boolean> => {
     if (!userId || itens.length === 0) return false;
@@ -630,18 +632,28 @@ export function useFinanceStore() {
         return false;
       }
 
-      // Conta que recebeu o repasse (coluna repasse_conta, script supabase-06). Ao reabrir, limpa.
-      if ((acao === "concluir" && conta) || acao === "reabrir") {
-        const { error: erroConta } = await supabase.from(NOME_TABELA_DB[origem]).update({ repasse_conta: acao === "concluir" ? conta : null }).in("id", ids);
-        if (erroConta) alert(/repasse_conta/.test(erroConta.message) ? "O repasse foi concluído, mas para escolher a conta de destino execute o script supabase-06-repasse-conta.sql no Supabase." : "O repasse foi concluído, mas não foi possível registrar a conta de destino: " + erroConta.message);
+      // Contas do repasse (script supabase-06): destino (quem recebe, em "concluir") e origem (quem repassa, em "informar").
+      // A origem é gravada por função no banco porque o responsável não é dono da linha.
+      const avisoScript = "O repasse foi atualizado, mas para registrar as contas execute o script supabase-06-repasse-conta.sql no Supabase.";
+      if (acao === "concluir" && conta) {
+        const { error: e1 } = await supabase.from(NOME_TABELA_DB[origem]).update({ repasse_conta: conta }).in("id", ids);
+        if (e1) alert(/repasse_conta/.test(e1.message) ? avisoScript : "O repasse foi concluído, mas não foi possível registrar a conta de destino: " + e1.message);
+      }
+      if (acao === "reabrir") {
+        const { error: e2 } = await supabase.from(NOME_TABELA_DB[origem]).update({ repasse_conta: null, repasse_conta_origem: null }).in("id", ids);
+        if (e2) alert(/repasse_conta/.test(e2.message) ? avisoScript : "Não foi possível limpar as contas do repasse: " + e2.message);
+      }
+      if (acao === "informar" || acao === "desinformar") {
+        const { error: e3 } = await supabase.rpc("registrar_repasse_conta", { p_tabela: NOME_TABELA_DB[origem], p_ids: ids.map(String), p_conta: acao === "informar" ? conta : null });
+        if (e3 && (conta || acao === "desinformar")) alert(/registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? avisoScript : "Não foi possível registrar a conta de origem do repasse: " + e3.message);
       }
 
       const alvo = new Set(ids);
       const patch: Record<string, any> =
-        acao === "informar" ? { repasse_informado: true, repasse_informado_em: agora, repasseInformado: true }
-          : acao === "desinformar" ? { repasse_informado: false, repasse_informado_em: null, repasseInformado: false }
+        acao === "informar" ? { repasse_informado: true, repasse_informado_em: agora, repasseInformado: true, repasse_conta_origem: conta }
+          : acao === "desinformar" ? { repasse_informado: false, repasse_informado_em: null, repasseInformado: false, repasse_conta_origem: null }
             : acao === "concluir" ? { repasse_pago: true, repasse_pago_em: agora, repassePago: true, repasse_conta: conta }
-              : { repasse_conta: null, repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
+              : { repasse_conta: null, repasse_conta_origem: null, repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
       setEstado((atual) => ({
         ...atual,
         [origem]: (atual[origem] as any[]).map((item) => (alvo.has(item.id) ? { ...item, ...patch } : item)),

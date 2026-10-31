@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import { useOpcoes } from "@/lib/useOpcoes";
+import { useMovimentosConta } from "@/hooks/useMovimentosConta";
 import { calcularSaldoConta, tipoDaConta } from "@/lib/contas";
 import { ArrowRight, Check, HandCoins, Lock, Settings2, Undo2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -22,22 +23,23 @@ type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir";
 type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], acao: AcaoRepasse, conta?: string | null) => Promise<boolean>;
 
 /* ---------- Escolha da conta que recebe o repasse ---------- */
-function EscolherContaRepasse({ lista, dados, userId, mes, onConfirmar, onFechar }: { lista: LancGrupo[]; dados: Dados; userId: string; mes: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
+function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfirmar, onFechar }: { modo: "receber" | "repassar"; lista: LancGrupo[]; dados: Dados; userId: string; mes: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
   const { pagamento } = useOpcoes();
+  const caixinhaMovs = useMovimentosConta();
   const contas = useMemo(() => pagamento.filter((o) => tipoDaConta(o) === "debito"), [pagamento]);
   const [escolhida, setEscolhida] = useState<string>("");
   const total = lista.reduce((t, l) => t + l.valor, 0);
   const sel = escolhida || contas[0]?.nome || "";
   return (
-    <DialogResponsivo titulo="Em qual conta o valor entrou?" onFechar={onFechar}>
+    <DialogResponsivo titulo={modo === "receber" ? "Em qual conta o valor entrou?" : "De qual conta saiu o valor?"} onFechar={onFechar}>
       <div className="space-y-4">
-        <p className="text-sm text-muted">Confirmar recebimento de <b className="text-ink">{brl(total)}</b>{lista.length > 1 ? ` (${lista.length} lançamentos)` : ""}. O valor soma no saldo da conta escolhida.</p>
+        <p className="text-sm text-muted">{modo === "receber" ? "Confirmar recebimento de" : "Marcar como repassado"} <b className="text-ink">{brl(total)}</b>{lista.length > 1 ? ` (${lista.length} lançamentos)` : ""}. {modo === "receber" ? "O valor soma no saldo da conta escolhida e entra como entrada no seu mês." : "O valor é descontado do saldo da conta escolhida quando quem lançou confirmar o recebimento."}</p>
         {contas.length === 0 ? (
-          <p className="rounded-xl bg-background p-3 text-sm text-muted">Você ainda não tem conta de débito cadastrada. Você pode confirmar o recebimento mesmo assim, sem registrar em nenhuma conta.</p>
+          <p className="rounded-xl bg-background p-3 text-sm text-muted">Você ainda não tem conta de débito cadastrada. Você pode continuar mesmo assim, sem registrar em nenhuma conta.</p>
         ) : (
           <div role="radiogroup" aria-label="Conta de destino" className="space-y-2">
             {contas.map((c) => {
-              const saldo = calcularSaldoConta(dados as any, c, { userId, ateMes: mes }).saldo;
+              const saldo = calcularSaldoConta(dados as any, c, { userId, ateMes: mes, caixinhaMovs }).saldo;
               return (
                 <label key={c.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm ${sel === c.nome ? "border-accent bg-accent/10" : "border-line"}`}>
                   <input type="radio" name="conta-repasse" checked={sel === c.nome} onChange={() => setEscolhida(c.nome)} className="accent-[var(--accent)]" />
@@ -50,8 +52,8 @@ function EscolherContaRepasse({ lista, dados, userId, mes, onConfirmar, onFechar
           </div>
         )}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={() => onConfirmar(null)} className="h-11 rounded-xl border border-line px-4 text-sm font-medium hover:bg-background">Confirmar sem registrar em conta</button>
-          {contas.length > 0 && <button type="button" onClick={() => onConfirmar(sel)} className="h-11 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent">Confirmar recebimento</button>}
+          <button type="button" onClick={() => onConfirmar(null)} className="h-11 rounded-xl border border-line px-4 text-sm font-medium hover:bg-background">Continuar sem registrar em conta</button>
+          {contas.length > 0 && <button type="button" onClick={() => onConfirmar(sel)} className="h-11 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent">{modo === "receber" ? "Confirmar recebimento" : "Marcar como repassado"}</button>}
         </div>
       </div>
     </DialogResponsivo>
@@ -155,8 +157,8 @@ function AbaRepasses({ lista, meuId, onRepasse, onNova }: { lista: LancGrupo[]; 
   const acao = (l: LancGrupo, a: AcaoRepasse) => void onRepasse([{ origem: l.origem, id: l.id }], a);
   const acaoVarios = (ls: LancGrupo[], a: AcaoRepasse) => {
     const msg = a === "concluir" ? `Confirmar o recebimento de ${ls.length} valores?` : `Marcar ${ls.length} valores como repassados?`;
-    // Concluir já abre a escolha da conta (que serve de confirmação); só "Repassei tudo" pede confirmação aqui
-    if (a === "concluir" || window.confirm(msg)) void onRepasse(ls.map((l) => ({ origem: l.origem, id: l.id })), a);
+    // Concluir e "Repassei" já abrem a escolha da conta (que serve de confirmação)
+    if (a === "concluir" || a === "informar" || window.confirm(msg)) void onRepasse(ls.map((l) => ({ origem: l.origem, id: l.id })), a);
   };
   const nada = r.aReceber.pessoas.length === 0 && r.aRepassar.pessoas.length === 0;
 
@@ -294,9 +296,9 @@ export default function TelaGrupo({
   // Ações minhas: devo marcar "Repassei" (pendente) ou devo confirmar um recebimento (aguardando)
   const pendentes = useMemo(() => lista.filter((l) => l.vencido && ((l.respId === meuId && l.situacaoRepasse === "pendente") || (l.autorId === meuId && l.situacaoRepasse === "aguardando"))).length, [lista, meuId]);
   // Confirmar recebimento ("concluir") pergunta antes em qual conta de débito o valor entrou
-  const [pedindoConta, setPedindoConta] = useState<{ itens: { origem: "extrato" | "cartao" | "contas"; id: string }[] } | null>(null);
+  const [pedindoConta, setPedindoConta] = useState<{ acao: "concluir" | "informar"; itens: { origem: "extrato" | "cartao" | "contas"; id: string }[] } | null>(null);
   const repasseComConta: Repasse = async (itens, acao, conta) => {
-    if (acao === "concluir" && conta === undefined) { setPedindoConta({ itens }); return true; }
+    if ((acao === "concluir" || acao === "informar") && conta === undefined) { setPedindoConta({ acao, itens }); return true; }
     return onRepasse(itens, acao, conta);
   };
   const lancamentosPedidos = pedindoConta ? lista.filter((l) => pedindoConta.itens.some((i) => i.origem === l.origem && i.id === l.id)) : [];
@@ -324,12 +326,13 @@ export default function TelaGrupo({
       {sub === "repasses" && <AbaRepasses lista={lista} meuId={meuId} onRepasse={repasseComConta} onNova={onNova} />}
       {pedindoConta && (
         <EscolherContaRepasse
+          modo={pedindoConta.acao === "concluir" ? "receber" : "repassar"}
           lista={lancamentosPedidos}
           dados={dados}
           userId={meuId}
           mes={mes}
           onFechar={() => setPedindoConta(null)}
-          onConfirmar={(conta) => { const itens = pedindoConta.itens; setPedindoConta(null); void onRepasse(itens, "concluir", conta); }}
+          onConfirmar={(conta) => { const itens = pedindoConta.itens; setPedindoConta(null); void onRepasse(itens, pedindoConta.acao, conta); }}
         />
       )}
     </div>

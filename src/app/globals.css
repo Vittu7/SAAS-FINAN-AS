@@ -9,8 +9,8 @@
 :root {
   color-scheme: light;
 
-  --bg: #e6ebf2;
-  --surface: #ffffff;
+  --bg: #040405;
+  --surface: #bebdbd;
   --line: #c5d0dd;
   --ink: #0f172a;
   --muted: #4f5f73;
@@ -218,9 +218,22 @@ textarea {
 }
 
 /* =========================================
-   FUNDO DECORATIVO
-   ========================================= */
-body::before {
+   FUNDOS DECORATIVOS
+   =========================================
+   Duas camadas fixas atrás do conteúdo (body::before e body::after). O MESMO CSS desenha as miniaturas do
+   seletor de Aparência (.hc-fx[data-fx]), então o que se vê no seletor é o que vai para a tela.
+   Tudo usa a cor de destaque (--accent) e sai em dois tons conforme o tema (.dark).
+   IMPORTANTE: nenhum contêiner da página pode ter fundo sólido, senão cobre estas camadas. */
+:root {
+  --fx: 0.16; /* intensidade no tema claro */
+}
+
+:root.dark {
+  --fx: 0.13; /* intensidade no tema escuro */
+}
+
+body::before,
+body::after {
   content: "";
   position: fixed;
   inset: 0;
@@ -230,63 +243,97 @@ body::before {
   transition: opacity 250ms ease;
 }
 
-/* Aurora */
-:root[data-bg="aurora"] body::before {
-  opacity: 0.10;
+/* Miniaturas do seletor: mesmas camadas, dentro da caixinha */
+.hc-fx {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-color: var(--bg);
+  --k: 3.2; /* a miniatura é pequena: precisa de mais força para ler */
+}
+
+.hc-fx::before,
+.hc-fx::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* --- Aurora: três manchas suaves de cor, uma em cada canto --- */
+:root[data-bg="aurora"] body::before,
+.hc-fx[data-fx="aurora"]::before {
+  opacity: calc(var(--fx) * var(--k, 1));
   background:
-    radial-gradient(55% 45% at 10% 0%,
-      var(--accent),
-      transparent 70%),
-    radial-gradient(45% 40% at 95% 15%,
-      #38bdf8,
-      transparent 70%),
-    radial-gradient(55% 45% at 80% 100%,
-      var(--accent),
-      transparent 70%);
+    radial-gradient(60% 50% at 6% 0%, var(--accent), transparent 70%),
+    radial-gradient(50% 45% at 100% 8%, #38bdf8, transparent 70%),
+    radial-gradient(60% 50% at 88% 100%, var(--accent), transparent 72%);
 }
 
-/* Glow */
-:root[data-bg="glow"] body::before {
-  opacity: 0.10;
-  background: radial-gradient(80% 60% at 50% -10%,
-      var(--accent),
-      transparent 70%);
+/* --- Brilho: um facho de luz que desce do topo --- */
+:root[data-bg="glow"] body::before,
+.hc-fx[data-fx="glow"]::before {
+  opacity: calc(var(--fx) * 1.6 * var(--k, 1));
+  background: radial-gradient(85% 60% at 50% -12%, var(--accent), transparent 72%);
 }
 
-/* Pontos */
-:root[data-bg="dots"] body::before {
-  opacity: 0.10;
-  background-image: radial-gradient(var(--accent) 1px,
-      transparent 1.4px);
-  background-size: 22px 22px;
+/* --- Malha: gradiente em malha, cores vizinhas da cor de destaque (mais "vivo" que a aurora) --- */
+:root[data-bg="malha"] body::before,
+.hc-fx[data-fx="malha"]::before {
+  opacity: calc(var(--fx) * 1.05 * var(--k, 1));
+  background:
+    radial-gradient(42% 38% at 12% 12%, var(--accent), transparent 70%),
+    radial-gradient(38% 34% at 78% 8%, color-mix(in oklab, var(--accent) 45%, #6366f1), transparent 70%),
+    radial-gradient(40% 36% at 92% 58%, color-mix(in oklab, var(--accent) 50%, #0ea5e9), transparent 70%),
+    radial-gradient(44% 40% at 22% 88%, color-mix(in oklab, var(--accent) 55%, #f472b6), transparent 72%),
+    radial-gradient(34% 30% at 62% 96%, color-mix(in oklab, var(--accent) 70%, #22d3ee), transparent 70%);
 }
 
-/* Grade */
-:root[data-bg="grid"] body::before {
-  opacity: 0.07;
-  background-image:
-    linear-gradient(var(--accent) 1px, transparent 1px),
-    linear-gradient(90deg, var(--accent) 1px, transparent 1px);
-  background-size: 40px 40px;
+/* --- Ondas: duas ondas suaves na base da tela, em degradê da cor de destaque --- */
+:root[data-bg="ondas"] body::before,
+.hc-fx[data-fx="ondas"]::before {
+  opacity: calc(var(--fx) * 0.8 * var(--k, 1));
+  background: radial-gradient(90% 55% at 50% -15%, var(--accent), transparent 72%);
 }
 
-/* Intensidade um pouco maior no tema escuro */
-:root[data-theme="dark"][data-bg="aurora"] body::before,
-:root[data-theme="system"][data-bg="aurora"] body::before {
-  opacity: 0.07;
+:root[data-bg="ondas"] body::after,
+.hc-fx[data-fx="ondas"]::after {
+  opacity: calc(var(--fx) * 1.25 * var(--k, 1));
+  background: linear-gradient(180deg, transparent 0%, var(--accent) 100%);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.55' d='M0 150 C 240 70 480 70 720 140 S 1200 230 1440 120 V320 H0Z'/%3E%3Cpath d='M0 215 C 260 150 520 150 760 205 S 1200 275 1440 190 V320 H0Z'/%3E%3C/svg%3E") bottom / 100% 46% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.55' d='M0 150 C 240 70 480 70 720 140 S 1200 230 1440 120 V320 H0Z'/%3E%3Cpath d='M0 215 C 260 150 520 150 760 205 S 1200 275 1440 190 V320 H0Z'/%3E%3C/svg%3E") bottom / 100% 46% no-repeat;
 }
 
-:root[data-theme="dark"][data-bg="glow"] body::before,
-:root[data-theme="system"][data-bg="glow"] body::before {
-  opacity: 0.06;
+/* --- Granulado: degradê suave com textura fina de grão (visual "papel", discreto) --- */
+:root[data-bg="granulado"] body::before,
+.hc-fx[data-fx="granulado"]::before {
+  opacity: calc(var(--fx) * 1.7 * var(--k, 1));
+  background:
+    radial-gradient(70% 55% at 0% 0%, var(--accent), transparent 72%),
+    radial-gradient(60% 50% at 100% 100%, color-mix(in oklab, var(--accent) 55%, #38bdf8), transparent 72%);
 }
 
-:root[data-theme="dark"][data-bg="dots"] body::before {
-  opacity: 0.07;
+:root[data-bg="granulado"] body::after,
+.hc-fx[data-fx="granulado"]::after {
+  opacity: 0.22;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
 }
 
-:root[data-theme="dark"][data-bg="grid"] body::before {
-  opacity: 0.05;
+:root.dark[data-bg="granulado"] body::after,
+:root.dark .hc-fx[data-fx="granulado"]::after {
+  opacity: 0.16;
+  filter: invert(1);
+}
+
+/* Telas pequenas: a camada fixa acompanha a altura MAIOR do navegador do celular (barra de endereço recolhida) */
+@supports (height: 100lvh) {
+  body::before,
+  body::after {
+    height: 100lvh;
+  }
 }
 
 /* =========================================

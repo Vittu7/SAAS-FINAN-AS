@@ -81,17 +81,11 @@ export default function RootLayout({
                   );
                 }
 
-                const bg = localStorage.getItem('homecash-bg') || 'none';
-                const img = localStorage.getItem('homecash-bg-img');
-
-                root.dataset.bg = bg === 'image' && !img ? 'none' : bg;
-
-                if (bg === 'image' && img) {
-                  root.style.setProperty(
-                    '--bg-img',
-                    'url("' + img + '")'
-                  );
-                }
+                const LEGADO = { dots: 'granulado', grid: 'ondas' };
+                const VALIDOS = ['none', 'aurora', 'glow', 'malha', 'ondas', 'granulado'];
+                let bg = localStorage.getItem('homecash-bg') || 'none';
+                bg = LEGADO[bg] || bg;
+                root.dataset.bg = VALIDOS.indexOf(bg) >= 0 ? bg : 'none';
               } catch (e) {}
             `,
           }}

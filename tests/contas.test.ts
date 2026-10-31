@@ -62,3 +62,64 @@ describe("contas de débito e crédito", () => {
     expect(verificarDisponibilidade(estado, { nome: "Pix" }, 99999, { userId: "eu", mes: M })).toMatchObject({ ok: true, disponivel: null });
   });
 });
+
+describe("repasses recebidos em conta de débito", () => {
+  const base = { id: "r1", mes: M, pagamento: "Pix", valor: 120, owner_id: "eu", responsavel_id: "ana", repasse_pago: true, repasse_pago_em: "2026-10-15T10:00:00Z" };
+  const com = (extra: any, userId = "eu") =>
+    calcularSaldoConta({ ...(estado as any), extrato: [...(estado as any).extrato, { ...base, ...extra }] }, debito, { userId, ateMes: M });
+  const semRepasse = calcularSaldoConta(estado, debito, { userId: "eu", ateMes: M }).saldo;
+
+  it("soma na conta escolhida por quem recebeu", () => {
+    const r = com({ repasse_conta: "Conta Nubank" });
+    expect(r.repasses).toBe(120);
+    expect(r.saldo).toBe(semRepasse + 120);
+  });
+  it("não soma em outra conta, se não confirmado ou se não for o autor", () => {
+    expect(com({ repasse_conta: "Outra" }).repasses).toBe(0);
+    expect(com({ repasse_conta: "Conta Nubank", repasse_pago: false }).repasses).toBe(0);
+    expect(com({ repasse_conta: "Conta Nubank" }, "ana").repasses).toBe(0);
+  });
+  it("só conta a partir do mês em que foi confirmado", () => {
+    expect(com({ repasse_conta: "Conta Nubank", repasse_pago_em: "2026-12-01T00:00:00Z" }).repasses).toBe(0);
+  });
+});
+
+describe("repasses pagos saindo de uma conta de débito", () => {
+  const item = { id: "r2", mes: M, pagamento: "Cartão do autor", valor: 100, owner_id: "autor", responsavel_id: "eu", repasse_pago: true, repasse_pago_em: "2026-10-20T10:00:00Z", repasse_conta_origem: "Conta Nubank" };
+  const com = (extra: any, userId = "eu") => calcularSaldoConta({ ...(estado as any), extrato: [...(estado as any).extrato, { ...item, ...extra }] }, debito, { userId, ateMes: M });
+  const base = calcularSaldoConta(estado, debito, { userId: "eu", ateMes: M }).saldo;
+
+  it("desconta da conta de origem do responsável quando o autor confirma", () => {
+    expect(com({}).saldo).toBe(base - 100);
+    expect(com({}).repassesPagos).toBe(100);
+  });
+  it("não desconta se ainda não confirmado, se outra conta ou se não for o responsável", () => {
+    expect(com({ repasse_pago: false }).repassesPagos).toBe(0);
+    expect(com({ repasse_conta_origem: "Outra" }).repassesPagos).toBe(0);
+    expect(com({}, "autor").repassesPagos).toBe(0);
+  });
+});
+
+describe("caixinhas usando o saldo de uma conta de débito", () => {
+  const movs = [
+    { tipo: "aporte", valor: 300, conta: "Conta Nubank", data: "2026-10-05" },
+    { tipo: "resgate", valor: 100, conta: "Conta Nubank", data: "2026-10-20" },
+    { tipo: "rendimento", valor: 9, conta: "Conta Nubank", data: "2026-10-21" },
+    { tipo: "aporte", valor: 999, conta: "Outra", data: "2026-10-05" },
+    { tipo: "aporte", valor: 50, conta: "Conta Nubank", data: "2026-11-01" },
+  ];
+  const base = calcularSaldoConta(estado, debito, { userId: "eu", ateMes: M }).saldo;
+
+  it("o aporte sai do saldo e o resgate volta; rendimento, outra conta e meses futuros não contam", () => {
+    const r = calcularSaldoConta(estado, debito, { userId: "eu", ateMes: M, caixinhaMovs: movs });
+    expect(r.aportesCaixinha).toBe(300);
+    expect(r.resgatesCaixinha).toBe(100);
+    expect(r.saldo).toBe(base - 300 + 100);
+  });
+  it("a verificação de saldo ao lançar considera os aportes", () => {
+    const sem = verificarDisponibilidade(estado, debito, 100, { userId: "eu", mes: M });
+    const com = verificarDisponibilidade(estado, debito, 100, { userId: "eu", mes: M, caixinhaMovs: [{ tipo: "aporte", valor: 1000, conta: "Conta Nubank", data: "2026-10-01" }] });
+    expect(sem.ok).toBe(true);
+    expect(com.ok).toBe(false);
+  });
+});

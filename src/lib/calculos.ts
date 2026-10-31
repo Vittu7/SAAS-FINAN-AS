@@ -79,3 +79,33 @@ export function calcularMes(
     porResponsavel,
   };
 }
+
+
+const proximoMes = (m: string) => {
+  const [a, mm] = m.split("-").map(Number);
+  const d = new Date(a, mm, 1); // mm já é o mês seguinte (0-based)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+/**
+ * O que SOBROU dos meses anteriores e passa para `mes` (entra como entrada do mês).
+ * Vai do primeiro mês com lançamentos até o mês anterior, acumulando mês a mês: sobra = entradas − saídas
+ * (com o salário configurado quando o mês não tem entrada lançada). Mês no vermelho não vira dívida para o
+ * seguinte: a sobra nunca fica negativa. Sem lançamentos antes de `mes`, não há o que passar.
+ */
+export function sobraDosMesesAnteriores(
+  e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
+  mes: string,
+  salarioConfig = 0,
+): number {
+  const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
+    .map((i) => String(i?.mes || ""))
+    .filter((m) => /^\d{4}-\d{2}$/.test(m) && m < mes);
+  if (meses.length === 0) return 0;
+  let m = meses.reduce((a, b) => (a < b ? a : b));
+  let sobra = 0;
+  for (let n = 0; m < mes && n < 240; n++, m = proximoMes(m)) {
+    sobra = Math.max(0, arred(sobra + calcularMes(e, { mes: m, salarioConfig }).saldoRestante));
+  }
+  return sobra;
+}

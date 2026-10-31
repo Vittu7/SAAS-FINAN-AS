@@ -238,7 +238,6 @@ function CartaoCaixinha({
       </div>
       <p className="mt-1.5 text-xs text-muted">
         {c.meta > 0 ? `${Math.round(progresso)}% da meta` : "Defina uma meta para acompanhar"}
-        {c.aporteAutoAtivo && c.aporteAutoValor > 0 ? ` · Aporte automático ${brl(c.aporteAutoValor)}/mês` : ""}
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">

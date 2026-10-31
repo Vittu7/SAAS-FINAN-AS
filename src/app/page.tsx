@@ -24,7 +24,8 @@ import DicaModulo from "@/components/DicaModulo";
 import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
-import { idsDaSelecao, lancamentosDoGrupo, resumoRepasses } from "@/lib/grupo";
+import { sobraDosMesesAnteriores } from "@/lib/calculos";
+import { entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, resumoRepasses } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
@@ -53,7 +54,6 @@ import {
 } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
 import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes, MobileSaldo } from "@/components/mobile/MobileShell";
-import CaixinhasDestaque from "@/components/CaixinhasDestaque";
 import SaldosContas from "@/components/SaldosContas";
 
 type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
@@ -66,7 +66,6 @@ export default function Home() {
   const [verificandoAuth, setVerificandoAuth] = useState(true);
   const [modalGrupoAberto, setModalGrupoAberto] = useState(false);
   const [pessoasSel, setPessoasSel] = useState<string[]>([TOKEN_EU]); // Privacidade: começa mostrando só os seus registros
-  const [filtroRespAberto, setFiltroRespAberto] = useState(false); // filtro de responsáveis recolhido por padrão
   const [sidebarExpandida, setSidebarExpandida] = useState(true);
   const [mes, setMes] = useState("");
   const [aba, setAba] = useState<AbaId>("inicio");
@@ -180,13 +179,15 @@ export default function Home() {
       pessoasSel.includes(TOKEN_EU) && item.lancadoParaOutro && !nomesSel.includes(item.responsavel)
         ? { ...item, foraDoMeuSaldo: true }
         : item;
-    return {
-      ...estado,
+    const filtrado = {
       extrato: estado.extrato.filter(passaFiltro).map(marcar),
       cartao: estado.cartao.filter(passaFiltro).map(marcar),
       contas: estado.contas.filter(passaFiltro).map(marcar),
     };
-  }, [estado, passaFiltro, pessoasSel]);
+    // Repasse confirmado = entrada para quem lançou (a despesa continua só no resumo do responsável)
+    const repasses = entradasDeRepasse(filtrado, { meuId: userId || "", meuNome: pessoaEu?.nome || "Eu", incluiEu: pessoasSel.includes(TOKEN_EU), nomesSelecionados: nomesSel });
+    return { ...estado, ...filtrado, extrato: [...filtrado.extrato, ...repasses] };
+  }, [estado, passaFiltro, pessoasSel, userId, pessoaEu?.nome]);
 
   const arraysMensais = useMemo(
     () => ({
@@ -244,7 +245,16 @@ export default function Home() {
     [estadoFiltrado, extrato, cartao, contas]
   );
 
-  const resumo = useMemo(() => resumoDoMes(estadoComFiltros, mes), [estadoComFiltros, mes]);
+  // Entradas do mês = o que entrou no mês + o que SOBROU dos meses anteriores (calculado com todos os meses,
+  // respeitando só o filtro de responsáveis; os filtros de busca da tela não mudam a sobra).
+  const sobraAnterior = useMemo(
+    () => (mes ? sobraDosMesesAnteriores(estadoFiltrado, mes, estado.config?.salario ?? 0) : 0),
+    [estadoFiltrado, mes, estado.config?.salario]
+  );
+  const resumo = useMemo(() => {
+    const r = resumoDoMes(estadoComFiltros, mes);
+    return { ...r, entradas: r.entradas + sobraAnterior, sobra: r.sobra + sobraAnterior, sobraAnterior };
+  }, [estadoComFiltros, mes, sobraAnterior]);
 
   if (verificandoAuth || !loja.pronto || !mes) {
     return (
@@ -280,6 +290,15 @@ export default function Home() {
   // O filtro de responsáveis aparece em todo módulo com lançamentos por pessoa (inclusive Grupo familiar e Faturas).
   // Fica de fora só onde não há responsável: Configurações, Investimentos (caixinhas) e Ajuda.
   const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda";
+  // Filtro de responsáveis: pílula fixa no topo, junto do seletor de mês (cabeçalho fixo no celular e barra fixa no desktop)
+  const filtroResp = mostrarVisualizacao && membros.length > 1 ? (
+    <FiltroResponsaveis
+      eu={{ nome: pessoaEu?.nome || "Eu", avatar: pessoaEu?.avatar, cor: pessoaEu?.cor }}
+      outros={membros.filter((m) => m.id !== userId).map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
+      selecionados={pessoasSel}
+      onChange={setPessoasSel}
+    />
+  ) : null;
   const pessoasFiltradas = idsDaSelecao(pessoasSel, membros, userId || "", TOKEN_EU);
   const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda";
   const rotuloVisualizacao =
@@ -287,7 +306,7 @@ export default function Home() {
   const mostrarFiltros = !mostrarPainel && !(aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" ? nadaVisivel : false) && aba !== "ajustes" && aba !== "fatura" && aba !== "graficos" && aba !== "investimentos" && aba !== "ajuda";
 
   return (
-    <div className="min-h-screen bg-background text-ink">
+    <div className="min-h-screen text-ink">
       <Sidebar
         onAbrirGrupo={() => abrirGrupo()}
         onNova={() => abrirNova()}
@@ -297,8 +316,9 @@ export default function Home() {
       />
 
       <main
-        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${sidebarExpandida ? "md:pl-60" : "md:pl-16"
-          }`}
+        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${
+          sidebarExpandida ? "md:pl-60" : "md:pl-16"
+        }`}
       >
         <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
@@ -306,55 +326,56 @@ export default function Home() {
               aba === "grupo" ? "Grupo familiar" : aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
-                  ? "Extrato"
-                  : aba === "lancamentos"
-                    ? "Lançamentos do mês"
-                    : aba === "cartao"
-                      ? "Contas parceladas"
-                      : "Contas fixas"
+                ? "Extrato"
+                : aba === "lancamentos"
+                ? "Lançamentos do mês"
+                : aba === "cartao"
+                ? "Contas parceladas"
+                : "Contas fixas"
             }
             mostrarMes={mostrarMesNoCabecalho}
+            filtro={filtroResp}
             mes={mes}
             setMes={setMes}
             onAbrirMenu={() => setMenuMobile(true)}
           />
 
-          <header className="hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line py-5 md:flex">
+          <header className="sticky top-0 z-30 -mx-8 -mt-8 hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line bg-background/85 px-8 py-4 backdrop-blur-xl md:flex">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight">
                 {aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                   ? "Olá 👋 Visão geral"
                   : aba === "extrato"
-                    ? "Extrato"
-                    : aba === "lancamentos"
-                      ? "Lançamentos do mês"
-                      : aba === "cartao"
-                        ? "Contas parceladas"
-                        : "Contas fixas"}
+                  ? "Extrato"
+                  : aba === "lancamentos"
+                  ? "Lançamentos do mês"
+                  : aba === "cartao"
+                  ? "Contas parceladas"
+                  : "Contas fixas"}
               </h1>
               <p className="mt-1 text-sm text-muted">
                 {mostrarPainel
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
-                    ? "Todas as movimentações do mês em um só lugar."
-                    : aba === "grupo"
-                      ? "Resumo por pessoa, lançamentos entre membros e valores a repassar."
-                      : aba === "ajuda"
-                        ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
-                        : aba === "graficos"
-                          ? "Veja para onde o dinheiro vai e gere relatórios por período."
-                          : aba === "investimentos"
-                            ? "Caixinhas, reserva de emergência, aportes e rendimentos."
-                            : aba === "ajustes"
-                              ? "Perfil, plano, aparência, cadastros e tela inicial."
-                              : aba === "fatura"
-                                ? "Escolha um cartão para ver a fatura do mês."
-                                : "Cadastre, consulte e edite seus registros."}
+                  ? "Todas as movimentações do mês em um só lugar."
+                  : aba === "grupo"
+                  ? "Resumo por pessoa, lançamentos entre membros e valores a repassar."
+                  : aba === "ajuda"
+                  ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
+                  : aba === "graficos"
+                  ? "Veja para onde o dinheiro vai e gere relatórios por período."
+                  : aba === "investimentos"
+                  ? "Caixinhas, reserva de emergência, aportes e rendimentos."
+                  : aba === "ajustes"
+                  ? "Perfil, plano, aparência, cadastros e tela inicial."
+                  : aba === "fatura"
+                  ? "Escolha um cartão para ver a fatura do mês."
+                  : "Cadastre, consulte e edite seus registros."}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-
+              {filtroResp}
 
               {mostrarMesNoCabecalho && <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
                 <button
@@ -385,17 +406,6 @@ export default function Home() {
               <ThemeToggle />
             </div>
           </header>
-
-          {mostrarVisualizacao && membros.length > 1 && (
-            <FiltroResponsaveis
-              eu={{ nome: pessoaEu?.nome || "Eu", avatar: pessoaEu?.avatar, cor: pessoaEu?.cor }}
-              outros={membros.filter((m) => m.id !== userId).map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
-              selecionados={pessoasSel}
-              onChange={setPessoasSel}
-              aberto={filtroRespAberto}
-              onAlternarAberto={() => setFiltroRespAberto((v) => !v)}
-            />
-          )}
 
           {mostrarPainel && (
             <div className="anim-stagger space-y-5">
@@ -591,6 +601,7 @@ export default function Home() {
           cartao={cartao}
           contas={contas}
           salario={estado.config.salario}
+          sobraAnterior={sobraAnterior}
           visualizacao={rotuloVisualizacao}
           onFechar={() => setDetalheExtrato(null)}
         />

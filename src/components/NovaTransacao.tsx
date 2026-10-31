@@ -9,6 +9,7 @@ import { SeletorOpcao } from "@/components/SeletorOpcao";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { brl, parseValor, rotuloMes } from "@/lib/finance";
 import { tipoDaConta, verificarDisponibilidade } from "@/lib/contas";
+import { useMovimentosConta } from "@/hooks/useMovimentosConta";
 import type { Estado } from "@/lib/types";
 import type { Membro } from "@/hooks/useFinanceStore";
 
@@ -47,6 +48,7 @@ export default function NovaTransacao({
   onAdicionarConta: (item: any) => Promise<void> | void;
 }) {
   const { pagamento: formas, categoria: categorias, recarregar } = useOpcoes();
+  const caixinhaMovs = useMovimentosConta();
   const [tipo, setTipo] = useState<Tipo>(tipoInicial);
   const [como, setComo] = useState<Como>(comoInicial);
   const [cadastrandoCartao, setCadastrandoCartao] = useState(false);
@@ -86,7 +88,7 @@ export default function NovaTransacao({
   const valorNum = parseValor(valor);
   // Conta fixa só desconta quando for marcada como paga: não valida na criação.
   const valida = saida ? como !== "fixa" : true;
-  const disp = contaSel && valida ? verificarDisponibilidade(estado, contaSel, valorNum, { userId, mes }) : null;
+  const disp = contaSel && valida ? verificarDisponibilidade(estado, contaSel, valorNum, { userId, mes, caixinhaMovs }) : null;
 
   const cor = saida ? "bg-rose-700 text-white" : "bg-emerald-700 text-white";
 
@@ -101,7 +103,7 @@ export default function NovaTransacao({
 
     // Aviso (não bloqueia): saldo do débito ou limite do crédito insuficiente
     if (saida && como !== "fixa" && contaSel) {
-      const v = verificarDisponibilidade(estado, contaSel, total, { userId, mes });
+      const v = verificarDisponibilidade(estado, contaSel, total, { userId, mes, caixinhaMovs });
       if (!v.ok && !window.confirm(`O valor excede o ${v.rotulo.toLowerCase()} de ${contaSel.nome} em ${brl(v.faltante)}. Lançar mesmo assim?`)) return;
     }
 

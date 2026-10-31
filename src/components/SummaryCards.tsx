@@ -17,7 +17,7 @@ export default function SummaryCards({ resumo, onAbrirExtrato }: { resumo: Resum
           <span className="grid size-7 place-items-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"><Ico icon={ArrowDownLeft} size={16} /></span>Entradas
         </p>
         <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400">{brl(resumo.entradas)}</p>
-        <p className="mt-2 text-xs text-muted">{resumo.usandoSalarioConfigurado ? "Usando o salário configurado. Lance uma entrada para substituir." : "Dinheiro recebido no mês"}</p>
+        <p className="mt-2 text-xs text-muted">{resumo.sobraAnterior > 0 ? `Inclui ${brl(resumo.sobraAnterior)} que sobraram dos meses anteriores.` : resumo.usandoSalarioConfigurado ? "Usando o salário configurado. Lance uma entrada para substituir." : "Dinheiro recebido no mês"}</p>
       </button>
 
       <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className={base} aria-label="Ver saídas do mês">

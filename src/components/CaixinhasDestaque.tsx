@@ -5,15 +5,15 @@ import { addMeses, brl, mesAtual, parseValor, rotuloMes } from "@/lib/finance";
 import { useCaixinhas } from "@/hooks/useCaixinhas";
 import { metaAtingida, progressoCaixinha, rotuloLocal, totalRendimentos, type Caixinha } from "@/lib/caixinhas";
 
-/** Tela inicial: sugestões de aporte automático do mês + cards das caixinhas marcadas para a Home. */
+/** Tela inicial: lembretes de rendimento + cards das caixinhas marcadas para a Home. */
 export default function CaixinhasDestaque() {
-  const { caixinhas, movimentos, sugestoes, lembretesRendimento, carregando, confirmarSugestao, dispensarSugestao, registrarRendimento, dispensarRendimento } =
+  const { caixinhas, movimentos, lembretesRendimento, carregando, registrarRendimento, dispensarRendimento } =
     useCaixinhas();
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState("");
 
   const destaque = caixinhas.filter((c) => c.exibirNaHome);
-  if (carregando || (destaque.length === 0 && sugestoes.length === 0 && lembretesRendimento.length === 0)) return null;
+  if (carregando || (destaque.length === 0 && lembretesRendimento.length === 0)) return null;
 
   const tratar = async (id: string, acao: () => Promise<string | null>) => {
     setOcupado(id);
@@ -40,44 +40,6 @@ export default function CaixinhasDestaque() {
         </div>
       )}
 
-      {sugestoes.length > 0 && (
-        <div className="rounded-2xl border border-accent/40 bg-accent/10 p-4">
-          <p className="text-sm font-semibold">Aportes de {rotuloMes(mesAtual())}</p>
-          <p className="text-xs text-muted">Você configurou aporte automático nestas caixinhas. Confirme para registrar no histórico.</p>
-          <ul className="mt-3 space-y-2">
-            {sugestoes.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2">
-                <span className="min-w-0 truncate text-sm">
-                  {c.nome} · <strong className="tabular-nums">{brl(c.aporteAutoValor)}</strong>
-                </span>
-                <span className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={ocupado === c.id}
-                    onClick={() => tratar(c.id, () => confirmarSugestao(c))}
-                    className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-on-accent hover:opacity-90 disabled:opacity-60"
-                  >
-                    Confirmar aporte
-                  </button>
-                  <button
-                    type="button"
-                    disabled={ocupado === c.id}
-                    onClick={() => tratar(c.id, () => dispensarSugestao(c))}
-                    className="rounded-lg border border-line px-3 py-1 text-xs text-muted hover:text-ink disabled:opacity-60"
-                  >
-                    Agora não
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-          {erro && (
-            <p className="mt-2 text-xs text-red-400" role="alert">
-              {erro}
-            </p>
-          )}
-        </div>
-      )}
 
       {destaque.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

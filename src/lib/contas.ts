@@ -5,6 +5,10 @@
  * - DÉBITO: tem saldo = saldo inicial + entradas na conta − saídas à vista na conta − contas fixas pagas na conta.
  * - REPASSES: quando o autor de um lançamento confirma que recebeu o repasse, escolhe em qual conta de débito o
  *   dinheiro entrou (campo repasse_conta). Esse valor entra no saldo dessa conta como "repasses recebidos".
+ *   Quem deve escolhe, ao marcar "Repassei", de qual conta saiu (repasse_conta_origem): o valor é descontado
+ *   dessa conta quando o autor confirma o recebimento.
+ * - CAIXINHAS: aporte feito "usando" uma conta sai do saldo dela; resgate para uma conta volta para o saldo.
+ *   Rendimentos não mexem em conta. Nada disso entra em entradas e saídas do mês.
  * - O saldo é um controle À PARTE: nunca entra em calcularMes (entradas, saídas e saldo do mês não mudam).
  * - O saldo considera só o que o usuário lançou (owner_id). Compras de outros membros no mesmo cartão
  *   continuam contando na fatura, como antes.
@@ -12,6 +16,9 @@
 import { arred, ehEntrada, semDuplicados } from "./calculos";
 import { calcularFatura } from "./faturas";
 import type { Estado } from "./types";
+
+/** Aporte/resgate de caixinha ligado a uma conta de débito (só o necessário para o saldo). */
+export type MovCaixinhaConta = { tipo: string; valor: number; conta: string; data: string };
 
 export type TipoCartao = "credito" | "debito";
 
@@ -39,7 +46,7 @@ const mesDoRepasse = (i: any): string => (i.repasse_pago_em ? String(i.repasse_p
 export function calcularSaldoConta(
   estado: Pick<Estado, "extrato" | "contas"> & { cartao?: Estado["cartao"] },
   conta: Pick<ContaOpcao, "nome" | "saldo_inicial">,
-  opts: { userId?: string | null; ateMes?: string } = {},
+  opts: { userId?: string | null; ateMes?: string; caixinhaMovs?: MovCaixinhaConta[] } = {},
 ) {
   const extrato = semDuplicados(estado.extrato as any[], "extrato").filter(
     (i) => i.pagamento === conta.nome && doUsuario(i, opts.userId) && ate(i, opts.ateMes),
@@ -55,11 +62,23 @@ export function calcularSaldoConta(
       ),
     ),
   );
+  // Repasses que o usuário (responsável) pagou saindo desta conta, já confirmados pelo autor
+  const repassesPagos = soma(
+    (["extrato", "cartao", "contas"] as const).flatMap((o) =>
+      semDuplicados(((estado as any)[o] || []) as any[], o).filter(
+        (i) => i.repasse_pago && i.repasse_conta_origem === conta.nome && !ehEntrada(i) && !!opts.userId && i.responsavel_id === opts.userId && i.owner_id !== i.responsavel_id && (!opts.ateMes || mesDoRepasse(i) <= opts.ateMes),
+      ),
+    ),
+  );
+  // Aportes em caixinhas saem da conta; resgates voltam para ela
+  const movsConta = (opts.caixinhaMovs || []).filter((m) => m.conta === conta.nome && (!opts.ateMes || String(m.data).slice(0, 7) <= opts.ateMes));
+  const aportesCaixinha = soma(movsConta.filter((m) => m.tipo === "aporte"));
+  const resgatesCaixinha = soma(movsConta.filter((m) => m.tipo === "resgate"));
   const inicial = num(conta.saldo_inicial);
   const entradas = soma(extrato.filter(ehEntrada));
   const saidas = soma(extrato.filter((i) => !ehEntrada(i)));
   const fixas = soma(fixasPagas);
-  return { inicial, entradas, saidas, fixas, repasses: repassesRecebidos, saldo: arred(inicial + entradas + repassesRecebidos - saidas - fixas) };
+  return { inicial, entradas, saidas, fixas, repasses: repassesRecebidos, repassesPagos, aportesCaixinha, resgatesCaixinha, saldo: arred(inicial + entradas + repassesRecebidos + resgatesCaixinha - saidas - fixas - repassesPagos - aportesCaixinha) };
 }
 
 export type Disponibilidade = {
@@ -76,11 +95,11 @@ export function verificarDisponibilidade(
   estado: Estado,
   conta: ContaOpcao,
   valor: number,
-  opts: { userId?: string | null; mes: string },
+  opts: { userId?: string | null; mes: string; caixinhaMovs?: MovCaixinhaConta[] },
 ): Disponibilidade {
   const tipo = tipoDaConta(conta);
   if (tipo === "debito") {
-    const { saldo } = calcularSaldoConta(estado, conta, { userId: opts.userId, ateMes: opts.mes });
+    const { saldo } = calcularSaldoConta(estado, conta, { userId: opts.userId, ateMes: opts.mes, caixinhaMovs: opts.caixinhaMovs });
     const faltante = Math.max(0, arred(valor - saldo));
     return { tipo, rotulo: "Saldo disponível", disponivel: saldo, ok: faltante === 0, faltante };
   }

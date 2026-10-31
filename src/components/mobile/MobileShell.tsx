@@ -15,15 +15,18 @@ import DialogResponsivo from "@/components/DialogResponsivo";
 
 type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
 
-/* ---------- Cabeçalho do app no celular (o filtro de responsáveis fica abaixo, na página) ---------- */
+/* ---------- Cabeçalho FIXO do app no celular: mês e filtro de responsáveis sempre à mão ---------- */
 export function MobileHeader({
   titulo,
   mes,
   setMes,
   onAbrirMenu,
   mostrarMes = true,
+  filtro,
 }: {
   mostrarMes?: boolean;
+  /** Filtro de responsáveis (pílula) que fica ao lado do seletor de mês */
+  filtro?: React.ReactNode;
   titulo: string;
   mes: string;
   setMes: (m: string) => void;
@@ -49,15 +52,20 @@ export function MobileHeader({
         </div>
       </div>
 
-      {mostrarMes && (
-        <div className="mt-3 flex h-9 items-center justify-between rounded-full bg-surface px-1 ring-1 ring-line">
-          <button type="button" aria-label="Mês anterior" onClick={() => setMes(addMeses(mes, -1))} className="grid size-7 place-items-center rounded-full text-muted active:bg-background">
-            <Ico icon={ChevronLeft} size={18} />
-          </button>
-          <span className="text-sm font-medium capitalize" aria-live="polite">{rotuloMes(mes)}</span>
-          <button type="button" aria-label="Próximo mês" onClick={() => setMes(addMeses(mes, 1))} className="grid size-7 place-items-center rounded-full text-muted active:bg-background">
-            <Ico icon={ChevronRight} size={18} />
-          </button>
+      {(mostrarMes || filtro) && (
+        <div className="mt-3 flex items-center gap-2">
+          {mostrarMes && (
+            <div className="flex h-10 min-w-0 flex-1 items-center justify-between rounded-full bg-surface px-1 shadow-sm ring-1 ring-line">
+              <button type="button" aria-label="Mês anterior" onClick={() => setMes(addMeses(mes, -1))} className="grid size-8 place-items-center rounded-full text-muted active:bg-background">
+                <Ico icon={ChevronLeft} size={18} />
+              </button>
+              <span className="truncate text-sm font-medium capitalize" aria-live="polite">{rotuloMes(mes)}</span>
+              <button type="button" aria-label="Próximo mês" onClick={() => setMes(addMeses(mes, 1))} className="grid size-8 place-items-center rounded-full text-muted active:bg-background">
+                <Ico icon={ChevronRight} size={18} />
+              </button>
+            </div>
+          )}
+          {filtro}
         </div>
       )}
     </header>

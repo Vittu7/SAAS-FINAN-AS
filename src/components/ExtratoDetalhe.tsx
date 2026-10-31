@@ -37,6 +37,7 @@ export default function ExtratoDetalhe({
   cartao,
   contas,
   salario,
+  sobraAnterior = 0,
   visualizacao,
   onFechar,
 }: {
@@ -46,6 +47,8 @@ export default function ExtratoDetalhe({
   cartao: any[];
   contas: any[];
   salario: number;
+  /** O que sobrou dos meses anteriores (já faz parte das entradas do mês) */
+  sobraAnterior?: number;
   visualizacao: string;
   onFechar: () => void;
 }) {
@@ -59,9 +62,9 @@ export default function ExtratoDetalhe({
 
   const responsaveis = useMemo(() => [...new Set(base.map((l) => l.responsavel).filter(Boolean))].sort(), [base]);
 
-  const entradasLinhas = useMemo(() => base.filter((l) => l.entrada), [base]);
+  const entradasLinhas = useMemo(() => base.filter((l) => l.entrada && !l.foraDoSaldo), [base]); // repasse recebido só quita o a receber
   const usandoSalario = entradasLinhas.length === 0 && salario > 0;
-  const entradasTotal = usandoSalario ? salario : entradasLinhas.reduce((t, l) => t + l.valor, 0);
+  const entradasTotal = (usandoSalario ? salario : entradasLinhas.reduce((t, l) => t + l.valor, 0)) + sobraAnterior;
 
   const gastosLinhas = useMemo(
     () => base.filter((l) => !l.entrada && (!origem || l.origem === origem) && (!responsavel || l.responsavel === responsavel)),
@@ -75,13 +78,16 @@ export default function ExtratoDetalhe({
 
   const linhas: LinhaExtrato[] = useMemo(() => {
     const ordenadas = ordenarPorValor(gastosLinhas, ordem);
-    const entradas: LinhaExtrato[] = usandoSalario
+    const entradasBase: LinhaExtrato[] = usandoSalario
       ? [{ id: "salario", origem: "extrato", descricao: "Salário configurado", categoria: "", forma: "", responsavel: "", valor: salario, entrada: true }]
       : entradasLinhas;
+    const entradas: LinhaExtrato[] = sobraAnterior > 0
+      ? [...entradasBase, { id: "sobra-anterior", origem: "extrato", descricao: "Sobra dos meses anteriores", categoria: "", forma: "", responsavel: "", valor: sobraAnterior, entrada: true }]
+      : entradasBase;
     if (tipo === "entradas") return entradas;
     if (tipo !== "disponivel" || filtrado) return ordenadas;
     return [...entradas, ...ordenadas];
-  }, [gastosLinhas, ordem, tipo, filtrado, salario, usandoSalario, entradasLinhas]);
+  }, [gastosLinhas, ordem, tipo, filtrado, salario, usandoSalario, entradasLinhas, sobraAnterior]);
 
   const titulo = tipo === "gastos" ? "Saídas do mês" : tipo === "entradas" ? "Entradas do mês" : "Saldo restante";
   const negativo = tipo === "disponivel" && sobra < 0;
@@ -105,7 +111,7 @@ export default function ExtratoDetalhe({
             {tipo === "gastos"
               ? `${base.length} ${base.length === 1 ? "movimentação" : "movimentações"} no mês`
               : tipo === "entradas"
-              ? `${entradasLinhas.length || (usandoSalario ? 1 : 0)} ${entradasLinhas.length === 1 ? "entrada" : "entradas"} no mês`
+              ? `${entradasLinhas.length + (usandoSalario ? 1 : 0) + (sobraAnterior > 0 ? 1 : 0)} ${entradasLinhas.length + (usandoSalario ? 1 : 0) + (sobraAnterior > 0 ? 1 : 0) === 1 ? "entrada" : "entradas"} no mês`
               : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}`}
           </p>
         </div>

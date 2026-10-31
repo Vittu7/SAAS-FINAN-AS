@@ -9,7 +9,7 @@ import type React from "react";
 import { supabase } from "@/lib/supabase";
 
 type Tema = "light" | "dark" | "system";
-type Fundo = "none" | "aurora" | "glow" | "dots" | "grid";
+type Fundo = "none" | "aurora" | "glow" | "malha" | "ondas" | "granulado";
 type Destaque = "teal" | "purple" | "blue" | "pink" | "orange" | "graphite";
 
 const DESTAQUES: { id: Destaque; nome: string; cor: string }[] = [
@@ -45,21 +45,21 @@ const FUNDOS: { id: Fundo; nome: string }[] = [
   { id: "none", nome: "Liso" },
   { id: "aurora", nome: "Aurora" },
   { id: "glow", nome: "Brilho" },
-  { id: "dots", nome: "Pontos" },
-  { id: "grid", nome: "Grade" },
+  { id: "malha", nome: "Malha" },
+  { id: "ondas", nome: "Ondas" },
+  { id: "granulado", nome: "Granulado" },
 ];
 
-const AMOSTRAS: Record<Fundo, React.CSSProperties> = {
-  none: {},
-  aurora: { backgroundImage: "radial-gradient(70% 70% at 10% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 70%), radial-gradient(60% 60% at 100% 100%, rgb(56 189 248 / .35), transparent 70%)" },
-  glow: { backgroundImage: "radial-gradient(90% 80% at 50% -20%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 70%)" },
-  dots: { backgroundImage: "radial-gradient(color-mix(in oklab, var(--accent) 60%, transparent) 1px, transparent 1.4px)", backgroundSize: "8px 8px" },
-  grid: { backgroundImage: "linear-gradient(color-mix(in oklab, var(--accent) 35%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--accent) 35%, transparent) 1px, transparent 1px)", backgroundSize: "10px 10px" },
+/** Fundos antigos (pontos e grade) viram os novos equivalentes, para ninguém perder a escolha. */
+const FUNDO_LEGADO: Record<string, Fundo> = { dots: "granulado", grid: "ondas" };
+const normalizarFundo = (valor: unknown): Fundo => {
+  const v = FUNDO_LEGADO[String(valor)] ?? String(valor);
+  return FUNDOS.some((f) => f.id === v) ? (v as Fundo) : "none";
 };
 
 function aplicarFundo(fundo: Fundo) {
   document.documentElement.dataset.bg = fundo;
-  localStorage.removeItem("homecash-bg-img");
+  try { localStorage.removeItem("homecash-bg-img"); } catch { /* armazenamento indisponível */ }
 }
 
 export function useAparencia() {
@@ -77,8 +77,8 @@ export function useAparencia() {
     setDestaque(destaqueInicial);
     aplicarTema(temaInicial, destaqueInicial);
 
-    const fundoSalvo = localStorage.getItem("homecash-bg") as Fundo | null;
-    const fundoInicial = fundoSalvo && FUNDOS.some((f) => f.id === fundoSalvo) ? fundoSalvo : "none";
+    const fundoInicial = normalizarFundo(localStorage.getItem("homecash-bg"));
+    if (localStorage.getItem("homecash-bg") !== fundoInicial) localStorage.setItem("homecash-bg", fundoInicial);
     setFundo(fundoInicial);
     aplicarFundo(fundoInicial);
 
@@ -104,15 +104,18 @@ export function useAparencia() {
             localStorage.setItem("homecash-accent", destaqueFinal);
             atualizado = true;
           }
-          if (theme_bg && theme_bg !== fundoInicial) {
-            setFundo(theme_bg);
-            localStorage.setItem("homecash-bg", theme_bg);
+          // Fundo: o escolhido PELO PRÓPRIO usuário (guardado na conta); sem escolha, liso. Assim a escolha
+          // acompanha a pessoa em qualquer aparelho e nunca herda o fundo de quem usou o aparelho antes.
+          const fundoFinal = normalizarFundo(theme_bg);
+          if (fundoFinal !== fundoInicial) {
+            setFundo(fundoFinal);
+            localStorage.setItem("homecash-bg", fundoFinal);
             atualizado = true;
           }
 
           if (atualizado) {
             aplicarTema(theme_color || temaInicial, destaqueFinal);
-            aplicarFundo(theme_bg || fundoInicial);
+            aplicarFundo(fundoFinal);
             avisar();
           }
         }
@@ -126,8 +129,9 @@ export function useAparencia() {
     const sync = () => {
       const t = (localStorage.getItem("homecash-theme") as Tema) || "system";
       const d = (localStorage.getItem("homecash-accent") as Destaque) || "teal";
-      const f = (localStorage.getItem("homecash-bg") as Fundo) || "none";
+      const f = normalizarFundo(localStorage.getItem("homecash-bg"));
       setTema(t); setDestaque(d); setFundo(f);
+      aplicarFundo(f);
     };
     window.addEventListener("homecash-aparencia", sync);
     return () => window.removeEventListener("homecash-aparencia", sync);
@@ -232,10 +236,10 @@ export function PainelAparencia({ compacto = false }: { compacto?: boolean }) {
 
       <fieldset>
         <legend className="mb-2 text-xs font-semibold text-muted">Fundo</legend>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <div className="grid grid-cols-3 gap-2">
           {FUNDOS.map((opcao) => (
             <button key={opcao.id} type="button" onClick={() => mudarFundo(opcao.id)} aria-pressed={fundo === opcao.id} className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-xs transition ${fundo === opcao.id ? "border-accent bg-accent/10 text-accent" : "border-line text-ink hover:bg-background"}`}>
-              <span aria-hidden="true" className="h-10 w-full rounded-lg border border-line bg-background" style={AMOSTRAS[opcao.id]} />
+              <span aria-hidden="true" className="hc-fx h-12 w-full rounded-lg border border-line" data-fx={opcao.id} />
               {opcao.nome}
             </button>
           ))}

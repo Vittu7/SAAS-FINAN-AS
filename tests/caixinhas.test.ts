@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { arred2, dataBR, metaAtingida, progressoCaixinha, rotuloLocal, sugestoesDoMes, sugestoesRendimento, totalRendimentos, type Caixinha, type Movimento } from "../src/lib/caixinhas";
+import { arred2, dataBR, metaAtingida, progressoCaixinha, rotuloLocal, sugestoesRendimento, totalRendimentos, type Caixinha, type Movimento } from "../src/lib/caixinhas";
 
 const base: Caixinha = {
   id: "1", nome: "Viagem", ehReserva: false, rendimento: "", meta: 1000, saldo: 250,
-  aporteAutoAtivo: true, aporteAutoValor: 100, ultimoMesAuto: "2026-09", exibirNaHome: false, cor: "#10B981",
+  exibirNaHome: false, cor: "#10B981",
   banco: "Nubank", tipoRendimento: "cdb", ultimoMesRendimento: "2026-09",
 };
 
@@ -17,14 +17,6 @@ describe("caixinhas", () => {
   it("detecta meta atingida só quando há meta", () => {
     expect(metaAtingida({ saldo: 1000, meta: 1000 })).toBe(true);
     expect(metaAtingida({ saldo: 10, meta: 0 })).toBe(false);
-  });
-
-  it("sugere aporte automático no mês seguinte ao último tratado", () => {
-    expect(sugestoesDoMes([base], "2026-10")).toHaveLength(1);
-    expect(sugestoesDoMes([{ ...base, ultimoMesAuto: "2026-10" }], "2026-10")).toHaveLength(0);
-    expect(sugestoesDoMes([{ ...base, aporteAutoAtivo: false }], "2026-10")).toHaveLength(0);
-    expect(sugestoesDoMes([{ ...base, aporteAutoValor: 0 }], "2026-10")).toHaveLength(0);
-    expect(sugestoesDoMes([{ ...base, ultimoMesAuto: null }], "2026-10")).toHaveLength(1);
   });
 
   it("formata datas e arredonda centavos", () => {
@@ -41,7 +33,7 @@ describe("caixinhas", () => {
 
   it("soma rendimentos por caixinha e monta o rótulo do local", () => {
     const mov = (id: string, caixinhaId: string, tipo: Movimento["tipo"], valor: number): Movimento => ({
-      id, caixinhaId, tipo, valor, data: "2026-10-01", descricao: "", origem: "manual",
+      id, caixinhaId, tipo, valor, data: "2026-10-01", descricao: "", origem: "manual", conta: "",
     });
     const lista = [mov("a", "1", "rendimento", 10.1), mov("b", "1", "aporte", 500), mov("c", "2", "rendimento", 5.2)];
     expect(totalRendimentos(lista, "1")).toBe(10.1);

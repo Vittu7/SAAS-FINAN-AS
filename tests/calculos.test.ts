@@ -1,3 +1,4 @@
+import { sobraDosMesesAnteriores } from "../src/lib/calculos";
 import { describe, it, expect } from "vitest";
 import { calcularMes, semDuplicados } from "../src/lib/calculos";
 import { resumoDoMes } from "../src/lib/finance";
@@ -53,5 +54,35 @@ describe("resumo e extrato usam a mesma regra", () => {
     expect(linhas.filter((l) => l.entrada)).toHaveLength(1);
     expect(totalGastos(linhas)).toBe(680);
     expect(agruparPorOrigem(linhas.filter((l) => !l.entrada)).reduce((t, g) => t + g.total, 0)).toBe(680);
+  });
+});
+
+describe("sobra dos meses anteriores", () => {
+  const e: any = {
+    extrato: [
+      { id: "1", mes: "2026-08", tipo: "entrada", valor: 3000 },
+      { id: "2", mes: "2026-08", valor: 1000 },
+      { id: "3", mes: "2026-09", tipo: "entrada", valor: 3000 },
+      { id: "4", mes: "2026-09", valor: 3500 },
+    ],
+    cartao: [],
+    contas: [],
+  };
+  it("passa a sobra de um mês para o seguinte, acumulando", () => {
+    expect(sobraDosMesesAnteriores(e, "2026-08")).toBe(0);
+    expect(sobraDosMesesAnteriores(e, "2026-09")).toBe(2000);
+    // set: 2000 + 3000 - 3500 = 1500
+    expect(sobraDosMesesAnteriores(e, "2026-10")).toBe(1500);
+  });
+  it("mês no vermelho não vira dívida para o seguinte", () => {
+    const f: any = { extrato: [{ id: "1", mes: "2026-08", tipo: "entrada", valor: 100 }, { id: "2", mes: "2026-08", valor: 500 }], cartao: [], contas: [] };
+    expect(sobraDosMesesAnteriores(f, "2026-09")).toBe(0);
+  });
+  it("usa o salário configurado nos meses sem entrada lançada e ignora o que é fora do saldo", () => {
+    const g: any = { extrato: [{ id: "1", mes: "2026-08", valor: 400 }, { id: "2", mes: "2026-08", valor: 999, foraDoMeuSaldo: true }], cartao: [], contas: [] };
+    expect(sobraDosMesesAnteriores(g, "2026-09", 2000)).toBe(1600);
+  });
+  it("sem lançamentos antes do mês, não há sobra", () => {
+    expect(sobraDosMesesAnteriores({ extrato: [], cartao: [], contas: [] }, "2026-10", 2000)).toBe(0);
   });
 });

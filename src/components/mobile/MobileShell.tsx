@@ -12,6 +12,8 @@ import Avatar from "@/components/Avatar";
 import { sairDaConta } from "@/lib/auth";
 import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import DialogResponsivo from "@/components/DialogResponsivo";
+import SeletorModoSaldo from "@/components/SeletorModoSaldo";
+import type { ModoSaldo, Painel } from "@/lib/painel";
 
 type Aba = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
 
@@ -77,14 +79,22 @@ export type TipoResumo = "gastos" | "disponivel" | "entradas";
 
 export function MobileSaldo({
   resumo,
+  painel,
+  modo,
+  onModo,
   onAbrirExtrato,
 }: {
   resumo: Resumo;
+  painel: Painel;
+  modo: ModoSaldo;
+  onModo: (m: ModoSaldo) => void;
   onAbrirExtrato?: (tipo: TipoResumo) => void;
 }) {
   const [oculto, setOculto] = useValoresOcultos();
-  const negativo = resumo.sobra < 0;
-  const pct = resumo.entradas > 0 ? Math.min(100, (resumo.totalGasto / resumo.entradas) * 100) : 0;
+  const total = modo === "total";
+  const valorHero = total ? painel.totalDisponivel : painel.resultadoMes;
+  const negativo = valorHero < 0;
+  const pct = painel.entradas > 0 ? Math.min(100, (painel.saidas / painel.entradas) * 100) : 0;
   const v = (n: number) => brl(n);
   const cartao = "rounded-2xl bg-surface p-4 text-left ring-1 ring-line active:scale-[0.98]";
 
@@ -97,7 +107,7 @@ export function MobileSaldo({
       >
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between">
-          <p className="text-xs font-medium opacity-80">{negativo ? "Saldo negativo" : "Saldo restante"}</p>
+          <p className="text-xs font-medium opacity-80">{total ? (negativo ? "Total disponível negativo" : "Total disponível") : negativo ? "Déficit do mês" : "Sobra do mês"}</p>
           <span
             role="button"
             tabIndex={0}
@@ -109,21 +119,31 @@ export function MobileSaldo({
             <Ico icon={oculto ? Eye : EyeOff} size={16} />
           </span>
         </div>
-        <p className="relative mt-2 text-4xl font-semibold tracking-tight tabular-nums">{negativo ? "− " : ""}{v(Math.abs(resumo.sobra))}</p>
+        <p className="relative mt-2 text-4xl font-semibold tracking-tight tabular-nums">{negativo ? "− " : ""}{v(Math.abs(valorHero))}</p>
         <div className="relative mt-4 h-1.5 overflow-hidden rounded-full bg-white/20">
           <div className="h-full rounded-full bg-white/90 transition-all" style={{ width: `${pct}%` }} />
         </div>
-        <p className="relative mt-2 text-xs opacity-80">{porc(pct)} das entradas já usado</p>
+        <p className="relative mt-2 text-xs opacity-80">{porc(pct)} das entradas do mês já usado</p>
+        {total && <p className="relative mt-1 text-xs opacity-80">Anterior {v(painel.saldoAnterior)}{painel.repassesRecebidos > 0 ? ` · repasses ${v(painel.repassesRecebidos)}` : ""}{painel.adiantado > 0 ? ` · adiantado ${v(painel.adiantado)}` : ""}</p>}
+      </button>
+
+      <div className="mt-3 flex justify-center"><SeletorModoSaldo modo={modo} onModo={onModo} /></div>
+
+      <button type="button" onClick={() => onAbrirExtrato?.("disponivel")} className={`${cartao} mt-3 block w-full`}>
+        <p className="text-xs text-muted">Saldo disponível · acumulado até o mês anterior</p>
+        <p className={`mt-1 text-lg font-semibold tabular-nums ${painel.saldoAnterior < 0 ? "text-rose-700 dark:text-rose-400" : ""}`}>{v(painel.saldoAnterior)}</p>
+        {(painel.aReceber > 0 || painel.aRepassar > 0) && <p className="mt-0.5 text-[11px] text-muted">{painel.aReceber > 0 && `A receber de repasses ${v(painel.aReceber)}`}{painel.aReceber > 0 && painel.aRepassar > 0 && " · "}{painel.aRepassar > 0 && `A repassar ${v(painel.aRepassar)}`}</p>}
       </button>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <button type="button" onClick={() => onAbrirExtrato?.("entradas")} className={cartao}>
           <p className="flex items-center gap-1.5 text-xs text-muted"><span className="grid size-5 place-items-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"><Ico icon={ArrowDownLeft} size={12} /></span>Entradas</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{v(resumo.entradas)}</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{v(painel.entradas)}</p>
+          {painel.repassesRecebidos > 0 && <p className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-400">Repasses {v(painel.repassesRecebidos)} (fora das entradas)</p>}
         </button>
         <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className={cartao}>
           <p className="flex items-center gap-1.5 text-xs text-muted"><span className="grid size-5 place-items-center rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-400"><Ico icon={ArrowUpRight} size={12} /></span>Saídas</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-rose-700 dark:text-rose-400">{v(resumo.totalGasto)}</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-rose-700 dark:text-rose-400">{v(painel.saidas)}</p>
           {resumo.faltaPagar > 0 && <p className="mt-0.5 text-[11px] text-muted">Falta pagar {v(resumo.faltaPagar)}</p>}
         </button>
       </div>

@@ -9,6 +9,9 @@
  * - Sem duplicidade: a mesma parcela da mesma compra e o mesmo id contam uma vez.
  *   Pagamento de fatura não é lançado (as compras já contam); transferência própria não é lançada.
  * - Investimentos: aporte/resgate/rendimento ficam nas caixinhas e NÃO entram em entradas nem saídas.
+ * - Repasses (transferência interna entre membros): NÃO são entrada externa. Quando o chamador informa
+ *   `repassesRecebidos` (ver repassesRecebidosNoMes), esse valor entra só no saldo restante e na sobra que passa
+ *   para o mês seguinte; `entradas` continua sendo só dinheiro externo. Sem essa opção, nada muda.
  */
 
 type Item = Record<string, any>;
@@ -35,8 +38,43 @@ export function semDuplicados<T extends Item>(itens: T[], origem: Origem): T[] {
 
 const soma = (itens: Item[]) => arred(itens.reduce((s, i) => s + num(i?.valor), 0));
 
+/** Mês (AAAA-MM) em que o repasse foi confirmado; sem data, vale o mês do lançamento. */
+const mesDoRepasse = (i: Item): string => (i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes));
+
+/**
+ * Repasses internos CONFIRMADOS no mês: dinheiro que um membro mandou para quem lançou a despesa.
+ * - Conta uma vez só (semDuplicados) e pelo mês em que foi confirmado, não pelo mês da despesa.
+ * - Só entra quando a despesa também conta na visão (itens "foraDoMeuSaldo" ficam de fora: o gasto é de outra
+ *   pessoa e o repasse só acerta contas entre membros).
+ * - `escopo` = ids das pessoas da visão (null = todo o grupo). Quem lançou e quem deve precisam estar no escopo;
+ *   assim "Somente eu" nunca soma o que eu paguei a outra pessoa nem o que outra pessoa me pagou por algo fora da visão.
+ * - Entradas nunca geram repasse.
+ */
+export function repassesRecebidosNoMes(
+  e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
+  mes: string,
+  escopo: Set<string> | null = null,
+): number {
+  let total = 0;
+  for (const o of ["extrato", "cartao", "contas"] as Origem[]) {
+    for (const i of semDuplicados(e?.[o] || [], o)) {
+      if (ehEntrada(i) || i.foraDoMeuSaldo) continue;
+      if (!(i.repasse_pago ?? i.repassePago)) continue;
+      const autor = i.owner_id;
+      const resp = i.responsavel_id;
+      if (!autor || !resp || autor === resp) continue;
+      if (escopo && !(escopo.has(String(autor)) && escopo.has(String(resp)))) continue;
+      if (mesDoRepasse(i) !== mes) continue;
+      total += num(i.valor);
+    }
+  }
+  return arred(total);
+}
+
 export type ResumoMes = {
   entradas: number;
+  /** Repasses internos recebidos no mês (não são entrada externa; já somados no saldoRestante) */
+  repassesRecebidos: number;
   saidas: number;
   saldoRestante: number;
   fallbackSalario: boolean;
@@ -47,7 +85,7 @@ export type ResumoMes = {
 
 export function calcularMes(
   e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
-  opts: { mes: string; salarioConfig?: number },
+  opts: { mes: string; salarioConfig?: number; repassesRecebidos?: number },
 ): ResumoMes {
   // Itens marcados "foraDoMeuSaldo" (lançados por mim para outra pessoa, na visão "Somente eu") não entram:
   // o gasto é de quem é o responsável, e o repasse é só um acerto entre membros (nunca vira entrada/saída).
@@ -69,10 +107,13 @@ export function calcularMes(
   const entradas = fallbackSalario ? num(opts.salarioConfig) : soma(entradasLancadas);
   const saidas = arred(porOrigem.extrato + porOrigem.cartao + porOrigem.contas);
 
+  const repassesRecebidos = arred(num(opts.repassesRecebidos));
+
   return {
     entradas,
+    repassesRecebidos,
     saidas,
-    saldoRestante: arred(entradas - saidas),
+    saldoRestante: arred(entradas + repassesRecebidos - saidas),
     fallbackSalario,
     faltaPagar: soma(contas.filter((i) => !i?.pago)),
     porOrigem,
@@ -97,6 +138,8 @@ export function sobraDosMesesAnteriores(
   e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
   mes: string,
   salarioConfig = 0,
+  /** Informe para somar os repasses recebidos em cada mês anterior (escopo: ver repassesRecebidosNoMes). */
+  repasses?: { escopo: Set<string> | null },
 ): number {
   const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
     .map((i) => String(i?.mes || ""))
@@ -105,7 +148,8 @@ export function sobraDosMesesAnteriores(
   let m = meses.reduce((a, b) => (a < b ? a : b));
   let sobra = 0;
   for (let n = 0; m < mes && n < 240; n++, m = proximoMes(m)) {
-    sobra = Math.max(0, arred(sobra + calcularMes(e, { mes: m, salarioConfig }).saldoRestante));
+    const repassesRecebidos = repasses ? repassesRecebidosNoMes(e, m, repasses.escopo) : 0;
+    sobra = Math.max(0, arred(sobra + calcularMes(e, { mes: m, salarioConfig, repassesRecebidos }).saldoRestante));
   }
   return sobra;
 }

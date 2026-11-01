@@ -6,6 +6,8 @@ import ExtratoLista from "@/components/ExtratoLista";
 import { brl, rotuloMes } from "@/lib/finance";
 import { montarLinhas, ordenarPorValor, totalGastos, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
 
+import type { ModoSaldo, Painel } from "@/lib/painel";
+
 export type TipoDetalhe = "gastos" | "disponivel" | "entradas";
 
 const ORDENS: { id: Ordem; rotulo: string }[] = [
@@ -41,7 +43,8 @@ export default function ExtratoDetalhe({
   cartao,
   contas,
   salario,
-  sobraAnterior = 0,
+  painel,
+  modo = "mes",
   visualizacao,
   onFechar,
 }: {
@@ -51,8 +54,9 @@ export default function ExtratoDetalhe({
   cartao: any[];
   contas: any[];
   salario: number;
-  /** O que sobrou dos meses anteriores (já faz parte das entradas do mês) */
-  sobraAnterior?: number;
+  /** Painel do mês: resultado do mês x total disponível */
+  painel?: Painel;
+  modo?: ModoSaldo;
   visualizacao: string;
   onFechar: () => void;
 }) {
@@ -68,7 +72,7 @@ export default function ExtratoDetalhe({
 
   const entradasLinhas = useMemo(() => base.filter((l) => l.entrada && !l.foraDoSaldo), [base]); // repasse recebido só quita o a receber
   const usandoSalario = entradasLinhas.length === 0 && salario > 0;
-  const entradasTotal = (usandoSalario ? salario : entradasLinhas.reduce((t, l) => t + l.valor, 0)) + sobraAnterior;
+  const entradasTotal = (usandoSalario ? salario : entradasLinhas.reduce((t, l) => t + l.valor, 0));
 
   const gastosLinhas = useMemo(
     () => base.filter((l) => !l.entrada && (!origem || l.origem === origem) && (!responsavel || l.responsavel === responsavel)),
@@ -78,22 +82,29 @@ export default function ExtratoDetalhe({
   const totalMes = totalGastos(base); // indicador completo do mês, independente dos filtros do detalhe
   const totalFiltrado = totalGastos(gastosLinhas);
   const filtrado = Boolean(origem || responsavel);
-  const sobra = entradasTotal - totalMes;
+  const resultadoMes = entradasTotal - totalMes;
+  const totalModo = tipo === "disponivel" && modo === "total" && Boolean(painel);
+  const sobra = totalModo ? painel!.totalDisponivel : resultadoMes;
 
   const linhas: LinhaExtrato[] = useMemo(() => {
     const ordenadas = ordenarPorValor(gastosLinhas, ordem);
     const entradasBase: LinhaExtrato[] = usandoSalario
       ? [{ id: "salario", origem: "extrato", descricao: "Salário configurado", categoria: "", forma: "", responsavel: "", valor: salario, entrada: true }]
       : entradasLinhas;
-    const entradas: LinhaExtrato[] = sobraAnterior > 0
-      ? [...entradasBase, { id: "sobra-anterior", origem: "extrato", descricao: "Sobra dos meses anteriores", categoria: "", forma: "", responsavel: "", valor: sobraAnterior, entrada: true }]
-      : entradasBase;
+    const entradas: LinhaExtrato[] = entradasBase;
+    // Total disponível: além das entradas do mês, mostra o que veio de antes e os repasses concluídos (transferência interna)
+    const extras: LinhaExtrato[] = totalModo && painel
+      ? [
+          ...(painel.saldoAnterior !== 0 ? [{ id: "saldo-anterior", origem: "extrato" as const, descricao: "Saldo acumulado dos meses anteriores", categoria: "", forma: "", responsavel: "", valor: painel.saldoAnterior, entrada: true }] : []),
+          ...(painel.repassesRecebidos > 0 ? [{ id: "repasses-recebidos", origem: "extrato" as const, descricao: "Repasses recebidos (transferência interna)", categoria: "Repasse", forma: "", responsavel: "", valor: painel.repassesRecebidos, entrada: true }] : []),
+        ]
+      : [];
     if (tipo === "entradas") return entradas;
     if (tipo !== "disponivel" || filtrado) return ordenadas;
-    return [...entradas, ...ordenadas];
-  }, [gastosLinhas, ordem, tipo, filtrado, salario, usandoSalario, entradasLinhas, sobraAnterior]);
+    return [...extras, ...entradas, ...ordenadas];
+  }, [gastosLinhas, ordem, tipo, filtrado, salario, usandoSalario, entradasLinhas, totalModo, painel]);
 
-  const titulo = tipo === "gastos" ? "Saídas do mês" : tipo === "entradas" ? "Entradas do mês" : "Saldo restante";
+  const titulo = tipo === "gastos" ? "Saídas do mês" : tipo === "entradas" ? "Entradas do mês" : totalModo ? "Total disponível" : "Resultado do mês";
   const negativo = tipo === "disponivel" && sobra < 0;
 
   return (
@@ -115,7 +126,9 @@ export default function ExtratoDetalhe({
             {tipo === "gastos"
               ? `${base.length} ${base.length === 1 ? "movimentação" : "movimentações"} no mês`
               : tipo === "entradas"
-              ? `${entradasLinhas.length + (usandoSalario ? 1 : 0) + (sobraAnterior > 0 ? 1 : 0)} ${entradasLinhas.length + (usandoSalario ? 1 : 0) + (sobraAnterior > 0 ? 1 : 0) === 1 ? "entrada" : "entradas"} no mês`
+              ? `${entradasLinhas.length + (usandoSalario ? 1 : 0)} ${entradasLinhas.length + (usandoSalario ? 1 : 0) === 1 ? "entrada" : "entradas"} no mês`
+              : totalModo && painel
+              ? `Anterior ${brl(painel.saldoAnterior)} + entradas ${brl(painel.entradas)}${painel.repassesRecebidos > 0 ? ` + repasses ${brl(painel.repassesRecebidos)}` : ""} − saídas ${brl(painel.saidas)}${painel.adiantado > 0 ? ` − adiantado ${brl(painel.adiantado)}` : ""}`
               : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}`}
           </p>
         </div>

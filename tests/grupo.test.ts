@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas, entradasDeRepasse } from "../src/lib/grupo";
-import { calcularMes } from "../src/lib/calculos";
+import { calcularMes, repassesRecebidosNoMes, sobraDosMesesAnteriores } from "../src/lib/calculos";
 
 const REF = "2026-10";
 const E: any = {
@@ -167,5 +167,47 @@ describe("compra compartilhada: R$ 5.000 no meu cartão, R$ 2.500 meus e R$ 2.50
     expect(entradasDeRepasse(compra(true), { ...o, nomesSelecionados: ["X"] })).toEqual([]);
     expect(entradasDeRepasse(compra(true), { ...o, incluiEu: false })).toEqual([]);
     expect(entradasDeRepasse(compra(true), { ...o, meuId: "x" })).toEqual([]);
+  });
+});
+describe("repasses recebidos no saldo restante (visão Todos)", () => {
+  // Vitu lançou R$ 100 no cartão para Gisa; a despesa conta uma vez (é da Gisa) e o repasse quita esse gasto.
+  const base = (extra: any = {}) => ({
+    extrato: [{ id: "s", mes: "2026-10", tipo: "entrada", valor: 1000, owner_id: "vitu", responsavel_id: "vitu" }],
+    cartao: [{ id: "c", mes: "2026-10", nome: "Tênis", cartao: "Nubank", parcelaAtual: 1, parcelaTotal: 1, valor: 100, owner_id: "vitu", responsavel_id: "gisa", ...extra }],
+    contas: [],
+  });
+  const pago = { repasse_pago: true, repasse_pago_em: "2026-10-20T10:00:00Z", repasse_conta: "Débito" };
+
+  it("repasse confirmado não é entrada externa, mas entra no saldo restante", () => {
+    const rep = repassesRecebidosNoMes(base(pago), "2026-10", null);
+    expect(rep).toBe(100);
+    const r = calcularMes(base(pago), { mes: "2026-10", repassesRecebidos: rep });
+    expect(r.entradas).toBe(1000); // só dinheiro externo
+    expect(r.repassesRecebidos).toBe(100);
+    expect(r.saldoRestante).toBe(1000 + 100 - 100);
+  });
+  it("sem confirmação não conta; sem a opção o cálculo antigo não muda", () => {
+    expect(repassesRecebidosNoMes(base(), "2026-10", null)).toBe(0);
+    expect(calcularMes(base(pago), { mes: "2026-10" }).saldoRestante).toBe(900);
+  });
+  it("não conta duas vezes (mesmo id repetido) e conta no mês da confirmação", () => {
+    const dup = { ...base(pago), cartao: [...base(pago).cartao, { ...base(pago).cartao[0] }] };
+    expect(repassesRecebidosNoMes(dup, "2026-10", null)).toBe(100);
+    const depois = base({ ...pago, repasse_pago_em: "2026-11-02T10:00:00Z" });
+    expect(repassesRecebidosNoMes(depois, "2026-10", null)).toBe(0);
+    expect(repassesRecebidosNoMes(depois, "2026-11", null)).toBe(100);
+  });
+  it("Somente eu e itens fora do meu saldo ficam de fora", () => {
+    expect(repassesRecebidosNoMes(base(pago), "2026-10", new Set(["vitu"]))).toBe(0);
+    expect(repassesRecebidosNoMes(base(pago), "2026-10", new Set(["vitu", "gisa"]))).toBe(100);
+    expect(repassesRecebidosNoMes(base({ ...pago, foraDoMeuSaldo: true }), "2026-10", null)).toBe(0);
+  });
+  it("repasse recebido depois da despesa vira sobra do mês seguinte", () => {
+    const e = base({ ...pago, repasse_pago_em: "2026-10-28T10:00:00Z" });
+    e.extrato = [] as any; // sem entrada: o mês fecha no vermelho (−100) e o repasse cobre
+    expect(sobraDosMesesAnteriores(e, "2026-11", 0)).toBe(0);
+    expect(sobraDosMesesAnteriores(e, "2026-11", 0, { escopo: null })).toBe(0);
+    const comSobra = { ...base(pago), extrato: [{ id: "s", mes: "2026-10", tipo: "entrada", valor: 1000, owner_id: "vitu", responsavel_id: "vitu" }] };
+    expect(sobraDosMesesAnteriores(comSobra, "2026-11", 0, { escopo: null })).toBe(1000);
   });
 });

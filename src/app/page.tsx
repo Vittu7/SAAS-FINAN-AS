@@ -24,7 +24,7 @@ import DicaModulo from "@/components/DicaModulo";
 import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
-import { sobraDosMesesAnteriores } from "@/lib/calculos";
+import { calcularPainel, type ModoSaldo } from "@/lib/painel";
 import { entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, resumoRepasses } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
@@ -78,6 +78,7 @@ export default function Home() {
   const [novaAberta, setNovaAberta] = useState(false);
   const [recentes, setRecentes] = useState<string[]>([]);
   const [detalheExtrato, setDetalheExtrato] = useState<TipoDetalhe | null>(null);
+  const [modoSaldo, setModoSaldo] = useState<ModoSaldo>("total"); // Resultado do mês x Total disponível
 
   // Permite abrir direto uma aba (ex.: /?aba=ajustes&secao=perfil, vindo da antiga página de perfil)
   useEffect(() => {
@@ -259,18 +260,23 @@ export default function Home() {
     [estadoFiltrado, extrato, cartao, contas]
   );
 
-  // Entradas do mês = o que entrou no mês + o que SOBROU dos meses anteriores (calculado com todos os meses,
-  // respeitando só o filtro de responsáveis; os filtros de busca da tela não mudam a sobra).
-  const sobraAnterior = useMemo(
-    () => (mes ? sobraDosMesesAnteriores(estadoFiltrado, mes, estado.config?.salario ?? 0) : 0),
-    [estadoFiltrado, mes, estado.config?.salario]
-  );
-  const resumo = useMemo(() => {
-    const r = resumoDoMes(estadoComFiltros, mes);
-    return { ...r, entradas: r.entradas + sobraAnterior, sobra: r.sobra + sobraAnterior, sobraAnterior };
-  }, [estadoComFiltros, mes, sobraAnterior]);
+  const resumo = useMemo(() => resumoDoMes(estadoComFiltros, mes), [estadoComFiltros, mes]);
 
-  if (verificandoAuth || !loja.pronto || !mes) {
+  // Painel: resultado do mês (entradas − saídas) x total disponível (acumulado + repasses concluídos).
+  // Usa todos os meses da visão escolhida (Todos / Somente eu / pessoas); repasse é transferência interna.
+  const escopoPessoas = useMemo(() => idsDaSelecao(pessoasSel, membros, userId || "", TOKEN_EU), [pessoasSel, membros, userId]);
+  const saldoInicialContas = useMemo(() => {
+    // Só as minhas contas de débito: entram quando a visão me inclui (Todos ou "Somente eu"); as contas dos outros são privadas.
+    const incluiMinhas = pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU);
+    if (!incluiMinhas) return 0;
+    return formasPagamento.filter((o) => tipoDaConta(o) === "debito").reduce((t, o) => t + (Number(o.saldo_inicial) || 0), 0);
+  }, [formasPagamento, pessoasSel]);
+  const painel = useMemo(
+    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, salarioConfig: estado.config?.salario ?? 0, escopo: escopoPessoas }) : null),
+    [estadoFiltrado, mes, saldoInicialContas, estado.config?.salario, escopoPessoas]
+  );
+
+  if (verificandoAuth || !loja.pronto || !mes || !painel) {
     return (
       <main className="grid min-h-screen place-items-center text-sm text-muted">
         Carregando painel...
@@ -444,8 +450,8 @@ export default function Home() {
                   <span className="shrink-0 text-xs font-semibold text-accent">Ver</span>
                 </button>
               )}
-              {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} onAbrirExtrato={setDetalheExtrato} />}
-              {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} onAbrirExtrato={setDetalheExtrato} /></div>}
+              {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} />}
+              {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} /></div>}
               <MobileRecentes recentes={recentes} onAba={irPara} />
               {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
               {dashboard.preferencias.faturas && <SaldosContas estado={estado} userId={userId} mes={mes} />}
@@ -519,6 +525,9 @@ export default function Home() {
                   rotuloResponsaveis={rotuloVisualizacao}
                   mes={mes}
                   resumo={resumo}
+                  painel={painel}
+                  modo={modoSaldo}
+                  onModo={setModoSaldo}
                   itens={{ extrato, cartao, contas }}
                   onAbrirExtrato={setDetalheExtrato}
                 />
@@ -623,7 +632,8 @@ export default function Home() {
           cartao={cartao}
           contas={contas}
           salario={estado.config.salario}
-          sobraAnterior={sobraAnterior}
+          painel={painel}
+          modo={modoSaldo}
           visualizacao={rotuloVisualizacao}
           onFechar={() => setDetalheExtrato(null)}
         />

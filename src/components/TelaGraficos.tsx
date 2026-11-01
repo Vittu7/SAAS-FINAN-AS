@@ -1,5 +1,6 @@
 "use client";
 
+import type { ModoSaldo, Painel } from "@/lib/painel";
 import { useState } from "react";
 import SummaryCards from "@/components/SummaryCards";
 import ResponsavelPanel from "@/components/ResponsavelPanel";
@@ -10,11 +11,14 @@ import type { Resumo } from "@/lib/finance";
 
 /** Tela própria de Gráficos, com a aba Relatórios (filtros por período e exportação). */
 export default function TelaGraficos({
-  estadoCompleto, mes, resumo, itens, onAbrirExtrato, rotuloResponsaveis,
+  estadoCompleto, mes, resumo, painel, modo, onModo, itens, onAbrirExtrato, rotuloResponsaveis,
 }: {
   estadoCompleto: { extrato: any[]; cartao: any[]; contas: any[]; config: { salario?: number } };
   mes: string;
   resumo: Resumo;
+  painel: Painel;
+  modo: ModoSaldo;
+  onModo: (m: ModoSaldo) => void;
   itens: { extrato: any[]; cartao: any[]; contas: any[] };
   onAbrirExtrato: (tipo: TipoResumo) => void;
   /** Pessoas do filtro global, só para o rótulo dos relatórios exportados */
@@ -32,8 +36,8 @@ export default function TelaGraficos({
 
       {sub === "graficos" ? (
         <>
-          <MobileSaldo resumo={resumo} onAbrirExtrato={onAbrirExtrato} />
-          <div className="hidden md:block"><SummaryCards resumo={resumo} onAbrirExtrato={onAbrirExtrato} /></div>
+          <MobileSaldo resumo={resumo} painel={painel} modo={modo} onModo={onModo} onAbrirExtrato={onAbrirExtrato} />
+          <div className="hidden md:block"><SummaryCards resumo={resumo} painel={painel} modo={modo} onModo={onModo} onAbrirExtrato={onAbrirExtrato} /></div>
           <GraficoEvolucao estado={estadoCompleto} mes={mes} />
           <ResponsavelPanel resumo={resumo} itens={itens} />
         </>

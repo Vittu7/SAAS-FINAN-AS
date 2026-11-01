@@ -71,8 +71,10 @@ export type Resumo = {
   /** Saídas do mês: à vista + parcelas + contas fixas */
   totalGasto: number;
   totalGeral: number;
-  /** Saldo restante = entradas − saídas */
+  /** Saldo restante = entradas + repasses recebidos − saídas */
   sobra: number;
+  /** Repasses internos recebidos no mês: dinheiro que já entrou, mas NÃO é entrada externa (não está em `entradas`) */
+  repassesRecebidos: number;
   /** Contas fixas ainda não pagas (informativo) */
   faltaPagar: number;
   usandoSalarioConfigurado: boolean;
@@ -82,13 +84,14 @@ export type Resumo = {
   porOrigem: { extrato: number; cartao: number; contas: number };
 };
 
-export function resumoDoMes(e: Estado, mes: string): Resumo {
-  const r = calcularMes(e, { mes, salarioConfig: e?.config?.salario ?? 0 });
+export function resumoDoMes(e: Estado, mes: string, repassesRecebidos = 0): Resumo {
+  const r = calcularMes(e, { mes, salarioConfig: e?.config?.salario ?? 0, repassesRecebidos });
   return {
     entradas: r.entradas,
     totalGasto: r.saidas,
     totalGeral: r.saidas,
     sobra: r.saldoRestante,
+    repassesRecebidos: r.repassesRecebidos,
     faltaPagar: r.faltaPagar,
     usandoSalarioConfigurado: r.fallbackSalario,
     sobraAnterior: 0,

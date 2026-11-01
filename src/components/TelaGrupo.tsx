@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos } from "@/lib/avisos";
 import { useMemo, useState } from "react";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import { useOpcoes } from "@/lib/useOpcoes";
@@ -241,8 +242,14 @@ function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Memb
     setErro("");
     const { data, error } = await supabase.from("perfis").update({ resumo_visivel: visivel }).eq("id", meuId).select("id").maybeSingle();
     setSalvando(false);
-    if (error || !data) return setErro(/resumo_visivel/.test(error?.message || "") ? "Execute o script supabase-04-grupo-repasses.sql no Supabase para habilitar esta opção." : "Não foi possível salvar sua preferência.");
+    if (error || !data) {
+      const msg = /resumo_visivel/.test(error?.message || "") ? "Execute o script supabase-04-grupo-repasses.sql no Supabase para habilitar esta opção." : "Não foi possível salvar sua preferência.";
+      setErro(msg);
+      avisos.erro("Preferência não salva", msg);
+      return;
+    }
     avisarPerfilAtualizado();
+    avisos.sucesso(visivel ? "Seu resumo agora aparece para o grupo" : "Seu resumo ficou oculto para o grupo");
   };
 
   return (

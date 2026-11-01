@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos } from "@/lib/avisos";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, mesAtual } from "@/lib/finance";
@@ -115,7 +116,13 @@ export function useCaixinhas() {
       // registrou o rendimento: o lembrete do mês some
       await supabase.from("caixinhas").update({ ultimo_mes_rendimento: mesAtual() }).eq("id", m.caixinhaId);
     }
-    if (!msg) notificar();
+    if (!msg) {
+      notificar();
+      avisos.sucesso(
+        m.tipo === "aporte" ? "Aporte registrado" : m.tipo === "resgate" ? "Resgate registrado" : "Rendimento registrado",
+        `${brl(m.valor)} · ${alvo.nome}`,
+      );
+    }
     return msg;
   };
 
@@ -123,6 +130,7 @@ export function useCaixinhas() {
     const { error } = await supabase.from("caixinha_movimentos").delete().eq("id", id);
     if (error) return traduzirErro(error);
     notificar();
+    avisos.sucesso("Movimentação excluída", "O saldo da caixinha foi recalculado.");
     return null;
   };
 
@@ -164,6 +172,7 @@ export function useCaixinhas() {
       }
     }
     notificar();
+    avisos.sucesso("Caixinha criada", d.nome.trim());
     return null;
   };
 
@@ -203,6 +212,7 @@ export function useCaixinhas() {
       }
     }
     notificar();
+    avisos.sucesso("Caixinha atualizada", d.nome.trim());
     return null;
   };
 
@@ -210,6 +220,7 @@ export function useCaixinhas() {
     const { error } = await supabase.from("caixinhas").delete().eq("id", id);
     if (error) return traduzirErro(error);
     notificar();
+    avisos.sucesso("Caixinha excluída");
     return null;
   };
 
@@ -222,6 +233,7 @@ export function useCaixinhas() {
     const { error } = await supabase.from("caixinhas").update({ ultimo_mes_rendimento: mesAtual() }).eq("id", c.id);
     if (error) return traduzirErro(error);
     notificar();
+    avisos.info("Lembrete adiado", "Volto a perguntar do rendimento no mês que vem.");
     return null;
   };
 

@@ -1,5 +1,6 @@
 
 import type { Metadata, Viewport } from "next";
+import Avisos from "@/components/Avisos";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -92,8 +93,9 @@ export default function RootLayout({
         />
       </head>
 
-      <body className="bg-bg text-ink antialiased transition-colors duration-200">
+      <body className="text-ink antialiased transition-colors duration-200">
         {children}
+        <Avisos />
       </body>
     </html>
   );

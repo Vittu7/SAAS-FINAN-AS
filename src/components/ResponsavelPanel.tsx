@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos, falhou } from "@/lib/avisos";
 import Avatar from "@/components/Avatar";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -66,8 +67,13 @@ export default function ResponsavelPanel({
   };
 
   const alterarCor = async (membroId: string, novaCor: string) => {
+    const anterior = membros.find((m) => m.id === membroId)?.cor;
     setMembros((prev) => prev.map((m) => (m.id === membroId ? { ...m, cor: novaCor } : m)));
-    await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
+    const { error } = await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
+    if (error) {
+      if (anterior) setMembros((prev) => prev.map((m) => (m.id === membroId ? { ...m, cor: anterior } : m)));
+      falhou("alterar a cor", error);
+    } else avisos.sucesso("Cor atualizada");
   };
 
   const fatias: Fatia[] = useMemo(() => {

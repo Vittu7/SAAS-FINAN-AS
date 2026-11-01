@@ -33,7 +33,7 @@ export function MobileHeader({
   onAbrirMenu: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 -mx-4 bg-background/85 px-4 pb-3 pt-[max(env(safe-area-inset-top),12px)] backdrop-blur-xl md:hidden">
+    <header className="hc-topbar sticky top-0 z-30 -mx-4 px-4 pb-3 pt-[max(env(safe-area-inset-top),12px)] backdrop-blur-xl md:hidden">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <img src="/logo.png" alt="" className="h-7 w-auto" />

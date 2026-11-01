@@ -119,7 +119,7 @@ export default function Sidebar({ onAbrirGrupo, onNova, abaAtiva, onSelecionarAb
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-line bg-surface/85 backdrop-blur-xl transition-[width] duration-300 ease-out md:flex ${expandido ? "w-60" : "w-16"}`}
+      className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-line hc-sidebar transition-[width] duration-300 ease-out md:flex ${expandido ? "w-60" : "w-16"}`}
     >
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
         {/* Marca + recolher */}

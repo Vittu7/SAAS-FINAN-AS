@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos } from "@/lib/avisos";
 import { Pencil, Tags, Trash2, Wallet, X, CreditCard, type LucideIcon } from "lucide-react";
 import { Ico } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
@@ -193,10 +194,15 @@ export default function GerenciarOpcoesModal({
           cor: form.cor,
         });
       }
+      const editando = Boolean(form.id);
+      if (!ehPagamento) avisos.sucesso(editando ? "Categoria atualizada" : "Categoria cadastrada", form.nome.trim());
+      else avisos.sucesso(editando ? (form.tipoCartao ? "Cartão atualizado" : "Forma de pagamento atualizada") : (form.tipoCartao ? "Cartão cadastrado" : "Forma de pagamento cadastrada"), form.nome.trim());
       setForm(null);
       onAtualizar?.();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
+      const msg = e instanceof Error ? e.message : "Não foi possível salvar.";
+      setErro(msg);
+      avisos.erro("Não foi possível salvar", msg);
     } finally {
       setSalvando(false);
     }
@@ -210,9 +216,12 @@ export default function GerenciarOpcoesModal({
       if (aba === "categorias") await removerCategoria(item.id);
       else await removerPagamento(item.id);
       if (form?.id === item.id) setForm(null);
+      avisos.sucesso(aba === "categorias" ? "Categoria excluída" : "Cadastro excluído", item.nome);
       onAtualizar?.();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível excluir.");
+      const msg = e instanceof Error ? e.message : "Não foi possível excluir.";
+      setErro(msg);
+      avisos.erro("Não foi possível excluir", msg);
     } finally {
       setSalvando(false);
     }

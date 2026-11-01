@@ -9,8 +9,8 @@
 :root {
   color-scheme: light;
 
-  --bg: #040405;
-  --surface: #bebdbd;
+  --bg: #e6ebf2;
+  --surface: #ffffff;
   --line: #c5d0dd;
   --ink: #0f172a;
   --muted: #4f5f73;
@@ -31,6 +31,7 @@
 /* =========================================
    TEMA ESCURO
    ========================================= */
+:root.dark,
 :root[data-theme="dark"] {
   color-scheme: dark;
 
@@ -154,7 +155,26 @@ body {
 }
 
 html {
-  background-color: var(--bg);
+  background-color: var(--bg, #e6ebf2);
+}
+
+/* Barras fixas (topo e menu lateral): vidro fosco. Com fundo decorativo ficam mais transparentes, para a decoração
+   aparecer também por trás delas (antes o topo ficava "liso" porque a barra cobria o desenho). */
+.hc-topbar {
+  background-color: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+.hc-sidebar {
+  background-color: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+:root:not([data-bg="none"]) .hc-topbar {
+  background-color: color-mix(in srgb, var(--bg) 38%, transparent);
+}
+:root:not([data-bg="none"]) .hc-sidebar {
+  background-color: color-mix(in srgb, var(--surface) 55%, transparent);
 }
 
 body {
@@ -387,6 +407,7 @@ body::after {
 /* Só opacity/transform: leves e sem travar a tela */
 .anim-page { animation: hc-fade-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .anim-fade { animation: hc-fade 0.2s ease-out both; }
+.hc-aviso { animation: hc-pop 0.22s cubic-bezier(.2,.8,.2,1) both; }
 .anim-dialog { animation: hc-sheet 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @media (min-width: 640px) { .anim-dialog { animation-name: hc-pop; animation-duration: 0.22s; } }
 .anim-grow { transform-origin: bottom; animation: hc-grow 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

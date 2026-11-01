@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos, falhou } from "@/lib/avisos";
 import { Trash2 } from "lucide-react";
 import { Ico } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -106,14 +107,16 @@ export default function AportesInvestimento({ saldoAnterior }: Props) {
 
         if (error) {
             console.error("Erro ao registrar aporte:", error);
-            setMensagem(`Não foi possível salvar o aporte: ${error.message}`);
+            setMensagem("");
+            falhou("salvar o aporte", error);
             setSalvando(false);
             return;
         }
 
         setAportes((lista) => [data as Aporte, ...lista]);
         setValorTexto("");
-        setMensagem("Aporte registrado com sucesso.");
+        setMensagem("");
+        avisos.sucesso("Aporte registrado", brl(valor));
         setSalvando(false);
     };
 
@@ -130,12 +133,14 @@ export default function AportesInvestimento({ saldoAnterior }: Props) {
 
         if (error) {
             console.error("Erro ao excluir aporte:", error);
-            setMensagem(`Não foi possível excluir o aporte: ${error.message}`);
+            setMensagem("");
+            falhou("excluir o aporte", error);
             return;
         }
 
         setAportes((lista) => lista.filter((aporte) => aporte.id !== id));
-        setMensagem("Aporte excluído.");
+        setMensagem("");
+        avisos.sucesso("Aporte excluído");
     };
 
         return (

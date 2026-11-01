@@ -1,6 +1,7 @@
 
 "use client";
 
+import { avisos, explicarFalha } from "@/lib/avisos";
 import { Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -112,12 +113,11 @@ export default function PerfilConta() {
       setAvatar(url);
       avisarPerfilAtualizado();
 
-      setStatus({ tipo: "ok", texto: "Foto atualizada." });
+      setStatus(null);
+      avisos.sucesso("Foto atualizada");
     } catch (e: any) {
-      setStatus({
-        tipo: "erro",
-        texto: e?.message || "Não foi possível enviar a foto.",
-      });
+      setStatus(null);
+      avisos.erro("Não foi possível enviar a foto", e?.message || explicarFalha(e));
     } finally {
       setEnviandoFoto(false);
 
@@ -140,12 +140,11 @@ export default function PerfilConta() {
       setAvatar(null);
       avisarPerfilAtualizado();
 
-      setStatus({ tipo: "ok", texto: "Foto removida." });
+      setStatus(null);
+      avisos.sucesso("Foto removida");
     } catch (e: any) {
-      setStatus({
-        tipo: "erro",
-        texto: e?.message || "Não foi possível remover a foto.",
-      });
+      setStatus(null);
+      avisos.erro("Não foi possível remover a foto", e?.message || explicarFalha(e));
     }
   };
 
@@ -171,15 +170,11 @@ export default function PerfilConta() {
       setNomeUsuario(salvo.nome_usuario || nomeUsuario.trim());
       avisarPerfilAtualizado();
 
-      setStatus({
-        tipo: "ok",
-        texto: "Perfil atualizado com sucesso!",
-      });
+      setStatus(null);
+      avisos.sucesso("Perfil atualizado", "Seu nome já aparece assim para o grupo.");
     } catch (e: any) {
-      setStatus({
-        tipo: "erro",
-        texto: e?.message || "Não foi possível salvar o perfil.",
-      });
+      setStatus(null);
+      avisos.erro("Não foi possível salvar o perfil", e?.message || explicarFalha(e));
     } finally {
       setSalvando(false);
     }

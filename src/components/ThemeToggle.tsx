@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos, explicarFalha } from "@/lib/avisos";
 import { Check, Palette, X } from "lucide-react";
 import { Ico } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
@@ -150,9 +151,12 @@ export function useAparencia() {
   // Função para atualizar preferências silenciosamente na nuvem
   const salvarNoSupabase = async (dados: Record<string, string>) => {
     try {
-      await supabase.auth.updateUser({ data: dados });
+      const { error } = await supabase.auth.updateUser({ data: dados });
+      if (error) throw error;
+      avisos.sucesso("Aparência salva", "Vale em todos os seus aparelhos.");
     } catch (error) {
       console.error("Erro ao salvar aparência no Supabase:", error);
+      avisos.aviso("Aparência salva só neste aparelho", "Não consegui gravar na sua conta. " + explicarFalha(error));
     }
   };
 

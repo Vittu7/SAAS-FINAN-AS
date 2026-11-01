@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos } from "@/lib/avisos";
 import { useState } from "react";
 import { Check } from "lucide-react";
 import DialogResponsivo from "@/components/DialogResponsivo";
@@ -62,10 +63,13 @@ export default function CadastrarCartaoModal({
         await adicionarPagamento(nomeDebito, { tipoCartao: "debito", saldoInicial: parseValor(saldo) || 0, cor });
       }
       onConcluir?.(base);
+      avisos.sucesso(tipo === "ambos" ? "Cartões de crédito e débito cadastrados" : "Cartão cadastrado", base);
       setPasso(3);
     } catch (e: any) {
       const msg = e?.message || "Não foi possível salvar. Tente novamente.";
-      setErro(criouCredito && temDebito ? `O cartão de crédito foi criado, mas o débito falhou: ${msg} Cadastre o débito em Configurações > Cadastros.` : msg);
+      const texto = criouCredito && temDebito ? `O cartão de crédito foi criado, mas o débito falhou: ${msg} Cadastre o débito em Configurações > Cadastros.` : msg;
+      setErro(texto);
+      avisos.erro("Não foi possível cadastrar o cartão", texto);
     } finally {
       setSalvando(false);
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos } from "@/lib/avisos";
 import DialogResponsivo from "./DialogResponsivo";
 import { useState } from "react";
 import { parseValor } from "@/lib/finance";
@@ -73,21 +74,19 @@ export default function EditarLancamentoModal({
     const valor = parseValor(valorTexto);
 
     if (!mes) {
-      alert("Selecione o mês do lançamento.");
+      avisos.aviso("Confira os dados", "Selecione o mês do lançamento.");
       return;
     }
 
     if (!descricao.trim()) {
-      alert(
-        tipo === "contas"
+      avisos.aviso("Confira os dados", tipo === "contas"
           ? "Por favor, insira o nome da conta."
-          : "Por favor, insira a descrição.",
-      );
+          : "Por favor, insira a descrição.");
       return;
     }
 
     if (!Number.isFinite(valor) || valor <= 0) {
-      alert("Por favor, insira um valor válido (ex: 50,00).");
+      avisos.aviso("Confira os dados", "Por favor, insira um valor válido (ex: 50,00).");
       return;
     }
 
@@ -95,7 +94,7 @@ export default function EditarLancamentoModal({
       tipo === "cartao" &&
       (parcelaAtual < 1 || parcelaTotal < parcelaAtual)
     ) {
-      alert("Confira a parcela atual e o total de parcelas.");
+      avisos.aviso("Confira os dados", "Confira a parcela atual e o total de parcelas.");
       return;
     }
 
@@ -106,7 +105,7 @@ export default function EditarLancamentoModal({
         Number(vencimento) < 1 ||
         Number(vencimento) > 31)
     ) {
-      alert("O vencimento deve ser um dia entre 1 e 31.");
+      avisos.aviso("Confira os dados", "O vencimento deve ser um dia entre 1 e 31.");
       return;
     }
 
@@ -151,7 +150,7 @@ export default function EditarLancamentoModal({
       if (ok !== false) onClose();
     } catch (error) {
       console.error("Erro ao salvar lançamento:", error);
-      alert("Não foi possível salvar as alterações. Tente novamente.");
+      avisos.erro("Não foi possível salvar as alterações", "Tente novamente em instantes.");
     } finally {
       setSalvando(false);
     }

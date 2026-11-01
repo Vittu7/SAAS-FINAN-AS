@@ -340,7 +340,7 @@ export default function Home() {
             onAbrirMenu={() => setMenuMobile(true)}
           />
 
-          <header className="sticky top-0 z-30 -mx-8 -mt-8 hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line bg-background/85 px-8 py-4 backdrop-blur-xl md:flex">
+          <header className="hc-topbar sticky top-0 z-30 -mx-8 -mt-8 hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line px-8 py-4 backdrop-blur-xl md:flex">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight">
                 {aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel

@@ -1,4 +1,5 @@
 'use client';
+import { avisos, explicarFalha } from "@/lib/avisos";
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { normalizarPreferencias, PREFERENCIAS_PADRAO, type PreferenciasDashboard } from '@/lib/dashboardPreferences';
@@ -27,7 +28,8 @@ export function useDashboardPreferences(userId: string | null) {
       const {error} = await supabase.from('preferencias_dashboard').upsert({user_id: userId, preferencias: nova}, {onConflict:'user_id'});
       if (error) throw error;
       setPreferencias(nova);
-    } catch { setErro('Não foi possível salvar. Sua preferência anterior foi mantida.'); }
+      avisos.sucesso('Tela inicial atualizada', 'Sua preferência foi salva.');
+    } catch (e) { setErro('Não foi possível salvar. Sua preferência anterior foi mantida.'); avisos.erro('Não foi possível salvar', 'Sua preferência anterior foi mantida. ' + explicarFalha(e)); }
     finally { setSalvando(false); }
   };
   return {preferencias, pronto, salvando, erro, alterar};

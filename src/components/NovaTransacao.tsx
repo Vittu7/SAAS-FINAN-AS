@@ -7,6 +7,7 @@ import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import { SeletorOpcao } from "@/components/SeletorOpcao";
 import { useOpcoes } from "@/lib/useOpcoes";
+import { avisos } from "@/lib/avisos";
 import { brl, parseValor, rotuloMes } from "@/lib/finance";
 import { tipoDaConta, verificarDisponibilidade } from "@/lib/contas";
 import { useMovimentosConta } from "@/hooks/useMovimentosConta";
@@ -43,9 +44,9 @@ export default function NovaTransacao({
   tipoInicial?: Tipo;
   comoInicial?: Como;
   onFechar: () => void;
-  onAdicionarExtrato: (item: any) => Promise<void> | void;
-  onAdicionarCartao: (item: any, gerarSeguintes: boolean) => Promise<void> | void;
-  onAdicionarConta: (item: any) => Promise<void> | void;
+  onAdicionarExtrato: (item: any, opcoes?: { silencioso?: boolean }) => Promise<boolean | void> | boolean | void;
+  onAdicionarCartao: (item: any, gerarSeguintes: boolean, opcoes?: { silencioso?: boolean }) => Promise<boolean | void> | boolean | void;
+  onAdicionarConta: (item: any, opcoes?: { silencioso?: boolean }) => Promise<boolean | void> | boolean | void;
 }) {
   const { pagamento: formas, categoria: categorias, recarregar } = useOpcoes();
   const caixinhaMovs = useMovimentosConta();
@@ -116,26 +117,45 @@ export default function NovaTransacao({
     const privado = visivelPara === "privado";
     const compartilhado_com = visivelPara && visivelPara !== "privado" ? visivelPara : null;
 
+    const varios = responsaveis.length > 1;
+    const opcoes = { silencioso: varios };
+    /** Para no primeiro erro (o aviso de erro já foi mostrado pela própria gravação) e não fecha a janela. */
+    const falhouAlgum = (resultados: unknown[]) => resultados.some((r) => r === false);
+    const avisarDivisao = (o: string) => avisos.sucesso(`${o} dividida entre ${responsaveis.length} pessoas`, `${descricao.trim()} · ${brl(total)}`);
+
     try {
       if (!saida) {
         // A entrada agora registra em qual conta o dinheiro entrou
-        await onAdicionarExtrato({ mes, tipo: "entrada", pagamento: forma || "Entrada", categoria: categoria || "Salário", valor: total, descricao: descricao.trim(), responsavel: meuNome, privado, compartilhado_com });
+        const ok = await onAdicionarExtrato({ mes, tipo: "entrada", pagamento: forma || "Entrada", categoria: categoria || "Salário", valor: total, descricao: descricao.trim(), responsavel: meuNome, privado, compartilhado_com });
+        if (ok === false) return;
       } else if (como === "avista") {
-        for (const r of responsaveis)
-          await onAdicionarExtrato({ mes, pagamento: forma || "Geral", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), responsavel: r, privado, compartilhado_com });
+        const feitos: unknown[] = [];
+        for (const r of responsaveis) {
+          feitos.push(await onAdicionarExtrato({ mes, pagamento: forma || "Geral", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), responsavel: r, privado, compartilhado_com }, opcoes));
+          if (falhouAlgum(feitos)) return;
+        }
+        if (varios) avisarDivisao("Saída");
       } else if (como === "parcelado") {
         const atual = Math.max(1, Number(parcelaAtual) || 1);
         const totalP = Math.max(atual, Number(parcelaTotal) || 1);
-        for (const r of responsaveis)
-          await onAdicionarCartao({ mes, cartao: forma || "Cartão", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), parcelaAtual: atual, parcelaTotal: totalP, responsavel: r, privado, compartilhado_com }, true);
+        const feitos: unknown[] = [];
+        for (const r of responsaveis) {
+          feitos.push(await onAdicionarCartao({ mes, cartao: forma || "Cartão", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), parcelaAtual: atual, parcelaTotal: totalP, responsavel: r, privado, compartilhado_com }, true, opcoes));
+          if (falhouAlgum(feitos)) return;
+        }
+        if (varios) avisarDivisao("Compra parcelada");
       } else {
         const dia = Number(vencimento);
         if (vencimento && (!Number.isInteger(dia) || dia < 1 || dia > 31)) {
           setSalvando(false);
           return setErro("O vencimento deve ser um dia entre 1 e 31.");
         }
-        for (const r of responsaveis)
-          await onAdicionarConta({ mes, nome: nomeDe(r), valor: individual, vencimento: vencimento || null, categoria: categoria || "Outros", forma_pagamento: forma || null, pago: false, responsavel: r, compartilhado_com });
+        const feitos: unknown[] = [];
+        for (const r of responsaveis) {
+          feitos.push(await onAdicionarConta({ mes, nome: nomeDe(r), valor: individual, vencimento: vencimento || null, categoria: categoria || "Outros", forma_pagamento: forma || null, pago: false, responsavel: r, compartilhado_com }, opcoes));
+          if (falhouAlgum(feitos)) return;
+        }
+        if (varios) avisarDivisao("Conta fixa");
       }
       onFechar();
     } finally {

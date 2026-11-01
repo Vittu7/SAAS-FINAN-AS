@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { addMeses } from "@/lib/finance";
+import { addMeses, brl } from "@/lib/finance";
 import type {
   Cartao,
   Config,
@@ -12,6 +12,10 @@ import type {
 } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 import { garantirPerfil } from "@/lib/perfil";
+import { avisos, falhou } from "@/lib/avisos";
+
+/** `silencioso`: quem chama (ex.: compra dividida entre várias pessoas) mostra um único aviso no final. */
+type OpcoesAviso = { silencioso?: boolean };
 
 const VAZIO: Estado = {
   extrato: [],
@@ -189,8 +193,9 @@ export function useFinanceStore() {
 
   const adicionarExtrato = async (
     item: Omit<Extrato, "id"> & { responsavel_id?: string },
-  ) => {
-    if (!userId) return;
+    opcoes: OpcoesAviso = {},
+  ): Promise<boolean> => {
+    if (!userId) { avisos.erro("Não foi possível salvar", "Sua sessão não foi encontrada. Entre novamente."); return false; }
 
     const payload = {
       owner_id: userId,
@@ -218,9 +223,8 @@ export function useFinanceStore() {
       .single();
 
     if (error) {
-      console.error("Erro ao adicionar no extrato:", error);
-      alert("Erro ao salvar extrato: " + error.message);
-      return;
+      falhou(item.tipo === "entrada" ? "cadastrar a entrada" : "cadastrar a saída", error);
+      return false;
     }
 
     if (data) {
@@ -229,13 +233,16 @@ export function useFinanceStore() {
         extrato: [...atual.extrato, enriquecer(data, membros, userId)],
       }));
     }
+    if (!opcoes.silencioso) avisos.sucesso(item.tipo === "entrada" ? "Entrada cadastrada" : "Saída cadastrada", `${item.descricao} · ${brl(Number(item.valor) || 0)}`);
+    return true;
   };
 
   const adicionarCartao = async (
     item: Omit<Cartao, "id"> & { responsavel_id?: string },
     gerarSeguintes: boolean,
-  ) => {
-    if (!userId) return;
+    opcoes: OpcoesAviso = {},
+  ): Promise<boolean> => {
+    if (!userId) { avisos.erro("Não foi possível salvar", "Sua sessão não foi encontrada. Entre novamente."); return false; }
 
     const restantes = gerarSeguintes
       ? Math.max(0, item.parcelaTotal - item.parcelaAtual)
@@ -265,9 +272,8 @@ export function useFinanceStore() {
       .select();
 
     if (error) {
-      console.error("Erro ao adicionar cartão:", error);
-      alert("Erro ao salvar cartão: " + error.message);
-      return;
+      falhou("cadastrar a compra no cartão", error);
+      return false;
     }
 
     if (data) {
@@ -279,12 +285,18 @@ export function useFinanceStore() {
         ],
       }));
     }
+    if (!opcoes.silencioso) avisos.sucesso(
+      novos.length > 1 ? "Compra parcelada cadastrada" : "Compra no cartão cadastrada",
+      novos.length > 1 ? `${item.descricao} · ${novos.length} parcelas lançadas` : `${item.descricao} · ${brl(Number(item.valor) || 0)}`,
+    );
+    return true;
   };
 
   const adicionarConta = async (
     item: Omit<ContaFixa, "id"> & { responsavel_id?: string },
-  ) => {
-    if (!userId) return;
+    opcoes: OpcoesAviso = {},
+  ): Promise<boolean> => {
+    if (!userId) { avisos.erro("Não foi possível salvar", "Sua sessão não foi encontrada. Entre novamente."); return false; }
 
     const payload = {
       owner_id: userId,
@@ -310,9 +322,8 @@ export function useFinanceStore() {
       .single();
 
     if (error) {
-      console.error("Erro ao adicionar conta fixa:", error);
-      alert("Erro ao salvar conta fixa: " + error.message);
-      return;
+      falhou("cadastrar a conta fixa", error);
+      return false;
     }
 
     if (data) {
@@ -321,6 +332,8 @@ export function useFinanceStore() {
         contas: [...atual.contas, enriquecer(data, membros, userId)],
       }));
     }
+    if (!opcoes.silencioso) avisos.sucesso("Conta fixa cadastrada", `${item.nome} · ${brl(Number(item.valor) || 0)}`);
+    return true;
   };
 
   const gerarContasFixasDoMes = useCallback(
@@ -386,19 +399,19 @@ export function useFinanceStore() {
       const novas = contasUnicasAnteriores
         .filter((conta: any) => !chavesExistentesNoMes.has(chaveConta(conta)))
         .map((conta: any) => ({
-          owner_id: conta.owner_id || userId,
-          grupo_id: conta.grupo_id || grupoId,
-          responsavel_id: conta.responsavel_id || userId,
-          serie_id: conta.serie_id,
-          mes,
-          nome: conta.nome,
-          pago: false,
-          valor: conta.valor,
-          forma_pagamento: conta.forma_pagamento || null,
-          categoria: conta.categoria || null,
-          vencimento: conta.vencimento
-            ? Number(conta.vencimento)
-            : null,
+        owner_id: conta.owner_id || userId,
+        grupo_id: conta.grupo_id || grupoId,
+        responsavel_id: conta.responsavel_id || userId,
+        serie_id: conta.serie_id,
+        mes,
+        nome: conta.nome,
+        pago: false,
+        valor: conta.valor,
+        forma_pagamento: conta.forma_pagamento || null,
+        categoria: conta.categoria || null,
+        vencimento: conta.vencimento
+          ? Number(conta.vencimento)
+          : null,
         }));
 
       if (novas.length === 0) return;
@@ -412,12 +425,12 @@ export function useFinanceStore() {
         .select();
 
       if (error) {
-        console.error("Erro ao gerar contas fixas do mês:", error);
-        alert("Erro ao gerar contas fixas: " + error.message);
+        falhou("gerar as contas fixas do mês", error);
         return;
       }
 
       if (data && data.length > 0) {
+        avisos.info(data.length === 1 ? "1 conta fixa trazida do mês anterior" : `${data.length} contas fixas trazidas do mês anterior`, "Confira os valores e marque como paga quando pagar.");
         setEstado((atual) => {
           const idsExistentes = new Set(
             atual.contas.map((conta: any) => conta.id),
@@ -457,13 +470,12 @@ export function useFinanceStore() {
       .select();
 
     if (error) {
-      console.error("Erro ao alterar:", error);
-      alert("Erro ao alterar: " + error.message);
+      falhou("salvar as alterações", error);
       return false;
     }
 
     if (!data || data.length === 0) {
-      alert("Não foi possível alterar: só quem criou o lançamento pode editá-lo.");
+      avisos.erro("Não foi possível salvar as alterações", "Só quem criou o lançamento pode editá-lo.");
       return false;
     }
 
@@ -479,11 +491,12 @@ export function useFinanceStore() {
         }) as Estado,
     );
 
+    avisos.sucesso("Alterações salvas", "O lançamento foi atualizado.");
     return true;
   };
 
-  const remover = async (tabela: Tabela, id: string) => {
-    if (String(id).startsWith("repasse:")) return; // entrada automática de repasse: some quando o repasse é reaberto
+  const remover = async (tabela: Tabela, id: string): Promise<boolean> => {
+    if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: some quando o repasse é reaberto
     const { data, error } = await supabase
       .from(NOME_TABELA_DB[tabela])
       .delete()
@@ -491,14 +504,13 @@ export function useFinanceStore() {
       .select("id");
 
     if (error) {
-      console.error("Erro ao remover:", error);
-      alert("Erro ao remover: " + error.message);
-      return;
+      falhou("remover o lançamento", error);
+      return false;
     }
 
     if (!data || data.length === 0) {
-      alert("Não foi possível remover: só quem criou o lançamento pode apagá-lo.");
-      return;
+      avisos.erro("Não foi possível remover o lançamento", "Só quem criou o lançamento pode apagá-lo.");
+      return false;
     }
 
     setEstado(
@@ -510,6 +522,8 @@ export function useFinanceStore() {
           ),
         }) as Estado,
     );
+    avisos.sucesso("Lançamento removido");
+    return true;
   };
 
   const alternarPago = async (id: string) => {
@@ -525,13 +539,12 @@ export function useFinanceStore() {
       .select("id");
 
     if (error) {
-      console.error("Erro ao atualizar pagamento:", error);
-      alert("Erro ao atualizar pagamento: " + error.message);
+      falhou("atualizar o pagamento da conta", error);
       return;
     }
 
     if (!data || data.length === 0) {
-      alert("Não foi possível atualizar o pagamento desta conta.");
+      avisos.erro("Não foi possível atualizar o pagamento", "Só quem criou a conta pode alterar o status.");
       return;
     }
 
@@ -541,6 +554,7 @@ export function useFinanceStore() {
         conta.id === id ? { ...conta, pago: novoStatus } : conta,
       ),
     }));
+    avisos.sucesso(novoStatus ? "Conta marcada como paga" : "Conta voltou para pendente", contaAtual.nome);
   };
 
   const atualizarConfig = async (patch: Partial<Config>) => {
@@ -568,8 +582,7 @@ export function useFinanceStore() {
       .maybeSingle();
 
     if (erroBusca) {
-      console.error("Erro ao ler configurações:", erroBusca);
-      alert("Erro ao salvar configurações: " + erroBusca.message);
+      falhou("salvar as configurações", erroBusca);
       return;
     }
 
@@ -588,8 +601,7 @@ export function useFinanceStore() {
       });
 
     if (error) {
-      console.error("Erro ao salvar configurações:", error);
-      alert("Erro ao salvar configurações: " + error.message);
+      falhou("salvar as configurações", error);
       return;
     }
 
@@ -597,6 +609,7 @@ export function useFinanceStore() {
       ...atual,
       config: { ...atual.config, ...patch },
     }));
+    avisos.sucesso("Configurações salvas");
   };
 
   /**
@@ -622,13 +635,17 @@ export function useFinanceStore() {
 
       if (error) {
         const faltaScript = /atualizar_repasse|repasse_/.test(error.message) || error.code === "PGRST202" || error.code === "42883";
-        alert(faltaScript ? "Para usar os repasses, execute os scripts supabase-04 e supabase-05 no Supabase." : "Erro ao atualizar o repasse: " + error.message);
+        if (faltaScript) avisos.erro("Repasses ainda não habilitados", "Execute os scripts supabase-04 e supabase-05 no Supabase.");
+        else falhou("atualizar o repasse", error);
         return false;
       }
       if (Number(data) !== ids.length) {
-        alert(acao === "informar" || acao === "desinformar"
-          ? "Só quem é o responsável pelo valor pode marcar como repassado (e só antes de concluído)."
-          : "Só quem fez o lançamento pode confirmar o recebimento do repasse.");
+        avisos.erro(
+          acao === "informar" || acao === "desinformar" ? "Não foi possível marcar como repassado" : "Não foi possível confirmar o recebimento",
+          acao === "informar" || acao === "desinformar"
+            ? "Só quem é o responsável pelo valor pode marcar como repassado (e só antes de concluído)."
+            : "Só quem fez o lançamento pode confirmar o recebimento do repasse.",
+        );
         return false;
       }
 
@@ -637,28 +654,35 @@ export function useFinanceStore() {
       const avisoScript = "O repasse foi atualizado, mas para registrar as contas execute o script supabase-06-repasse-conta.sql no Supabase.";
       if (acao === "concluir" && conta) {
         const { error: e1 } = await supabase.from(NOME_TABELA_DB[origem]).update({ repasse_conta: conta }).in("id", ids);
-        if (e1) alert(/repasse_conta/.test(e1.message) ? avisoScript : "O repasse foi concluído, mas não foi possível registrar a conta de destino: " + e1.message);
+        if (e1) avisos.aviso(/repasse_conta/.test(e1.message) ? avisoScript : "O repasse foi concluído, mas a conta de destino não foi registrada", /repasse_conta/.test(e1.message) ? undefined : e1.message);
       }
       if (acao === "reabrir") {
         const { error: e2 } = await supabase.from(NOME_TABELA_DB[origem]).update({ repasse_conta: null, repasse_conta_origem: null }).in("id", ids);
-        if (e2) alert(/repasse_conta/.test(e2.message) ? avisoScript : "Não foi possível limpar as contas do repasse: " + e2.message);
+        if (e2) avisos.aviso(/repasse_conta/.test(e2.message) ? avisoScript : "O repasse foi reaberto, mas as contas não foram limpas", /repasse_conta/.test(e2.message) ? undefined : e2.message);
       }
       if (acao === "informar" || acao === "desinformar") {
         const { error: e3 } = await supabase.rpc("registrar_repasse_conta", { p_tabela: NOME_TABELA_DB[origem], p_ids: ids.map(String), p_conta: acao === "informar" ? conta : null });
-        if (e3 && (conta || acao === "desinformar")) alert(/registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? avisoScript : "Não foi possível registrar a conta de origem do repasse: " + e3.message);
+        if (e3 && (conta || acao === "desinformar")) avisos.aviso(/registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? avisoScript : "O repasse foi atualizado, mas a conta de origem não foi registrada", /registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? undefined : e3.message);
       }
 
       const alvo = new Set(ids);
       const patch: Record<string, any> =
         acao === "informar" ? { repasse_informado: true, repasse_informado_em: agora, repasseInformado: true, repasse_conta_origem: conta }
-          : acao === "desinformar" ? { repasse_informado: false, repasse_informado_em: null, repasseInformado: false, repasse_conta_origem: null }
-            : acao === "concluir" ? { repasse_pago: true, repasse_pago_em: agora, repassePago: true, repasse_conta: conta }
-              : { repasse_conta: null, repasse_conta_origem: null, repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
+        : acao === "desinformar" ? { repasse_informado: false, repasse_informado_em: null, repasseInformado: false, repasse_conta_origem: null }
+        : acao === "concluir" ? { repasse_pago: true, repasse_pago_em: agora, repassePago: true, repasse_conta: conta }
+        : { repasse_conta: null, repasse_conta_origem: null, repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
       setEstado((atual) => ({
         ...atual,
         [origem]: (atual[origem] as any[]).map((item) => (alvo.has(item.id) ? { ...item, ...patch } : item)),
       }) as Estado);
     }
+
+    const n = itens.length;
+    const varios = n > 1;
+    if (acao === "informar") avisos.sucesso(varios ? `${n} repasses informados` : "Repasse informado", "Agora aguarda quem lançou confirmar o recebimento.");
+    else if (acao === "desinformar") avisos.sucesso(varios ? `${n} repasses desmarcados` : "Repasse desmarcado", "Voltou para pendente.");
+    else if (acao === "concluir") avisos.sucesso(varios ? `${n} recebimentos confirmados` : "Recebimento confirmado", conta ? `O valor entrou como entrada em ${conta}.` : "O valor foi abatido do que a pessoa devia.");
+    else avisos.sucesso(varios ? `${n} repasses reabertos` : "Repasse reaberto", "Voltou para pendente.");
     return true;
   };
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos } from "@/lib/avisos";
 import { useMemo, useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { Ico } from "@/components/icons";
@@ -75,7 +76,7 @@ export default function RelatorioFinanceiro({ estado, mes, rotuloResponsaveis }:
   const exportarCSV = () => baixar(relatorioParaCSV(r), "text/csv;charset=utf-8", `${nomeArquivo}.csv`);
   const exportarPDF = () => {
     const w = window.open("", "_blank");
-    if (!w) return alert("O navegador bloqueou a janela. Permita pop-ups para exportar em PDF.");
+    if (!w) return avisos.aviso("O navegador bloqueou a janela", "Permita pop-ups para este site e tente exportar o PDF de novo.");
     w.document.write(relatorioParaHTML(r));
     w.document.close();
     w.focus();

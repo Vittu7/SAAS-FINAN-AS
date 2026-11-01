@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos, falhou } from "@/lib/avisos";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -40,10 +41,11 @@ export default function FamiliaPage() {
       if (erroGrupo || !grupoId) throw erroGrupo || new Error("Não foi possível criar o grupo.");
 
       const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, String(grupoId)) : null;
-      alert("Grupo familiar criado com sucesso!" + (aviso ? "\n\n" + aviso : ""));
+      avisos.sucesso("Grupo familiar criado", "Você já é o gestor dele.");
+      if (aviso) avisos.aviso(aviso);
       carregarPerfil(); // Recarrega a tela
     } catch (error: any) {
-      alert("Erro ao criar grupo: " + error.message);
+      falhou("criar o grupo", error);
     } finally {
       setCarregando(false);
     }

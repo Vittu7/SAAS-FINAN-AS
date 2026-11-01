@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos } from "@/lib/avisos";
 import AutorTag from "@/components/AutorTag";
 import { ResponsavelChip } from "@/components/Avatar";
 import { Check, ChevronDown, Pencil, Trash2, TriangleAlert } from "lucide-react";
@@ -17,7 +18,7 @@ import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 type Props = {
   mes: string;
   itens: any[];
-  onAdd: (item: any) => void | Promise<void>;
+  onAdd: (item: any) => unknown;
   onRemove: (id: string) => void;
   onEdit?: (id: string, patch: Record<string, any>) => Promise<boolean | void>;
   onTogglePago: (id: string) => void;
@@ -123,19 +124,19 @@ export default function ContasFixasTable({
     const valorTotal = parseValor(valorTexto);
 
     if (!nome.trim()) {
-      alert("Por favor, insira o nome da conta.");
+      avisos.aviso("Confira os dados", "Por favor, insira o nome da conta.");
       return;
     }
 
     if (!Number.isFinite(valorTotal) || valorTotal <= 0) {
-      alert("Por favor, insira um valor válido (ex: 50,00).");
+      avisos.aviso("Confira os dados", "Por favor, insira um valor válido (ex: 50,00).");
       return;
     }
 
     if (vencimento) {
       const dia = Number(vencimento);
       if (!Number.isInteger(dia) || dia < 1 || dia > 31) {
-        alert("O vencimento deve ser um dia entre 1 e 31.");
+        avisos.aviso("Confira os dados", "O vencimento deve ser um dia entre 1 e 31.");
         return;
       }
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { avisos, falhou } from "@/lib/avisos";
 import { Plus, Trash2, X } from "lucide-react";
 import { Ico } from "@/components/icons";
 import { useState, useEffect } from "react";
@@ -76,7 +77,9 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   };
 
   const alterarCorMembro = async (membroId: string, novaCor: string) => {
-    await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
+    const { error } = await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
+    if (error) falhou("alterar a cor", error);
+    else avisos.sucesso("Cor atualizada");
     carregarPerfilEMembros();
   };
 
@@ -92,7 +95,8 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         if (erroGrupo || !grupoId) throw erroGrupo || new Error("Não foi possível criar o grupo.");
 
         const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, String(grupoId)) : null;
-        alert("Grupo criado com sucesso!" + (aviso ? "\n\n" + aviso : ""));
+        avisos.sucesso("Grupo criado", "Você já é o gestor dele.");
+        if (aviso) avisos.aviso(aviso);
         window.dispatchEvent(new Event("homecash:perfil"));
       }
 
@@ -109,14 +113,15 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         if (erroPerfil) throw erroPerfil;
 
         const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, inputValor) : null;
-        alert("Você entrou no grupo!" + (aviso ? "\n\n" + aviso : ""));
+        avisos.sucesso("Você entrou no grupo");
+        if (aviso) avisos.aviso(aviso);
         window.dispatchEvent(new Event("homecash:perfil"));
       }
 
       await carregarPerfilEMembros();
       setModo("menu");
     } catch (error: any) {
-      alert("Erro: " + error.message);
+      falhou(modo === "criar" ? "criar o grupo" : "entrar no grupo", error);
     } finally {
       setCarregando(false);
       setInputValor("");
@@ -139,8 +144,9 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     ]);
 
     if (error) {
-      alert("Erro ao adicionar convidado: " + error.message);
+      falhou("adicionar o convidado", error);
     } else {
+      avisos.sucesso("Convidado adicionado", nomeConvidado.trim());
       setNomeConvidado("");
       setAdicionandoConvidado(false);
       await carregarPerfilEMembros();
@@ -158,9 +164,10 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     const { error } = await supabase.rpc("remover_membro_grupo", { p_membro: membro.id });
     if (error) {
-      alert("Não foi possível remover: " + error.message);
+      falhou("remover o membro", error);
       return;
     }
+    avisos.sucesso(membro.eh_convidado ? "Convidado removido" : "Membro removido do grupo", membro.nome_usuario);
     await carregarPerfilEMembros();
     window.dispatchEvent(new Event("homecash:perfil"));
   };
@@ -172,7 +179,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     const { error } = await supabase.rpc("excluir_grupo_familiar");
     setCarregando(false);
     if (error) {
-      alert("Não foi possível excluir o grupo: " + error.message);
+      falhou("excluir o grupo", error);
       return;
     }
     setExcluindoGrupo(false);
@@ -181,7 +188,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     setModo("menu");
     await carregarPerfilEMembros();
     window.dispatchEvent(new Event("homecash:perfil"));
-    alert("Grupo excluído.");
+    avisos.sucesso("Grupo excluído", "Os lançamentos continuam com cada dono.");
   };
 
   const souGestor = meuPerfil?.cargo === "gestor";

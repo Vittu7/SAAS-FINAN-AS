@@ -8,6 +8,9 @@ import { useRouter } from "next/navigation";
 import { Ico } from "@/components/icons";
 import { supabase } from "@/lib/supabase";
 import Avatar from "@/components/Avatar";
+import DialogResponsivo from "@/components/DialogResponsivo";
+import { falhou } from "@/lib/avisos";
+import { sairDaConta } from "@/lib/auth";
 import {
   avatarDoProvedor,
   avisarPerfilAtualizado,
@@ -35,6 +38,41 @@ export default function PerfilConta() {
   const [status, setStatus] = useState<Status | null>(null);
 
   const inputFoto = useRef<HTMLInputElement>(null);
+
+  const [excluindoConta, setExcluindoConta] = useState(false);
+  const [confirmaTexto, setConfirmaTexto] = useState("");
+  const [apagando, setApagando] = useState(false);
+  const PALAVRA = "EXCLUIR";
+
+  const fecharExclusao = () => { if (!apagando) { setExcluindoConta(false); setConfirmaTexto(""); } };
+
+  const excluirConta = async () => {
+    if (confirmaTexto.trim().toUpperCase() !== PALAVRA) return;
+    setApagando(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sessão não encontrada. Entre novamente.");
+
+      // fotos de perfil guardadas (se não der, a conta é excluída do mesmo jeito)
+      try {
+        const { data: arquivos } = await supabase.storage.from("avatars").list(user.id);
+        if (arquivos?.length) await supabase.storage.from("avatars").remove(arquivos.map((a) => `${user.id}/${a.name}`));
+      } catch { /* sem fotos ou sem permissão */ }
+
+      const { error } = await supabase.rpc("excluir_minha_conta");
+      if (error) throw error;
+
+      try {
+        Object.keys(localStorage).filter((k) => k.startsWith("homecash")).forEach((k) => localStorage.removeItem(k));
+      } catch { /* armazenamento indisponível */ }
+      await sairDaConta(supabase as any).catch(() => null);
+      avisos.sucesso("Conta excluída", "Todos os seus dados foram apagados.");
+      router.replace("/login");
+    } catch (e) {
+      falhou("excluir a conta", e);
+      setApagando(false);
+    }
+  };
 
   useEffect(() => {
     let ativo = true;
@@ -327,6 +365,60 @@ export default function PerfilConta() {
           </p>
         )}
       </form>
+
+      <section className="rounded-2xl border border-rose-500/40 bg-rose-500/5 p-5" aria-label="Excluir conta">
+        <h3 className="text-sm font-semibold text-rose-700 dark:text-rose-400">Excluir conta</h3>
+        <p className="mt-1 text-sm text-muted">
+          Apaga para sempre o seu login e todos os seus dados: lançamentos, cartões, caixinhas, investimentos e configurações. Não dá para desfazer.
+        </p>
+        <button
+          type="button"
+          onClick={() => setExcluindoConta(true)}
+          className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-rose-500/50 text-sm font-semibold text-rose-700 transition hover:bg-rose-500/10 dark:text-rose-400"
+        >
+          <Ico icon={Trash2} size={16} />Excluir minha conta
+        </button>
+      </section>
+
+      {excluindoConta && (
+        <DialogResponsivo titulo="Excluir conta" onFechar={fecharExclusao}>
+          <div className="space-y-4">
+            <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-700 dark:text-rose-400">
+              Esta ação é permanente e não pode ser desfeita.
+            </p>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
+              <li>Seu login e seu perfil serão apagados.</li>
+              <li>Os lançamentos que você criou, seus cartões, categorias, caixinhas e aportes serão apagados.</li>
+              <li>Nos lançamentos de outras pessoas em que você era só o responsável, o seu nome é removido.</li>
+              <li>Se você for a última pessoa do grupo familiar, o grupo e os convidados dele também serão apagados.</li>
+            </ul>
+            <div>
+              <label htmlFor="conf-excluir" className="mb-1 block text-xs font-medium text-muted">
+                Para confirmar, digite <b className="text-ink">{PALAVRA}</b>
+              </label>
+              <input
+                id="conf-excluir"
+                autoComplete="off"
+                value={confirmaTexto}
+                onChange={(e) => setConfirmaTexto(e.target.value)}
+                className={campo}
+                placeholder={PALAVRA}
+              />
+            </div>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={fecharExclusao} disabled={apagando} className="h-11 rounded-xl px-5 text-sm font-medium text-muted ring-1 ring-line disabled:opacity-50">Cancelar</button>
+              <button
+                type="button"
+                onClick={excluirConta}
+                disabled={apagando || confirmaTexto.trim().toUpperCase() !== PALAVRA}
+                className="h-11 rounded-xl bg-rose-700 px-5 text-sm font-semibold text-white transition disabled:opacity-40"
+              >
+                {apagando ? "Excluindo..." : "Excluir definitivamente"}
+              </button>
+            </div>
+          </div>
+        </DialogResponsivo>
+      )}
     </div>
   );
 }

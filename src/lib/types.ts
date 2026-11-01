@@ -16,6 +16,8 @@ export type Extrato = {
   responsavel: Responsavel;
   /** "entrada" = dinheiro recebido; ausente ou "saida" = gasto */
   tipo?: "saida" | "entrada";
+  /** Data do lançamento (AAAA-MM-DD); lançamentos antigos podem não ter */
+  data?: string | null;
 };
 
 export type Cartao = {
@@ -29,6 +31,8 @@ export type Cartao = {
   categoria: string;
   valor: number;
   responsavel: Responsavel;
+  /** Data da compra desta parcela (AAAA-MM-DD) */
+  data?: string | null;
 };
 
 export type ContaFixa = {

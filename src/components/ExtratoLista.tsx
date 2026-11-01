@@ -8,6 +8,7 @@ import { Selo } from "@/components/SeletorOpcao";
 import { brl } from "@/lib/finance";
 import { agruparPorOrigem, type LinhaExtrato, type Ordem } from "@/lib/extrato";
 import { COR_PADRAO, useOpcoes } from "@/lib/useOpcoes";
+import { rotuloData } from "@/lib/datas";
 
 const TOM = {
   ok: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -86,6 +87,7 @@ function Linha({ linha: l, cor, onEditar, onRemover }: { linha: LinhaExtrato; co
 
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold">{l.descricao}</p>
+        {l.data && <p className="text-[11px] font-medium text-muted">{l.origem === "contas" ? "Vence " : ""}{rotuloData(l.data)}</p>}
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {l.categoria && <Selo nome={l.categoria} cor={cor} />}
           <span className="min-w-0 truncate text-xs text-muted">{[l.responsavel && <b key="r" className="font-semibold text-ink">{l.responsavel}</b>, l.forma].filter(Boolean).reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, " · ", x] : [x]), [])}</span>

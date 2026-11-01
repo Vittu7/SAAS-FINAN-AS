@@ -13,6 +13,13 @@ import type {
 import { supabase } from "@/lib/supabase";
 import { garantirPerfil } from "@/lib/perfil";
 import { avisos, falhou } from "@/lib/avisos";
+import { dataValida, somarMesesData } from "@/lib/datas";
+
+/** A coluna "data" ainda não existe no banco (script supabase-12 não executado)? */
+const colunaDataAusente = (e: any) =>
+  Boolean(e) && (e.code === "PGRST204" || e.code === "42703") && /\bdata\b/.test(String(e.message ?? ""));
+const AVISO_SEM_DATA = () =>
+  avisos.aviso("Salvo, mas sem a data", "Execute o script supabase-12-datas.sql no Supabase para guardar a data de cada lançamento.");
 
 /** `silencioso`: quem chama (ex.: compra dividida entre várias pessoas) mostra um único aviso no final. */
 type OpcoesAviso = { silencioso?: boolean };
@@ -215,12 +222,17 @@ export function useFinanceStore() {
       privado: (item as any).privado ?? false,
       compartilhado_com: (item as any).compartilhado_com || null,
     };
+    const dataItem = dataValida((item as any).data) ? (item as any).data : null;
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("extrato")
-      .insert([payload])
+      .insert([dataItem ? { ...payload, data: dataItem } : payload])
       .select()
       .single();
+    if (error && dataItem && colunaDataAusente(error)) {
+      ({ data, error } = await supabase.from("extrato").insert([payload]).select().single());
+      if (!error) AVISO_SEM_DATA();
+    }
 
     if (error) {
       falhou(item.tipo === "entrada" ? "cadastrar a entrada" : "cadastrar a saída", error);
@@ -265,11 +277,18 @@ export function useFinanceStore() {
       privado: (item as any).privado ?? false,
       compartilhado_com: (item as any).compartilhado_com || null,
     }));
+    const dataCompra = dataValida((item as any).data) ? ((item as any).data as string) : null;
+    // cada parcela leva a data da compra deslocada para o mês dela
+    const novosComData = dataCompra ? novos.map((n, indice) => ({ ...n, data: somarMesesData(dataCompra, indice) })) : novos;
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("cartao")
-      .insert(novos)
+      .insert(novosComData)
       .select();
+    if (error && dataCompra && colunaDataAusente(error)) {
+      ({ data, error } = await supabase.from("cartao").insert(novos).select());
+      if (!error) AVISO_SEM_DATA();
+    }
 
     if (error) {
       falhou("cadastrar a compra no cartão", error);
@@ -463,11 +482,16 @@ export function useFinanceStore() {
       patchBanco.responsavel_id = idDoResponsavel({ responsavel });
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from(NOME_TABELA_DB[tabela])
       .update(patchBanco)
       .eq("id", id)
       .select();
+    if (error && "data" in patchBanco && colunaDataAusente(error)) {
+      const { data: _semData, ...semData } = patchBanco;
+      ({ data, error } = await supabase.from(NOME_TABELA_DB[tabela]).update(semData).eq("id", id).select());
+      if (!error) AVISO_SEM_DATA();
+    }
 
     if (error) {
       falhou("salvar as alterações", error);

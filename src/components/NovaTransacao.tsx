@@ -8,8 +8,11 @@ import DialogResponsivo from "@/components/DialogResponsivo";
 import { SeletorOpcao } from "@/components/SeletorOpcao";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { avisos } from "@/lib/avisos";
+import { dataPadraoDoMes } from "@/lib/datas";
 import { brl, parseValor, rotuloMes } from "@/lib/finance";
 import { tipoDaConta, verificarDisponibilidade } from "@/lib/contas";
+import type { TipoCartao } from "@/lib/contas";
+import { formaEscolhida, nomeBaseCartao, nomeNoSeletor, unificarCartoes, variantesPorCartao } from "@/lib/cartoes";
 import { useMovimentosConta } from "@/hooks/useMovimentosConta";
 import type { Estado } from "@/lib/types";
 import type { Membro } from "@/hooks/useFinanceStore";
@@ -60,6 +63,10 @@ export default function NovaTransacao({
   const [parcelaAtual, setParcelaAtual] = useState("1");
   const [parcelaTotal, setParcelaTotal] = useState("2");
   const [vencimento, setVencimento] = useState("");
+  // Data do lançamento (entrada, saída à vista e compra parcelada). O mês do lançamento vem dela.
+  const [data, setData] = useState(() => dataPadraoDoMes(mes));
+  const [dataMexida, setDataMexida] = useState(false);
+  useEffect(() => { if (!dataMexida) setData(dataPadraoDoMes(mes)); }, [mes, dataMexida]);
   const [quem, setQuem] = useState<string[]>([]);
   const [visivelPara, setVisivelPara] = useState("");
   const [erro, setErro] = useState("");
@@ -86,6 +93,21 @@ export default function NovaTransacao({
   }, [listaForma, forma]);
 
   const contaSel = formas.find((f) => f.nome === forma);
+
+  // Cartão unificado: crédito e débito do mesmo cartão aparecem como UM item; o tipo é escolhido logo abaixo
+  const listaSeletor = useMemo(() => unificarCartoes(listaForma), [listaForma]);
+  const valorSeletor = nomeNoSeletor(listaForma, forma);
+  const variantes = contaSel && tipoDaConta(contaSel) ? variantesPorCartao(listaForma).get(nomeBaseCartao(contaSel.nome).toLocaleLowerCase("pt-BR")) : undefined;
+  const escolherNoSeletor = (nome: string) => setForma(formaEscolhida(listaForma, nome, como === "avista" ? "debito" : "credito"));
+  const escolherTipo = (t: TipoCartao) => { const alvo = variantes?.[t]; if (alvo) setForma(alvo.nome); };
+  const tipoCartaoAtual = contaSel ? tipoDaConta(contaSel) : null;
+  const seletorTipoCartao = variantes?.credito && variantes?.debito ? (
+    <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-background p-1 ring-1 ring-line" role="group" aria-label="Crédito ou débito">
+      {(["credito", "debito"] as const).map((t) => (
+        <button key={t} type="button" aria-pressed={tipoCartaoAtual === t} onClick={() => escolherTipo(t)} className={`h-9 rounded-lg text-sm font-semibold transition ${tipoCartaoAtual === t ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`}>{t === "credito" ? "Crédito" : "Débito"}</button>
+      ))}
+    </div>
+  ) : null;
   const valorNum = parseValor(valor);
   // Conta fixa só desconta quando for marcada como paga: não valida na criação.
   const valida = saida ? como !== "fixa" : true;
@@ -101,6 +123,7 @@ export default function NovaTransacao({
     const total = parseValor(valor);
     if (!total) return setErro("Digite um valor maior que zero.");
     if (!descricao.trim()) return setErro("Escreva uma descrição curta.");
+    if (!(saida && como === "fixa") && !data) return setErro("Escolha a data do lançamento.");
 
     // Aviso (não bloqueia): saldo do débito ou limite do crédito insuficiente
     if (saida && como !== "fixa" && contaSel) {
@@ -118,6 +141,9 @@ export default function NovaTransacao({
     const compartilhado_com = visivelPara && visivelPara !== "privado" ? visivelPara : null;
 
     const varios = responsaveis.length > 1;
+    const temData = !(saida && como === "fixa");
+    // O mês do lançamento vem da data escolhida (conta fixa continua no mês que está aberto)
+    const mesLanc = temData && data ? data.slice(0, 7) : mes;
     const opcoes = { silencioso: varios };
     /** Para no primeiro erro (o aviso de erro já foi mostrado pela própria gravação) e não fecha a janela. */
     const falhouAlgum = (resultados: unknown[]) => resultados.some((r) => r === false);
@@ -126,12 +152,12 @@ export default function NovaTransacao({
     try {
       if (!saida) {
         // A entrada agora registra em qual conta o dinheiro entrou
-        const ok = await onAdicionarExtrato({ mes, tipo: "entrada", pagamento: forma || "Entrada", categoria: categoria || "Salário", valor: total, descricao: descricao.trim(), responsavel: meuNome, privado, compartilhado_com });
+        const ok = await onAdicionarExtrato({ mes: mesLanc, data, tipo: "entrada", pagamento: forma || "Entrada", categoria: categoria || "Salário", valor: total, descricao: descricao.trim(), responsavel: meuNome, privado, compartilhado_com });
         if (ok === false) return;
       } else if (como === "avista") {
         const feitos: unknown[] = [];
         for (const r of responsaveis) {
-          feitos.push(await onAdicionarExtrato({ mes, pagamento: forma || "Geral", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), responsavel: r, privado, compartilhado_com }, opcoes));
+          feitos.push(await onAdicionarExtrato({ mes: mesLanc, data, pagamento: forma || "Geral", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), responsavel: r, privado, compartilhado_com }, opcoes));
           if (falhouAlgum(feitos)) return;
         }
         if (varios) avisarDivisao("Saída");
@@ -140,7 +166,7 @@ export default function NovaTransacao({
         const totalP = Math.max(atual, Number(parcelaTotal) || 1);
         const feitos: unknown[] = [];
         for (const r of responsaveis) {
-          feitos.push(await onAdicionarCartao({ mes, cartao: forma || "Cartão", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), parcelaAtual: atual, parcelaTotal: totalP, responsavel: r, privado, compartilhado_com }, true, opcoes));
+          feitos.push(await onAdicionarCartao({ mes: mesLanc, data, cartao: forma || "Cartão", categoria: categoria || "Outros", valor: individual, descricao: nomeDe(r), parcelaAtual: atual, parcelaTotal: totalP, responsavel: r, privado, compartilhado_com }, true, opcoes));
           if (falhouAlgum(feitos)) return;
         }
         if (varios) avisarDivisao("Compra parcelada");
@@ -194,6 +220,14 @@ export default function NovaTransacao({
           <input id="nt-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder={saida ? "Ex.: Mercado, Internet, Celular" : "Ex.: Salário de outubro"} className={campo} />
         </div>
 
+        {!(saida && como === "fixa") && (
+          <div>
+            <label htmlFor="nt-data" className={rotulo}>Data</label>
+            <input id="nt-data" type="date" required value={data} onChange={(e) => { setData(e.target.value); setDataMexida(true); }} className={campo} />
+            {data && data.slice(0, 7) !== mes && <p className="mt-1 text-xs text-muted">Este lançamento vai para {rotuloMes(data.slice(0, 7))}.</p>}
+          </div>
+        )}
+
         {saida && (
           <div>
             <span className={rotulo}>Como foi?</span>
@@ -223,7 +257,8 @@ export default function NovaTransacao({
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <span className={rotulo}>{como === "parcelado" ? "Cartão de crédito" : "Forma de pagamento"}</span>
-                <SeletorOpcao opcoes={listaForma} valor={forma} onChange={setForma} />
+                <SeletorOpcao opcoes={listaSeletor} valor={valorSeletor} onChange={escolherNoSeletor} />
+                {seletorTipoCartao}
               </div>
               <div>
                 <span className={rotulo}>Categoria</span>

@@ -133,15 +133,15 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     if (!nomeConvidado.trim() || !meuPerfil?.grupo_id) return;
     setCarregando(true);
 
-    const { error } = await supabase.from("perfis").insert([
-      {
-        nome_usuario: nomeConvidado.trim(),
-        grupo_id: meuPerfil.grupo_id,
-        cargo: "membro",
-        eh_convidado: true,
-        cor: corConvidado,
-      },
-    ]);
+    // Função do banco (supabase-08-convidado.sql): cria o convidado sem conta com as permissões certas
+    let { error } = await supabase.rpc("adicionar_convidado", { p_nome: nomeConvidado.trim(), p_cor: corConvidado });
+    if (error && (error.code === "PGRST202" || error.code === "42883" || /adicionar_convidado/.test(error.message))) {
+      // Script ainda não rodou: tenta o jeito antigo (com id próprio) e, se falhar, orienta
+      const direto = await supabase.from("perfis").insert([
+        { id: crypto.randomUUID(), nome_usuario: nomeConvidado.trim(), grupo_id: meuPerfil.grupo_id, cargo: "membro", eh_convidado: true, cor: corConvidado },
+      ]);
+      error = direto.error ? { ...direto.error, message: "Para cadastrar convidados, execute o script supabase-08-convidado.sql no Supabase. (" + direto.error.message + ")" } : null;
+    }
 
     if (error) {
       falhou("adicionar o convidado", error);
@@ -393,7 +393,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         ) : (
           <form onSubmit={gerenciarGrupo} className="space-y-4">
             <label className="text-sm font-medium text-muted">
-              {modo === "criar" ? "Nome do Grupo (ex: Casa Araguaína)" : "Cole o Código do Grupo"}
+              {modo === "criar" ? "Nome do Grupo (ex: Família Silva)" : "Cole o Código do Grupo"}
             </label>
             <input
               type="text"

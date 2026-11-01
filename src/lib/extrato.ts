@@ -1,6 +1,18 @@
 import { ehEntrada, semDuplicados } from "./calculos";
+import { dataDoItem } from "./datas";
 
-export type Ordem = "" | "maior" | "menor";
+/** "" = padrão · valor · nome A→Z / Z→A · data mais recente / mais antiga · categoria A→Z */
+export type Ordem = "" | "maior" | "menor" | "az" | "za" | "recente" | "antiga" | "categoria";
+
+export const OPCOES_ORDEM: { id: Ordem; rotulo: string; grupo: string }[] = [
+  { id: "recente", rotulo: "Data: mais recente primeiro", grupo: "Data" },
+  { id: "antiga", rotulo: "Data: mais antiga primeiro", grupo: "Data" },
+  { id: "az", rotulo: "Nome: A → Z", grupo: "Nome" },
+  { id: "za", rotulo: "Nome: Z → A", grupo: "Nome" },
+  { id: "maior", rotulo: "Valor: maior para menor", grupo: "Valor" },
+  { id: "menor", rotulo: "Valor: menor para maior", grupo: "Valor" },
+  { id: "categoria", rotulo: "Categoria: A → Z", grupo: "Outros" },
+];
 export type OrigemLinha = "extrato" | "cartao" | "contas";
 
 export const ROTULO_ORIGEM: Record<OrigemLinha, string> = {
@@ -29,6 +41,8 @@ export type LinhaExtrato = {
   /** Valor a repassar já recebido? (somente quando há repasse) */
   repasse?: "pendente" | "aguardando" | "pago" | null;
   valor: number;
+  /** Data do lançamento (AAAA-MM-DD). Em conta fixa é o vencimento. */
+  data?: string | null;
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
   /** Entrada de dinheiro (ex.: salário) — aparece em verde e não entra em totais de gasto. */
   entrada?: boolean;
@@ -36,11 +50,33 @@ export type LinhaExtrato = {
 
 const num = (v: unknown) => Number(v) || 0;
 
-/** Ordena por valor sem alterar o array original. Ordem vazia mantém a ordem recebida. */
+const PT = (a: unknown, b: unknown) => String(a ?? "").localeCompare(String(b ?? ""), "pt-BR", { sensitivity: "base", numeric: true });
+const nomeDe = (i: any) => i?.descricao ?? i?.nome ?? "";
+
+/**
+ * Ordena sem alterar o array original (aceita linhas do extrato ou linhas cruas do banco).
+ * Ordem vazia mantém a ordem recebida. Sem data, o item vai para o fim; empates seguem pelo nome.
+ */
 export function ordenarPorValor<T extends { valor: number | string }>(itens: T[], ordem: Ordem): T[] {
   if (!ordem) return itens;
-  const sinal = ordem === "maior" ? -1 : 1;
-  return [...itens].sort((a, b) => sinal * (num(a.valor) - num(b.valor)));
+  const desempate = (a: any, b: any) => PT(nomeDe(a), nomeDe(b));
+  const porData = (sinal: 1 | -1) => (a: any, b: any) => {
+    const da = dataDoItem(a), db = dataDoItem(b);
+    if (!da && !db) return desempate(a, b);
+    if (!da) return 1;
+    if (!db) return -1;
+    return sinal * (da < db ? -1 : da > db ? 1 : 0) || desempate(a, b);
+  };
+  const comparar: Record<Exclude<Ordem, "">, (a: any, b: any) => number> = {
+    maior: (a, b) => num(b.valor) - num(a.valor) || desempate(a, b),
+    menor: (a, b) => num(a.valor) - num(b.valor) || desempate(a, b),
+    az: (a, b) => desempate(a, b),
+    za: (a, b) => desempate(b, a),
+    recente: porData(-1),
+    antiga: porData(1),
+    categoria: (a, b) => PT(a.categoria, b.categoria) || desempate(a, b),
+  };
+  return [...itens].sort(comparar[ordem]);
 }
 
 /** Junta lançamentos, parcelas e contas fixas do mês numa lista única e padronizada. */
@@ -65,6 +101,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       foraDoSaldo: Boolean(i.foraDoMeuSaldo),
       repasse: (i.repasseDevido ? (i.repassePago ? "pago" : i.repasseInformado ? "aguardando" : "pendente") : null) as "pendente" | "aguardando" | "pago" | null,
       valor: num(i.valor),
+      data: dataDoItem(i),
       entrada: ehEntrada(i),
     })),
     ...cartao.map((i) => ({
@@ -83,6 +120,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       foraDoSaldo: Boolean(i.foraDoMeuSaldo),
       repasse: (i.repasseDevido ? (i.repassePago ? "pago" : i.repasseInformado ? "aguardando" : "pendente") : null) as "pendente" | "aguardando" | "pago" | null,
       valor: num(i.valor),
+      data: dataDoItem(i),
       status: { texto: `Parcela ${i.parcelaAtual ?? i.parcela_atual ?? 1}/${i.parcelaTotal ?? i.parcela_total ?? 1}`, tom: "neutro" as const },
     })),
     ...contas.map((i) => ({
@@ -101,6 +139,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       foraDoSaldo: Boolean(i.foraDoMeuSaldo),
       repasse: (i.repasseDevido ? (i.repassePago ? "pago" : i.repasseInformado ? "aguardando" : "pendente") : null) as "pendente" | "aguardando" | "pago" | null,
       valor: num(i.valor),
+      data: dataDoItem(i),
       status: i.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
     })),
   ];

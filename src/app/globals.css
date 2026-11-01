@@ -161,9 +161,9 @@ html {
 /* Barras fixas (topo e menu lateral): vidro fosco. Com fundo decorativo ficam mais transparentes, para a decoração
    aparecer também por trás delas (antes o topo ficava "liso" porque a barra cobria o desenho). */
 .hc-topbar {
-  background-color: color-mix(in srgb, var(--bg) 88%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
+  background-color: color-mix(in srgb, var(--bg) 90%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
 }
 .hc-sidebar {
   background-color: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -171,7 +171,7 @@ html {
   backdrop-filter: blur(14px) saturate(1.4);
 }
 :root:not([data-bg="none"]) .hc-topbar {
-  background-color: color-mix(in srgb, var(--bg) 38%, transparent);
+  background-color: color-mix(in srgb, var(--bg) 80%, transparent);
 }
 :root:not([data-bg="none"]) .hc-sidebar {
   background-color: color-mix(in srgb, var(--surface) 55%, transparent);

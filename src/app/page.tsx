@@ -30,6 +30,7 @@ import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
 import { useOpcoes } from "@/lib/useOpcoes";
+import { tipoDaConta } from "@/lib/contas";
 import { useOnboarding } from "@/lib/onboarding";
 import { lerListaDoUsuario, salvarDoUsuario } from "@/lib/usuarioStorage";
 import { DICAS_MODULO } from "@/lib/dicasModulo";
@@ -43,11 +44,13 @@ import Sidebar from "@/components/Sidebar";
 import FiltrosLancamentos, { FILTROS_INICIAIS, type FiltrosLancamentoState } from "@/components/FiltrosLancamentos";
 import FiltroResponsaveis, { TOKEN_EU } from "@/components/FiltroResponsaveis";
 import { ordenarPorValor } from "@/lib/extrato";
+import { dataDoItem } from "@/lib/datas";
 import { useFinanceStore } from "@/hooks/useFinanceStore";
 import {
   addMeses,
   brl,
   mesAtual,
+  parseValor,
   useValoresOcultos,
   resumoDoMes,
   rotuloMes,
@@ -217,6 +220,17 @@ export default function Home() {
       if (filtros.categoria && item.categoria !== filtros.categoria) return false;
       const pagamento = item.pagamento || item.forma_pagamento || item.cartao || "";
       if (filtros.pagamento && pagamento !== filtros.pagamento) return false;
+      if (filtros.dataDe || filtros.dataAte) {
+        const d = dataDoItem(item);
+        if (!d) return false; // sem data não dá para saber se está no período
+        if (filtros.dataDe && d < filtros.dataDe) return false;
+        if (filtros.dataAte && d > filtros.dataAte) return false;
+      }
+      const valorItem = Number(item.valor) || 0;
+      const vMin = filtros.valorMin ? parseValor(filtros.valorMin) : null;
+      const vMax = filtros.valorMax ? parseValor(filtros.valorMax) : null;
+      if (vMin !== null && Number.isFinite(vMin) && valorItem < vMin) return false;
+      if (vMax !== null && Number.isFinite(vMax) && valorItem > vMax) return false;
       if ((aba === "extrato" || aba === "contas") && origem === "contas" && filtros.status !== "todos") {
         if (Boolean(item.pago) !== (filtros.status === "pago")) return false;
       }
@@ -273,16 +287,23 @@ export default function Home() {
   const semParcelas = estadoFiltrado.cartao.length === 0;
   const semContas = estadoFiltrado.contas.length === 0;
   const temCartao = formasPagamento.some((f) => f.eh_cartao);
+  // Cartão ou conta cadastrados (crédito ou débito): o 1º passo do guia, feito ANTES de lançar
+  const temCartaoOuConta = formasPagamento.some((f) => tipoDaConta(f) !== null);
   const temEntrada = estado.extrato.some((i: any) => i.tipo === "entrada") || (estado.config?.salario ?? 0) > 0;
   const temSaida = estado.extrato.some((i: any) => i.tipo !== "entrada") || estado.cartao.length > 0 || estado.contas.length > 0;
   const passosGuia: PassoGuia[] = [
-    { id: "entrada", titulo: "Lance sua primeira entrada", descricao: "Seu salário ou qualquer dinheiro que você recebeu.", feito: temEntrada, acao: "Lançar", onClick: () => abrirNova({ tipo: "entrada" }) },
-    { id: "saida", titulo: "Lance sua primeira saída", descricao: "Um gasto do dia a dia, como mercado ou transporte.", feito: temSaida, acao: "Lançar", onClick: () => abrirNova({ tipo: "saida", como: "avista" }) },
-    { id: "cartao", titulo: "Cadastre um cartão de crédito", descricao: "Para acompanhar fatura e limite.", feito: temCartao, opcional: true, acao: "Cadastrar", onClick: () => setCadastrandoCartao(true) },
-    { id: "fixa", titulo: "Cadastre uma conta fixa", descricao: "Aluguel, internet, assinaturas: o que se repete todo mês.", feito: estado.contas.length > 0, opcional: true, acao: "Cadastrar", onClick: () => abrirNova({ tipo: "saida", como: "fixa" }) },
-    { id: "grupo", titulo: "Organize o grupo da família", descricao: "Crie ou entre em um grupo para dividir despesas.", feito: membros.length > 1, opcional: true, acao: "Abrir", onClick: () => setModalGrupoAberto(true) },
+    // ESSENCIAL (nesta ordem: cadastrar primeiro, lançar depois)
+    { id: "cartao", prioridade: "essencial", titulo: "Cadastre seu cartão ou conta", descricao: "Um cartão pode ter crédito (limite e fatura) e débito (saldo). Pix e dinheiro já vêm prontos.", feito: temCartaoOuConta, acao: "Cadastrar", onClick: () => setCadastrandoCartao(true) },
+    { id: "entrada", prioridade: "essencial", titulo: "Lance sua primeira entrada", descricao: "Seu salário ou qualquer dinheiro que você recebeu.", feito: temEntrada, acao: "Lançar", onClick: () => abrirNova({ tipo: "entrada" }) },
+    { id: "saida", prioridade: "essencial", titulo: "Lance sua primeira saída", descricao: "Um gasto do dia a dia, como mercado ou transporte. Escolha crédito ou débito do cartão.", feito: temSaida, acao: "Lançar", onClick: () => abrirNova({ tipo: "saida", como: "avista" }) },
+    { id: "fixa", prioridade: "essencial", titulo: "Cadastre uma conta fixa", descricao: "Aluguel, internet, assinaturas: o que se repete todo mês.", feito: estado.contas.length > 0, acao: "Cadastrar", onClick: () => abrirNova({ tipo: "saida", como: "fixa" }) },
+    // COMPLEMENTAR (pode ficar para depois)
+    { id: "grupo", prioridade: "complementar", titulo: "Organize o grupo da família", descricao: "Crie ou entre em um grupo para dividir despesas.", feito: membros.length > 1, acao: "Abrir", onClick: () => setModalGrupoAberto(true) },
+    { id: "aparencia", prioridade: "complementar", titulo: "Escolha a aparência", descricao: "Tema claro ou escuro, cor de destaque e fundo.", feito: (onb.estado.feitas ?? []).includes("aparencia"), acao: "Escolher", onClick: () => { onb.marcarFeita("aparencia"); setSecaoAjustes("aparencia"); irPara("ajustes"); } },
+    { id: "personalizar", prioridade: "complementar", titulo: "Personalize a tela inicial", descricao: "Escolha o que aparece no início.", feito: (onb.estado.feitas ?? []).includes("personalizar"), acao: "Personalizar", onClick: () => { onb.marcarFeita("personalizar"); setSecaoAjustes("dashboard"); irPara("ajustes"); } },
   ];
-  const mostrarGuia = onb.pronto && !onb.estado.guiaOculto && totalLanc <= 15 && passosGuia.some((p) => !p.feito);
+  const puladasGuia = onb.estado.puladas ?? [];
+  const mostrarGuia = onb.pronto && !onb.estado.guiaOculto && totalLanc <= 15 && passosGuia.some((p) => !p.feito && !puladasGuia.includes(p.id));
   const repasses = resumoRepasses(lancamentosDoGrupo(estado), userId || "");
   const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
   const dica = DICAS_MODULO[aba];
@@ -409,7 +430,7 @@ export default function Home() {
 
           {mostrarPainel && (
             <div className="anim-stagger space-y-5">
-              {mostrarGuia && <GuiaInicial passos={passosGuia} onOcultar={() => onb.atualizar({ guiaOculto: true })} onAjuda={() => abrirAjuda()} />}
+              {mostrarGuia && <GuiaInicial passos={passosGuia} puladas={puladasGuia} onPular={onb.pularEtapa} onRetomar={onb.retomarEtapa} onOcultar={() => onb.atualizar({ guiaOculto: true })} onAjuda={() => abrirAjuda()} />}
               {userId && (repasses.aReceber.agora > 0 || repasses.aRepassar.agora > 0) && (
                 <button type="button" onClick={() => abrirGrupo("repasses")} className="card-glass flex w-full items-center justify-between gap-3 p-4 text-left transition hover:-translate-y-0.5" aria-label="Ver valores a repassar">
                   <span className="min-w-0">
@@ -458,6 +479,7 @@ export default function Home() {
                 filtros={filtros}
                 setFiltros={setFiltros}
                 mostrarAutoria={membros.length > 1}
+                mes={mes}
                 categorias={opcoesFiltro.categorias}
                 pagamentos={opcoesFiltro.pagamentos}
                 mostrarTipo={aba === "extrato"}

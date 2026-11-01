@@ -8,7 +8,7 @@ import { Ico } from "@/components/icons";
 const PASSOS = [
   { icone: Sparkles, titulo: "Bem-vindo ao HomeCash!", texto: "Aqui você organiza o dinheiro da casa em um só lugar: o que entra, o que sai e o que sobra. Vamos mostrar o básico em 3 telas rápidas." },
   { icone: Scale, titulo: "Três números importam", texto: "Entradas é o dinheiro que você recebeu. Saídas é o que você gastou. Saldo restante é a diferença: o que sobra no mês." },
-  { icone: ArrowUpRight, titulo: "Tudo começa no botão +", texto: "Para registrar qualquer entrada ou saída, use Nova transação. Vamos deixar um guia de primeiros passos na tela inicial para você seguir no seu ritmo." },
+  { icone: ArrowUpRight, titulo: "Tudo começa no botão +", texto: "Primeiro cadastre seu cartão ou conta (um cartão pode ter crédito e débito). Depois, para registrar qualquer entrada ou saída, use Nova transação. Deixamos um guia de primeiros passos na tela inicial: você segue no seu ritmo e pode pular o que não quiser fazer agora." },
 ] as const;
 
 export default function BoasVindas({ nome, onConcluir }: { nome?: string; onConcluir: () => void }) {

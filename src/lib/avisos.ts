@@ -72,6 +72,8 @@ export function explicarFalha(erro: unknown): string {
   if (e.code === "42501" || /row-level security|permission denied/i.test(msg))
     return "Você não tem permissão para fazer isso.";
   if (e.code === "23505" || /duplicate key/i.test(msg)) return "Já existe um registro igual a esse.";
+  if (/responsavel_id/.test(msg) && (e.code === "23503" || /foreign key/i.test(msg)))
+    return "O banco ainda não aceita convidados como responsáveis. Execute o script supabase-09-convidado-responsavel.sql no Supabase.";
   if (e.code === "23503") return "Este item está ligado a outros registros e não pôde ser alterado.";
   if (e.code === "23502" || e.code === "22P02" || e.code === "23514") return "Algum campo está vazio ou com valor inválido. Confira e tente de novo.";
   if (e.code === "PGRST204" || e.code === "42703" || e.code === "PGRST202" || e.code === "42883" || e.code === "42P01")

@@ -12,6 +12,10 @@ const ORDENS: { id: Ordem; rotulo: string }[] = [
   { id: "", rotulo: "Padrão" },
   { id: "maior", rotulo: "Maior valor" },
   { id: "menor", rotulo: "Menor valor" },
+  { id: "recente", rotulo: "Mais recente" },
+  { id: "antiga", rotulo: "Mais antiga" },
+  { id: "az", rotulo: "Nome A→Z" },
+  { id: "za", rotulo: "Nome Z→A" },
 ];
 
 const ORIGENS: { id: "" | OrigemLinha; rotulo: string }[] = [
@@ -127,7 +131,7 @@ export default function ExtratoDetalhe({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="group" aria-label="Ordenar por valor">
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="group" aria-label="Ordenar">
               {ORDENS.map((o) => (
                 <button key={o.id || "padrao"} type="button" aria-pressed={ordem === o.id} onClick={() => setOrdem(o.id)} className={chip(ordem === o.id)}>
                   {o.id === "" ? "Ordem padrão" : o.rotulo}

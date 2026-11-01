@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { Ico, ICONE_ABA } from "@/components/icons";
 import { CONCEITOS, PERGUNTAS, TUTORIAIS } from "@/lib/ajuda";
@@ -51,10 +51,18 @@ export default function TelaAjuda({ foco, onIrPara, onRever }: { foco?: string |
 
       {sub === "tutoriais" && (
         <ul className="anim-stagger space-y-3">
-          {tutoriais.map((t) => {
+          {tutoriais.map((t, idx) => {
             const ativo = aberto === t.id;
+            // Cabeçalho de cada grupo de prioridade (o essencial vem primeiro)
+            const cabecalho = idx === 0 || tutoriais[idx - 1].prioridade !== t.prioridade;
             return (
-              <li key={t.id} ref={ativo ? focoRef : undefined} className="card-glass overflow-hidden">
+              <Fragment key={t.id}>
+              {cabecalho && (
+                <li role="presentation" className="px-1 pt-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">{t.prioridade === "essencial" ? "Essencial: comece por aqui" : "Complementar: para depois"}</p>
+                </li>
+              )}
+              <li ref={ativo ? focoRef : undefined} className="card-glass overflow-hidden">
                 <button type="button" onClick={() => setAberto(ativo ? null : t.id)} aria-expanded={ativo} className="flex w-full items-center gap-3 p-4 text-left">
                   <span className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/12 text-accent"><Ico icon={ICONE_ABA[t.aba] ?? ICONE_ABA.inicio} size={20} /></span>
                   <span className="min-w-0 flex-1">
@@ -78,6 +86,7 @@ export default function TelaAjuda({ foco, onIrPara, onRever }: { foco?: string |
                   </div>
                 )}
               </li>
+              </Fragment>
             );
           })}
         </ul>

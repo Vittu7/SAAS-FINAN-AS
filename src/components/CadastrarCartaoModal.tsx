@@ -30,7 +30,7 @@ export default function CadastrarCartaoModal({
 }) {
   const { adicionarPagamento } = useOpcoes();
   const [passo, setPasso] = useState(0);
-  const [tipo, setTipo] = useState<Tipo>("credito");
+  const [tipo, setTipo] = useState<Tipo>("ambos");
   const [nome, setNome] = useState("");
   const [limite, setLimite] = useState("");
   const [saldo, setSaldo] = useState("");

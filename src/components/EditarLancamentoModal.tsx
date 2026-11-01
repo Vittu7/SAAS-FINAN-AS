@@ -7,6 +7,7 @@ import { parseValor } from "@/lib/finance";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { SeletorOpcao } from "@/components/SeletorOpcao";
 import { tipoDaConta } from "@/lib/contas";
+import { dataDoItem, dataPadraoDoMes } from "@/lib/datas";
 
 type TipoLancamento = "extrato" | "cartao" | "contas";
 
@@ -35,6 +36,9 @@ export default function EditarLancamentoModal({
     : opcoesPagamento;
 
   const [mes, setMes] = useState<string>(item.mes || "");
+  // Lançamentos e compras no cartão têm DATA (o mês vem dela); conta fixa continua por mês + vencimento
+  const temData = tipo !== "contas";
+  const [data, setData] = useState<string>(dataDoItem(item) ?? (item.mes ? dataPadraoDoMes(item.mes) : ""));
   const [forma, setForma] = useState<string>(
     tipo === "extrato"
       ? item.pagamento || ""
@@ -73,8 +77,8 @@ export default function EditarLancamentoModal({
 
     const valor = parseValor(valorTexto);
 
-    if (!mes) {
-      avisos.aviso("Confira os dados", "Selecione o mês do lançamento.");
+    if (!mes || (temData && !data)) {
+      avisos.aviso("Confira os dados", temData ? "Escolha a data do lançamento." : "Selecione o mês do lançamento.");
       return;
     }
 
@@ -113,7 +117,8 @@ export default function EditarLancamentoModal({
 
     if (tipo === "extrato") {
       patch = {
-        mes,
+        mes: data.slice(0, 7),
+        data,
         pagamento: forma || (ehEntrada ? "Entrada" : "Geral"),
         categoria: categoria || "Outros",
         descricao: descricao.trim(),
@@ -122,7 +127,8 @@ export default function EditarLancamentoModal({
       };
     } else if (tipo === "cartao") {
       patch = {
-        mes,
+        mes: data.slice(0, 7),
+        data,
         cartao: forma || "Forma de Pagamento",
         categoria: categoria || "Outros",
         nome: descricao.trim(),
@@ -160,18 +166,33 @@ export default function EditarLancamentoModal({
     <DialogResponsivo titulo="Editar lançamento" onFechar={onClose}>
       <form onSubmit={handleSalvar} className="min-w-0 space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted">
-              Mês
-            </label>
-            <input
-              type="month"
-              required
-              value={mes}
-              onChange={(e) => setMes(e.target.value)}
-              className={CLASSE_CAMPO}
-            />
-          </div>
+          {temData ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">
+                Data
+              </label>
+              <input
+                type="date"
+                required
+                value={data}
+                onChange={(e) => { setData(e.target.value); if (e.target.value) setMes(e.target.value.slice(0, 7)); }}
+                className={CLASSE_CAMPO}
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">
+                Mês
+              </label>
+              <input
+                type="month"
+                required
+                value={mes}
+                onChange={(e) => setMes(e.target.value)}
+                className={CLASSE_CAMPO}
+              />
+            </div>
+          )}
 
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs font-medium text-muted">

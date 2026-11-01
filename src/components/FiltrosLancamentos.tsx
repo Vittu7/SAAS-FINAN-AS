@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { OPCOES_ORDEM, type Ordem } from "@/lib/extrato";
 
 export type FiltrosLancamentoState = {
   busca: string;
@@ -10,8 +11,14 @@ export type FiltrosLancamentoState = {
   status: string;
   /** Quem lançou: todos | mim (lançados por mim) | grupo (lançados por outros membros) */
   autoria: "todos" | "mim" | "grupo";
-  /** Ordenação por valor: "" (padrão) | "maior" (maior → menor) | "menor" (menor → maior). */
-  ordem: "" | "maior" | "menor";
+  /** Ordenação: padrão, data, nome A→Z / Z→A, valor ou categoria */
+  ordem: Ordem;
+  /** Período dentro do mês (AAAA-MM-DD), vazio = sem limite */
+  dataDe: string;
+  dataAte: string;
+  /** Faixa de valor (texto digitado), vazio = sem limite */
+  valorMin: string;
+  valorMax: string;
 };
 
 export const FILTROS_INICIAIS: FiltrosLancamentoState = {
@@ -22,6 +29,10 @@ export const FILTROS_INICIAIS: FiltrosLancamentoState = {
   status: "todos",
   autoria: "todos",
   ordem: "",
+  dataDe: "",
+  dataAte: "",
+  valorMin: "",
+  valorMax: "",
 };
 
 type Props = {
@@ -33,6 +44,8 @@ type Props = {
   mostrarStatus?: boolean;
   /** Mostra os filtros "Lançados por mim / pelo grupo" (só faz sentido com mais de uma pessoa) */
   mostrarAutoria?: boolean;
+  /** Mês exibido (AAAA-MM): limita o seletor de datas */
+  mes?: string;
 };
 
 /** Filtros de lista. Responsáveis não ficam aqui: o filtro de pessoas é único e global, no topo da tela. */
@@ -44,6 +57,7 @@ export default function FiltrosLancamentos({
   mostrarTipo = false,
   mostrarStatus = false,
   mostrarAutoria = false,
+  mes,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const ativos = Object.entries(filtros).filter(([chave, valor]) =>
@@ -60,7 +74,7 @@ export default function FiltrosLancamentos({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Filtros</h2>
-          <p className="text-xs text-muted">Encontre lançamentos por descrição, tipo ou forma de pagamento e ordene por valor.</p>
+          <p className="text-xs text-muted">Busque por descrição, período, valor, categoria ou forma de pagamento e ordene por data, nome ou valor.</p>
         </div>
         <button
           type="button"
@@ -110,11 +124,22 @@ export default function FiltrosLancamentos({
             <option value="pendente">Pendentes</option>
           </select>
         )}
-        <select aria-label="Ordenar por valor" value={filtros.ordem} onChange={(event) => atualizar("ordem", event.target.value)} className={selectClass}>
+        <select aria-label="Ordenar" value={filtros.ordem} onChange={(event) => atualizar("ordem", event.target.value)} className={selectClass}>
           <option value="">Ordenar: padrão</option>
-          <option value="maior">Valor: maior para menor</option>
-          <option value="menor">Valor: menor para maior</option>
+          {["Data", "Nome", "Valor", "Outros"].map((g) => (
+            <optgroup key={g} label={g === "Outros" ? "Categoria" : g}>
+              {OPCOES_ORDEM.filter((o) => o.grupo === g).map((o) => <option key={o.id} value={o.id}>{o.rotulo}</option>)}
+            </optgroup>
+          ))}
         </select>
+        <label className="flex min-w-0 items-center gap-2 text-xs text-muted">De
+          <input type="date" aria-label="Data inicial" value={filtros.dataDe} min={mes ? `${mes}-01` : undefined} max={filtros.dataAte || (mes ? `${mes}-31` : undefined)} onChange={(event) => atualizar("dataDe", event.target.value)} className={`${selectClass} w-full`} />
+        </label>
+        <label className="flex min-w-0 items-center gap-2 text-xs text-muted">Até
+          <input type="date" aria-label="Data final" value={filtros.dataAte} min={filtros.dataDe || (mes ? `${mes}-01` : undefined)} max={mes ? `${mes}-31` : undefined} onChange={(event) => atualizar("dataAte", event.target.value)} className={`${selectClass} w-full`} />
+        </label>
+        <input type="text" inputMode="decimal" aria-label="Valor mínimo" placeholder="Valor mínimo (R$)" value={filtros.valorMin} onChange={(event) => atualizar("valorMin", event.target.value)} className={selectClass} />
+        <input type="text" inputMode="decimal" aria-label="Valor máximo" placeholder="Valor máximo (R$)" value={filtros.valorMax} onChange={(event) => atualizar("valorMax", event.target.value)} className={selectClass} />
         {ativos > 0 && (
           <button type="button" onClick={() => setFiltros(FILTROS_INICIAIS)} className="rounded-lg px-3 py-2 text-left text-sm font-medium text-accent hover:bg-background">
             Limpar filtros

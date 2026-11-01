@@ -75,7 +75,7 @@ export default function FamiliaPage() {
             <h2 className="text-xl font-semibold mb-2">Criar um Novo Grupo Familiar</h2>
             <p className="text-sm text-muted mb-4">Crie um grupo para compartilhar despesas com seus familiares.</p>
             
-            <label className="text-xs font-medium text-muted block mb-1">Nome do Grupo (ex: Casa Araguaína)</label>
+            <label className="text-xs font-medium text-muted block mb-1">Nome do Grupo (ex: Família Silva)</label>
             <input
               type="text"
               required

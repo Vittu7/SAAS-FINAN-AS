@@ -343,9 +343,8 @@ export default function Home() {
       />
 
       <main
-        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${
-          sidebarExpandida ? "md:pl-60" : "md:pl-16"
-        }`}
+        className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${sidebarExpandida ? "md:pl-60" : "md:pl-16"
+          }`}
       >
         <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
           <MobileHeader
@@ -353,12 +352,12 @@ export default function Home() {
               aba === "grupo" ? "Grupo familiar" : aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                 ? "Olá 👋"
                 : aba === "extrato"
-                ? "Extrato"
-                : aba === "lancamentos"
-                ? "Lançamentos do mês"
-                : aba === "cartao"
-                ? "Contas parceladas"
-                : "Contas fixas"
+                  ? "Extrato"
+                  : aba === "lancamentos"
+                    ? "Lançamentos do mês"
+                    : aba === "cartao"
+                      ? "Contas parceladas"
+                      : "Contas fixas"
             }
             mostrarMes={mostrarMesNoCabecalho}
             filtro={filtroResp}
@@ -373,31 +372,31 @@ export default function Home() {
                 {aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
                   ? "Olá 👋 Visão geral"
                   : aba === "extrato"
-                  ? "Extrato"
-                  : aba === "lancamentos"
-                  ? "Lançamentos do mês"
-                  : aba === "cartao"
-                  ? "Contas parceladas"
-                  : "Contas fixas"}
+                    ? "Extrato"
+                    : aba === "lancamentos"
+                      ? "Lançamentos do mês"
+                      : aba === "cartao"
+                        ? "Contas parceladas"
+                        : "Contas fixas"}
               </h1>
               <p className="mt-1 text-sm text-muted">
                 {mostrarPainel
                   ? "Seu mês, organizado em um só lugar."
                   : aba === "extrato"
-                  ? "Todas as movimentações do mês em um só lugar."
-                  : aba === "grupo"
-                  ? "Resumo por pessoa, lançamentos entre membros e valores a repassar."
-                  : aba === "ajuda"
-                  ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
-                  : aba === "graficos"
-                  ? "Veja para onde o dinheiro vai e gere relatórios por período."
-                  : aba === "investimentos"
-                  ? "Caixinhas, reserva de emergência, aportes e rendimentos."
-                  : aba === "ajustes"
-                  ? "Perfil, plano, aparência, cadastros e tela inicial."
-                  : aba === "fatura"
-                  ? "Escolha um cartão para ver a fatura do mês."
-                  : "Cadastre, consulte e edite seus registros."}
+                    ? "Todas as movimentações do mês em um só lugar."
+                    : aba === "grupo"
+                      ? "Resumo por pessoa, lançamentos entre membros e valores a repassar."
+                      : aba === "ajuda"
+                        ? "Tutoriais, perguntas frequentes e conceitos para usar o HomeCash."
+                        : aba === "graficos"
+                          ? "Veja para onde o dinheiro vai e gere relatórios por período."
+                          : aba === "investimentos"
+                            ? "Caixinhas, reserva de emergência, aportes e rendimentos."
+                            : aba === "ajustes"
+                              ? "Perfil, plano, aparência, cadastros e tela inicial."
+                              : aba === "fatura"
+                                ? "Escolha um cartão para ver a fatura do mês."
+                                : "Cadastre, consulte e edite seus registros."}
               </p>
             </div>
 

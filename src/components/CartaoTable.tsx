@@ -425,6 +425,7 @@ export default function CartaoTable({
           progresso: ((item.parcelaAtual ?? 1) / Math.max(1, item.parcelaTotal ?? 1)) * 100,
           onEditar: onEdit ? () => setEditando(item) : undefined,
           onRemover: () => onRemove(item.id),
+          confirmarRemocao: "Remover esta compra de todos os meses? Todas as parcelas serão apagadas. Essa ação não pode ser desfeita.",
         }))}
       />
 
@@ -465,7 +466,7 @@ export default function CartaoTable({
                       <span className="inline-flex items-center gap-1"><Ico icon={Pencil} size={13} />Editar</span>
                     </button>
                   )}
-                  <button onClick={() => onRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
+                  <button onClick={() => { if (window.confirm("Remover esta compra de todos os meses? Todas as parcelas serão apagadas. Essa ação não pode ser desfeita.")) onRemove(item.id); }} className="text-xs text-red-400 hover:text-red-300">
                     <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={13} />Remover</span>
                   </button>
                 </td>

@@ -27,7 +27,8 @@ export default function ExtratoGeral({ mes, extrato, cartao, contas, ordem = "",
     if (item) setEditando({ origem: l.origem, item });
   };
   const remover = (l: LinhaExtrato) => {
-    if (window.confirm(`Remover "${l.descricao}"? Essa ação não pode ser desfeita.`)) onRemove?.(l.origem, rawId(l));
+    const alcance = l.origem === "cartao" ? " de todos os meses (todas as parcelas desta compra)" : l.origem === "contas" ? " de todos os meses (passados e futuros)" : "";
+    if (window.confirm(`Remover "${l.descricao}"${alcance}? Essa ação não pode ser desfeita.`)) onRemove?.(l.origem, rawId(l));
   };
   const linhas = useMemo(
     () => ordenarPorValor(montarLinhas(extrato, cartao, contas, mes), ordem),

@@ -22,6 +22,8 @@ export type ItemMobile = {
   progresso?: number; // 0 a 100 (parcelas)
   onEditar?: () => void;
   onRemover?: () => void;
+  /** Pergunta antes de remover (ex.: avisa que apaga de todos os meses) */
+  confirmarRemocao?: string;
   onAlternar?: () => void;
   rotuloAlternar?: string;
 };
@@ -120,7 +122,7 @@ export default function MobileLista({
                         </button>
                       )}
                       {i.onRemover && (
-                        <button type="button" onClick={() => { if (window.confirm("Remover este item?")) i.onRemover?.(); }}
+                        <button type="button" onClick={() => { if (window.confirm(i.confirmarRemocao ?? "Remover este item?")) i.onRemover?.(); }}
                           className="h-10 flex-1 rounded-full bg-rose-500/10 text-sm font-medium text-rose-500 active:scale-[0.98]">
                           <span className="inline-flex items-center justify-center gap-1.5"><Ico icon={Trash2} size={16} />Remover</span>
                         </button>

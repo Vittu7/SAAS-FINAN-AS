@@ -358,7 +358,7 @@ export default function ContasFixasTable({
           valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : item.repasseInformado ? "aguardando" : "pendente") : null, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
           status: item.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
           onAlternar: () => onTogglePago(item.id), rotuloAlternar: item.pago ? "Desmarcar" : "Marcar como paga",
-          onEditar: () => setEditando(item), onRemover: () => onRemove(item.id),
+          onEditar: () => setEditando(item), onRemover: () => onRemove(item.id), confirmarRemocao: "Remover esta conta fixa de todos os meses (passados e futuros)? Essa ação não pode ser desfeita.",
         }))}
       />
 
@@ -447,7 +447,7 @@ export default function ContasFixasTable({
                   )}
                   <button
                     type="button"
-                    onClick={() => onRemove(item.id)}
+                    onClick={() => { if (window.confirm("Remover esta conta fixa de todos os meses (passados e futuros)? Essa ação não pode ser desfeita.")) onRemove(item.id); }}
                     className="text-xs text-red-400 hover:underline"
                   >
                     <span className="inline-flex items-center gap-1"><Ico icon={Trash2} size={13} />Excluir</span>

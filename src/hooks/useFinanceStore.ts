@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { idsDaSerieCartao, idsDaSerieConta } from "@/lib/serie";
 import { addMeses, brl } from "@/lib/finance";
 import type {
   Cartao,
@@ -519,12 +520,18 @@ export function useFinanceStore() {
     return true;
   };
 
+  /** Ids de todas as linhas da MESMA compra parcelada (todas as parcelas) ou conta fixa (todos os meses). */
+  const idsDaSerie = (tabela: Tabela, id: string): string[] =>
+    tabela === "cartao" ? idsDaSerieCartao(estado.cartao as any[], id) : tabela === "contas" ? idsDaSerieConta(estado.contas as any[], id) : [id];
+
+  /** Extrato: remove só o lançamento. Compra parcelada e conta fixa: remove de TODOS os meses. */
   const remover = async (tabela: Tabela, id: string): Promise<boolean> => {
     if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: some quando o repasse é reaberto
+    const ids = idsDaSerie(tabela, id);
     const { data, error } = await supabase
       .from(NOME_TABELA_DB[tabela])
       .delete()
-      .eq("id", id)
+      .in("id", ids)
       .select("id");
 
     if (error) {
@@ -532,21 +539,24 @@ export function useFinanceStore() {
       return false;
     }
 
-    if (!data || data.length === 0) {
+    if (!data || !data.some((linha: any) => linha.id === id)) {
       avisos.erro("Não foi possível remover o lançamento", "Só quem criou o lançamento pode apagá-lo.");
       return false;
     }
 
+    const apagados = new Set<string>(data.map((linha: any) => linha.id));
     setEstado(
       (atual) =>
         ({
           ...atual,
           [tabela]: (atual[tabela] as { id: string }[]).filter(
-            (item) => item.id !== id,
+            (item) => !apagados.has(item.id),
           ),
         }) as Estado,
     );
-    avisos.sucesso("Lançamento removido");
+    const naoApagados = ids.length - apagados.size;
+    if (tabela === "extrato" || apagados.size <= 1) avisos.sucesso("Lançamento removido");
+    else avisos.sucesso(tabela === "cartao" ? "Compra removida de todos os meses" : "Conta fixa removida de todos os meses", `${apagados.size} lançamentos apagados.${naoApagados > 0 ? ` ${naoApagados} não puderam ser apagados (não são seus).` : ""}`);
     return true;
   };
 

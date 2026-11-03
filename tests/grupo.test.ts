@@ -206,9 +206,9 @@ describe("repasses recebidos no saldo restante (visão Todos)", () => {
     const e = base({ ...pago, repasse_pago_em: "2026-10-28T10:00:00Z" });
     e.extrato = [] as any; // sem entrada: o mês fecha no vermelho (−100) e o repasse cobre
     expect(sobraDosMesesAnteriores(e, "2026-11")).toBe(0);
-    expect(sobraDosMesesAnteriores(e, "2026-11", 0, { escopo: null })).toBe(0);
+    expect(sobraDosMesesAnteriores(e, "2026-11", { escopo: null })).toBe(0);
     const comSobra = { ...base(pago), extrato: [{ id: "s", mes: "2026-10", tipo: "entrada", valor: 1000, owner_id: "vitu", responsavel_id: "vitu" }] };
-    expect(sobraDosMesesAnteriores(comSobra, "2026-11", 0, { escopo: null })).toBe(1000);
+    expect(sobraDosMesesAnteriores(comSobra, "2026-11", { escopo: null })).toBe(1000);
   });
 });
 

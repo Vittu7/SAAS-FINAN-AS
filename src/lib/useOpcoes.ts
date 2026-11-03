@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { explicarFalha } from "@/lib/avisos";
 
 export interface Opcao {
   id: string;
@@ -215,7 +216,10 @@ export function useOpcoes() {
       .eq("id", id)
       .select("id");
 
-    if (error) throw error;
+    if (error) {
+      console.error("Erro ao excluir cadastro:", error);
+      throw new Error(explicarFalha(error));
+    }
 
     if (!data || data.length === 0) {
       throw new Error("Não foi possível excluir: este cadastro pertence a outro usuário.");
@@ -296,7 +300,10 @@ export function useOpcoes() {
       .eq("id", id)
       .select("id");
 
-    if (error) throw error;
+    if (error) {
+      console.error("Erro ao excluir cadastro:", error);
+      throw new Error(explicarFalha(error));
+    }
 
     if (!data || data.length === 0) {
       throw new Error("Não foi possível excluir: este cadastro pertence a outro usuário.");

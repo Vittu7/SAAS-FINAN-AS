@@ -59,6 +59,11 @@ export default function PerfilConta() {
         if (arquivos?.length) await supabase.storage.from("avatars").remove(arquivos.map((a) => `${user.id}/${a.name}`));
       } catch { /* sem fotos ou sem permissão */ }
 
+      // Caixinhas primeiro: se o banco apagar só os movimentos, o saldo recalculado fica negativo e a exclusão trava (caixinhas_saldo_check).
+      // Apagando a caixinha inteira (os movimentos saem junto) isso não acontece. Se falhar, segue para a função do banco.
+      const { error: erroCaixinhas } = await supabase.from("caixinhas").delete().eq("user_id", user.id);
+      if (erroCaixinhas) console.error("Erro ao apagar caixinhas antes de excluir a conta:", erroCaixinhas);
+
       const { error } = await supabase.rpc("excluir_minha_conta");
       if (error) throw error;
 

@@ -36,6 +36,9 @@ const VAZIO: Estado = {
   },
 };
 
+/** Quantos ids vão em cada pedido de exclusão (evita estourar o tamanho da URL). */
+const LOTE_REMOCAO = 50;
+
 const NOME_TABELA_DB: Record<Tabela, string> = {
   extrato: "extrato",
   cartao: "cartao",
@@ -569,33 +572,45 @@ export function useFinanceStore() {
   /** Extrato: remove só o lançamento. Compra parcelada e conta fixa: remove de TODOS os meses. */
   const remover = async (tabela: Tabela, id: string): Promise<boolean> => {
     if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: some quando o repasse é reaberto
-    const ids = idsDaSerie(tabela, id);
-    const { data, error } = await supabase
-      .from(NOME_TABELA_DB[tabela])
-      .delete()
-      .in("id", ids)
-      .select("id");
+    const ids = idsDaSerie(tabela, id).map(String);
+    const apagados = new Set<string>();
+    let erroBanco: unknown = null;
 
-    if (error) {
-      falhou("remover o lançamento", error);
+    // Apaga em lotes: uma conta fixa/compra parcelada com muitas linhas gerava uma URL grande demais e o banco recusava o pedido.
+    for (let i = 0; i < ids.length; i += LOTE_REMOCAO) {
+      const { data, error } = await supabase
+        .from(NOME_TABELA_DB[tabela])
+        .delete()
+        .in("id", ids.slice(i, i + LOTE_REMOCAO))
+        .select("id");
+      if (error) { erroBanco = error; break; }
+      for (const linha of data || []) apagados.add(String((linha as any).id));
+    }
+
+    // O que já foi apagado no banco sai da tela mesmo que um lote posterior tenha falhado
+    if (apagados.size > 0) {
+      setEstado(
+        (atual) =>
+          ({
+            ...atual,
+            [tabela]: (atual[tabela] as { id: string }[]).filter(
+              (item) => !apagados.has(String(item.id)),
+            ),
+          }) as Estado,
+      );
+    }
+
+    if (erroBanco) {
+      falhou("remover o lançamento", erroBanco);
       return false;
     }
 
-    if (!data || !data.some((linha: any) => linha.id === id)) {
+    // ids podem vir como número do banco: compara sempre como texto
+    if (!apagados.has(String(id))) {
       avisos.erro("Não foi possível remover o lançamento", "Só quem criou o lançamento pode apagá-lo.");
       return false;
     }
 
-    const apagados = new Set<string>(data.map((linha: any) => linha.id));
-    setEstado(
-      (atual) =>
-        ({
-          ...atual,
-          [tabela]: (atual[tabela] as { id: string }[]).filter(
-            (item) => !apagados.has(item.id),
-          ),
-        }) as Estado,
-    );
     const naoApagados = ids.length - apagados.size;
     if (tabela === "extrato" || apagados.size <= 1) avisos.sucesso("Lançamento removido");
     else avisos.sucesso(tabela === "cartao" ? "Compra removida de todos os meses" : "Conta fixa removida de todos os meses", `${apagados.size} lançamentos apagados.${naoApagados > 0 ? ` ${naoApagados} não puderam ser apagados (não são seus).` : ""}`);

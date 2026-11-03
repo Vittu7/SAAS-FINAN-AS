@@ -279,8 +279,8 @@ export default function Home() {
   // Aportes são só meus: entram quando a visão me inclui (Todos ou "Somente eu"), como o saldo inicial das contas
   const movsCaixinhaVisao = useMemo(() => (pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU) ? caixinhaMovs : []), [caixinhaMovs, pessoasSel]);
   const painel = useMemo(
-    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, salarioConfig: estado.config?.salario ?? 0, escopo: escopoPessoas, caixinhaMovs: movsCaixinhaVisao }) : null),
-    [estadoFiltrado, mes, saldoInicialContas, estado.config?.salario, escopoPessoas, movsCaixinhaVisao]
+    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, meuId: userId, dadosRepasses: estado, escopo: escopoPessoas, caixinhaMovs: movsCaixinhaVisao }) : null),
+    [estadoFiltrado, estado, mes, saldoInicialContas, userId, escopoPessoas, movsCaixinhaVisao]
   );
 
   if (verificandoAuth || !loja.pronto || !mes || !painel) {
@@ -302,7 +302,7 @@ export default function Home() {
   const temCartao = formasPagamento.some((f) => f.eh_cartao);
   // Cartão ou conta cadastrados (crédito ou débito): o 1º passo do guia, feito ANTES de lançar
   const temCartaoOuConta = formasPagamento.some((f) => tipoDaConta(f) !== null);
-  const temEntrada = estado.extrato.some((i: any) => i.tipo === "entrada") || (estado.config?.salario ?? 0) > 0;
+  const temEntrada = estado.extrato.some((i: any) => i.tipo === "entrada");
   const temSaida = estado.extrato.some((i: any) => i.tipo !== "entrada") || estado.cartao.length > 0 || estado.contas.length > 0;
   const passosGuia: PassoGuia[] = [
     // ESSENCIAL (nesta ordem: cadastrar primeiro, lançar depois)
@@ -462,8 +462,8 @@ export default function Home() {
                   <span className="shrink-0 text-xs font-semibold text-accent">Ver</span>
                 </button>
               )}
-              {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} />}
-              {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} /></div>}
+              {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} onAbrirRepasses={() => abrirGrupo("repasses")} />}
+              {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} onAbrirRepasses={() => abrirGrupo("repasses")} /></div>}
               <MobileRecentes recentes={recentes} onAba={irPara} />
               {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
               {dashboard.preferencias.faturas && <SaldosContas estado={estado} userId={userId} mes={mes} />}
@@ -643,7 +643,6 @@ export default function Home() {
           extrato={extrato}
           cartao={cartao}
           contas={contas}
-          salario={estado.config.salario}
           painel={painel}
           modo={modoSaldo}
           visualizacao={rotuloVisualizacao}

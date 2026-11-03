@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { idsDaSerieCartao, idsDaSerieConta } from "@/lib/serie";
 import { addMeses, brl } from "@/lib/finance";
 import type {
@@ -30,7 +30,6 @@ const VAZIO: Estado = {
   cartao: [],
   contas: [],
   config: {
-    salario: 0,
     investido: 0,
     reservaAtual: 0,
     reservaMeta: 0,
@@ -88,6 +87,28 @@ function enriquecer(row: any, membros: Membro[], meuId?: string | null): any {
   return { ...row, ...extras };
 }
 
+/**
+ * Lê do Supabase os lançamentos que o usuário pode ver (os dele, os que é responsável e os do grupo)
+ * e devolve já enriquecidos. Retorna null se alguma consulta falhar, para nunca apagar a tela por erro de rede.
+ */
+async function lerLancamentos(uid: string, gId: string | null, listaMembros: Membro[]) {
+  const filtro = gId
+    ? `owner_id.eq.${uid},responsavel_id.eq.${uid},grupo_id.eq.${gId}`
+    : `owner_id.eq.${uid},responsavel_id.eq.${uid}`;
+
+  const [resExtrato, resCartao, resContas] = await Promise.all([
+    supabase.from("extrato").select("*").or(filtro),
+    supabase.from("cartao").select("*").or(filtro),
+    supabase.from("contas_fixas").select("*").or(filtro),
+  ]);
+  if (resExtrato.error || resCartao.error || resContas.error) return null;
+
+  // Partilha seletiva: além da regra no banco, esconde o que foi partilhado com outra pessoa
+  const visivel = (row: any) => !row.compartilhado_com || row.owner_id === uid || row.compartilhado_com === uid;
+  const montar = (rows: any[] | null) => (rows || []).filter(visivel).map((row: any) => enriquecer(row, listaMembros, uid));
+  return { extrato: montar(resExtrato.data), cartao: montar(resCartao.data), contas: montar(resContas.data) };
+}
+
 export function useFinanceStore() {
   const [estado, setEstado] = useState<Estado>(VAZIO);
   const [pronto, setPronto] = useState(false);
@@ -118,7 +139,7 @@ export function useFinanceStore() {
 
     const { data: cfg } = await supabase
       .from("configuracoes")
-      .select("salario, investido, reserva_atual, reserva_meta")
+      .select("investido, reserva_atual, reserva_meta")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -146,40 +167,61 @@ export function useFinanceStore() {
 
     setMembros(listaMembros);
 
-    const filtro = gId
-      ? `owner_id.eq.${user.id},responsavel_id.eq.${user.id},grupo_id.eq.${gId}`
-      : `owner_id.eq.${user.id},responsavel_id.eq.${user.id}`;
+    const lancamentos = await lerLancamentos(user.id, gId, listaMembros);
 
-    const [resExtrato, resCartao, resContas] = await Promise.all([
-      supabase.from("extrato").select("*").or(filtro),
-      supabase.from("cartao").select("*").or(filtro),
-      supabase.from("contas_fixas").select("*").or(filtro),
-    ]);
-
-    // Partilha seletiva: além da regra no banco, esconde o que foi partilhado com outra pessoa
-    const visivel = (row: any) =>
-      !row.compartilhado_com || row.owner_id === user.id || row.compartilhado_com === user.id;
-
-    setEstado({
-      extrato: (resExtrato.data || []).filter(visivel).map((row: any) =>
-        enriquecer(row, listaMembros, user.id),
-      ),
-      cartao: (resCartao.data || []).filter(visivel).map((row: any) =>
-        enriquecer(row, listaMembros, user.id),
-      ),
-      contas: (resContas.data || []).filter(visivel).map((row: any) =>
-        enriquecer(row, listaMembros, user.id),
-      ),
+    setEstado((atual) => ({
+      extrato: lancamentos?.extrato ?? atual.extrato,
+      cartao: lancamentos?.cartao ?? atual.cartao,
+      contas: lancamentos?.contas ?? atual.contas,
       config: {
-        salario: cfg?.salario || 0,
         investido: cfg?.investido || 0,
         reservaAtual: cfg?.reserva_atual || 0,
         reservaMeta: cfg?.reserva_meta || 0,
       },
-    });
+    }));
 
     setPronto(true);
   }, []);
+
+  // Contexto mais recente para a sincronização (evita recriar a assinatura a cada mudança de membros)
+  const ctxRef = useRef<{ userId: string | null; grupoId: string | null; membros: Membro[] }>({ userId: null, grupoId: null, membros: [] });
+  useEffect(() => {
+    ctxRef.current = { userId, grupoId, membros };
+  }, [userId, grupoId, membros]);
+
+  /** Relê só os lançamentos (inclui repasses) do banco: é o que mantém todos os membros com os mesmos valores. */
+  const sincronizarLancamentos = useCallback(async () => {
+    const { userId: uid, grupoId: gid, membros: ms } = ctxRef.current;
+    if (!uid) return;
+    const lancamentos = await lerLancamentos(uid, gid, ms);
+    if (!lancamentos) return;
+    setEstado((atual) => ({ ...atual, ...lancamentos }));
+  }, []);
+
+  // Sincronização entre membros: quando alguém lança, edita ou repassa, todos recebem a mudança.
+  // Plano B (caso o Realtime não esteja ativo nas tabelas): relê ao voltar para a aba e ao reconectar.
+  useEffect(() => {
+    if (!userId) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const agendar = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void sincronizarLancamentos(), 400);
+    };
+    const canal = supabase.channel(`lancamentos-${userId}`);
+    for (const tabela of ["extrato", "cartao", "contas_fixas"]) {
+      canal.on("postgres_changes", { event: "*", schema: "public", table: tabela }, agendar);
+    }
+    canal.subscribe();
+    const aoVoltar = () => { if (document.visibilityState === "visible") agendar(); };
+    document.addEventListener("visibilitychange", aoVoltar);
+    window.addEventListener("online", agendar);
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", aoVoltar);
+      window.removeEventListener("online", agendar);
+      void supabase.removeChannel(canal);
+    };
+  }, [userId, sincronizarLancamentos]);
 
   // Quando nome/foto mudam (Configurações ou boas-vindas), recarrega os membros para a foto aparecer em todo o sistema
   useEffect(() => {
@@ -596,9 +638,6 @@ export function useFinanceStore() {
 
     const patchSupabase: Record<string, any> = {};
 
-    if (patch.salario !== undefined) {
-      patchSupabase.salario = patch.salario;
-    }
     if (patch.investido !== undefined) {
       patchSupabase.investido = patch.investido;
     }
@@ -627,7 +666,7 @@ export function useFinanceStore() {
         .eq("user_id", userId)
       : await supabase.from("configuracoes").insert({
         user_id: userId,
-        salario: 0,
+        salario: 0, // coluna legada (NOT NULL no banco); o salário agora é lançado como entrada
         investido: 0,
         reserva_atual: 0,
         reserva_meta: 0,
@@ -710,6 +749,9 @@ export function useFinanceStore() {
         [origem]: (atual[origem] as any[]).map((item) => (alvo.has(String(item.id)) ? { ...item, ...patch } : item)),
       }) as Estado);
     }
+
+    // Confirma com o banco: o que o usuário vê é exatamente o que ficou gravado (e o que os outros membros recebem)
+    void sincronizarLancamentos();
 
     const n = itens.length;
     const varios = n > 1;

@@ -19,6 +19,7 @@
  */
 import { arred, calcularMes, ehEntrada, semDuplicados } from "./calculos";
 import { addMeses } from "./finance";
+import { lancamentosDoGrupo } from "./grupo";
 import type { MovCaixinhaConta } from "./contas";
 
 type Item = Record<string, any>;
@@ -58,12 +59,33 @@ function devidos(e: Dados, escopo: Set<string> | null): Rep[] {
   return lista;
 }
 
+/**
+ * Situação dos repasses de QUEM ESTÁ USANDO o app, independente do filtro de pessoas da tela.
+ * Fluxo: pendente → (quem deve marca "Repassei") aguardando confirmação → (quem lançou confirma) concluído.
+ * Aguardando continua em aberto: o dinheiro só entra/sai do saldo quando é confirmado.
+ */
+export type SituacaoRepassesPainel = {
+  /** Eu lancei e ainda não me repassaram nem marcaram como repassado */
+  aReceber: number;
+  /** Já marcaram como "Repassado": falta eu confirmar o recebimento */
+  aReceberAguardando: number;
+  /** Eu devo e ainda não marquei "Repassei" */
+  aRepassar: number;
+  /** Eu já marquei "Repassei": falta quem lançou confirmar */
+  aRepassarAguardando: number;
+  /** Confirmados NESTE mês (dinheiro que entrou na minha conta) */
+  recebidosNoMes: number;
+  /** Confirmados NESTE mês (dinheiro que saiu da minha conta) */
+  enviadosNoMes: number;
+  /** Há alguma coisa para mostrar (aberto ou concluído no mês) */
+  temMovimento: boolean;
+};
+
 export type Painel = {
   mes: string;
   /** Entradas EXTERNAS do mês (sem repasses e sem saldo anterior) */
   entradas: number;
   entradasPorOrigem: { rotulo: string; valor: number }[];
-  usandoSalarioConfigurado: boolean;
   saidas: number;
   /** Entradas − saídas do mês, sozinho */
   resultadoMes: number;
@@ -89,15 +111,16 @@ export type Painel = {
   resgatesCaixinha: number;
   /** Quanto dinheiro existe disponível ao fim do mês selecionado */
   totalDisponivel: number;
+  /** Repasses do usuário (todas as situações), para o resumo sempre mostrar onde cada valor está */
+  repasses: SituacaoRepassesPainel;
 };
 
 export function calcularPainel(
   e: Dados,
   /** escopo = ids das pessoas da visão (null = todo o grupo) */
-  opts: { mes: string; saldoInicial?: number; salarioConfig?: number; escopo?: Set<string> | null; /** aportes/resgates de caixinha ligados a uma conta (só os do usuário) */ caixinhaMovs?: MovCaixinhaConta[] },
+  opts: { mes: string; saldoInicial?: number; /** id de quem está usando o app (habilita o bloco de repasses) */ meuId?: string | null; /** lançamentos SEM filtro de pessoas, para os repasses (padrão: os mesmos de `e`) */ dadosRepasses?: Dados; escopo?: Set<string> | null; /** aportes/resgates de caixinha ligados a uma conta (só os do usuário) */ caixinhaMovs?: MovCaixinhaConta[] },
 ): Painel {
   const { mes } = opts;
-  const salarioConfig = opts.salarioConfig ?? 0;
   const adiant = adiantamentos(e);
   const deve = devidos(e, opts.escopo ?? null);
   const soma = (l: { valor: number }[]) => arred(l.reduce((s, a) => s + a.valor, 0));
@@ -106,7 +129,7 @@ export function calcularPainel(
     .filter((x) => x.conta && (x.tipo === "aporte" || x.tipo === "resgate") && /^\d{4}-\d{2}/.test(String(x.data)))
     .map((x) => ({ tipo: x.tipo, valor: num(x.valor), mes: String(x.data).slice(0, 7) }));
   const movimentoDoMes = (m: string) => {
-    const r = calcularMes(e, { mes: m, salarioConfig });
+    const r = calcularMes(e, { mes: m });
     const recebidos = soma(adiant.filter((a) => a.concluido && a.mesRepasse === m));
     const adiantadoMes = soma(adiant.filter((a) => a.mes === m));
     const enviados = soma(deve.filter((a) => a.concluido && a.mesRepasse === m));
@@ -133,18 +156,41 @@ export function calcularPainel(
     const rotulo = String(i.categoria || i.descricao || "Entrada");
     porOrigem.set(rotulo, arred((porOrigem.get(rotulo) || 0) + num(i.valor)));
   }
-  const entradasPorOrigem = atual.r.fallbackSalario
-    ? [{ rotulo: "Salário configurado", valor: atual.r.entradas }]
-    : [...porOrigem.entries()].map(([rotulo, valor]) => ({ rotulo, valor })).sort((a, b) => b.valor - a.valor);
+  const entradasPorOrigem = [...porOrigem.entries()].map(([rotulo, valor]) => ({ rotulo, valor })).sort((a, b) => b.valor - a.valor);
 
   const emAberto = (l: Rep[]) => l.filter((a) => a.mes <= mes && !(a.concluido && a.mesRepasse <= mes));
   const aReceberAberto = emAberto(adiant);
   const aRepassarAberto = emAberto(deve);
+
+  // Repasses do usuário: lê direto da lista do grupo (não depende do filtro de pessoas nem de "foraDoMeuSaldo"),
+  // então o valor marcado como "Repassado" nunca some do resumo: ele passa a aparecer em "aguardando confirmação".
+  const meuId = opts.meuId ? String(opts.meuId) : "";
+  const repasses: SituacaoRepassesPainel = { aReceber: 0, aReceberAguardando: 0, aRepassar: 0, aRepassarAguardando: 0, recebidosNoMes: 0, enviadosNoMes: 0, temMovimento: false };
+  if (meuId) {
+    for (const l of lancamentosDoGrupo(opts.dadosRepasses ?? e, mes)) {
+      const euLancei = l.autorId === meuId;
+      const euDevo = l.respId === meuId;
+      if (!euLancei && !euDevo) continue;
+      if (l.repassePago) {
+        const mesConfirmado = l.repassePagoEm ? String(l.repassePagoEm).slice(0, 7) : l.mes;
+        if (mesConfirmado !== mes) continue;
+        if (euLancei) repasses.recebidosNoMes = arred(repasses.recebidosNoMes + l.valor);
+        else repasses.enviadosNoMes = arred(repasses.enviadosNoMes + l.valor);
+        continue;
+      }
+      if (l.mes > mes) continue; // parcelas e contas de meses futuros ainda não vencem
+      const aguardando = l.situacaoRepasse === "aguardando";
+      if (euLancei) { if (aguardando) repasses.aReceberAguardando = arred(repasses.aReceberAguardando + l.valor); else repasses.aReceber = arred(repasses.aReceber + l.valor); }
+      else if (aguardando) repasses.aRepassarAguardando = arred(repasses.aRepassarAguardando + l.valor);
+      else repasses.aRepassar = arred(repasses.aRepassar + l.valor);
+    }
+    repasses.temMovimento = repasses.aReceber + repasses.aReceberAguardando + repasses.aRepassar + repasses.aRepassarAguardando + repasses.recebidosNoMes + repasses.enviadosNoMes > 0;
+  }
+
   return {
     mes,
     entradas: atual.r.entradas,
     entradasPorOrigem,
-    usandoSalarioConfigurado: atual.r.fallbackSalario,
     saidas: atual.r.saidas,
     resultadoMes: atual.r.saldoRestante,
     saldoAnterior,
@@ -158,5 +204,6 @@ export function calcularPainel(
     aportesCaixinha: atual.aportes,
     resgatesCaixinha: atual.resgates,
     totalDisponivel: arred(saldoAnterior + atual.liquido),
+    repasses,
   };
 }

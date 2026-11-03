@@ -12,6 +12,7 @@ import Avatar from "@/components/Avatar";
 import { sairDaConta } from "@/lib/auth";
 import BotaoOcultarValores from "@/components/BotaoOcultarValores";
 import DialogResponsivo from "@/components/DialogResponsivo";
+import RepassesResumo from "@/components/RepassesResumo";
 import SeletorModoSaldo from "@/components/SeletorModoSaldo";
 import type { ModoSaldo, Painel } from "@/lib/painel";
 
@@ -83,12 +84,14 @@ export function MobileSaldo({
   modo,
   onModo,
   onAbrirExtrato,
+  onAbrirRepasses,
 }: {
   resumo: Resumo;
   painel: Painel;
   modo: ModoSaldo;
   onModo: (m: ModoSaldo) => void;
   onAbrirExtrato?: (tipo: TipoResumo) => void;
+  onAbrirRepasses?: () => void;
 }) {
   const [oculto, setOculto] = useValoresOcultos();
   const total = modo === "total";
@@ -133,8 +136,6 @@ export function MobileSaldo({
       <button type="button" onClick={() => onAbrirExtrato?.("disponivel")} className={`${cartao} mt-3 block w-full`}>
         <p className="text-xs text-muted">Saldo disponível · acumulado até o mês anterior</p>
         <p className={`mt-1 text-lg font-semibold tabular-nums ${painel.saldoAnterior < 0 ? "text-rose-700 dark:text-rose-400" : ""}`}>{v(painel.saldoAnterior)}</p>
-        {(painel.aReceber > 0 || painel.aRepassar > 0) && <p className="mt-0.5 text-[11px] text-muted">{painel.aReceber > 0 && `A receber de repasses ${v(painel.aReceber)}`}{painel.aReceber > 0 && painel.aRepassar > 0 && " · "}{painel.aRepassar > 0 && `A repassar ${v(painel.aRepassar)}`}</p>}
-        {(painel.aReceberAguardando > 0 || painel.aRepassarAguardando > 0) && <p className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-400">Repassado, aguardando confirmação {v(painel.aReceberAguardando + painel.aRepassarAguardando)}</p>}
       </button>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
@@ -142,13 +143,16 @@ export function MobileSaldo({
           <p className="flex items-center gap-1.5 text-xs text-muted"><span className="grid size-5 place-items-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"><Ico icon={ArrowDownLeft} size={12} /></span>Entradas</p>
           <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{v(painel.entradas)}</p>
           {painel.repassesRecebidos > 0 && <p className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-400">Repasses {v(painel.repassesRecebidos)} (fora das entradas)</p>}
+          {painel.entradas === 0 && <p className="mt-0.5 text-[11px] text-muted">Cadastre seu salário como entrada</p>}
         </button>
         <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className={cartao}>
           <p className="flex items-center gap-1.5 text-xs text-muted"><span className="grid size-5 place-items-center rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-400"><Ico icon={ArrowUpRight} size={12} /></span>Saídas</p>
           <p className="mt-1 text-lg font-semibold tabular-nums text-rose-700 dark:text-rose-400">{v(painel.saidas)}</p>
-          {resumo.faltaPagar > 0 && <p className="mt-0.5 text-[11px] text-muted">Falta pagar {v(resumo.faltaPagar)}</p>}
+          {resumo.faltaPagar > 0 && <p className="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">Falta pagar {v(resumo.faltaPagar)}</p>}
         </button>
       </div>
+
+      <RepassesResumo painel={painel} onAbrir={onAbrirRepasses} className="mt-3" />
     </section>
   );
 }

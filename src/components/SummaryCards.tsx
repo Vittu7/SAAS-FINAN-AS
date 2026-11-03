@@ -38,6 +38,8 @@ export default function SummaryCards({
     `− saídas ${brl(painel.saidas)}`,
     painel.adiantado > 0 && `− adiantado ${brl(painel.adiantado)}`,
     painel.repassesEnviados > 0 && `− repasses enviados ${brl(painel.repassesEnviados)}`,
+    painel.aportesCaixinha > 0 && `− aportes em caixinhas ${brl(painel.aportesCaixinha)}`,
+    painel.resgatesCaixinha > 0 && `+ resgates de caixinhas ${brl(painel.resgatesCaixinha)}`,
   ].filter(Boolean);
 
   return (
@@ -60,6 +62,9 @@ export default function SummaryCards({
               {painel.aReceber > 0 && painel.aRepassar > 0 && " · "}
               {painel.aRepassar > 0 && <>A repassar {brl(painel.aRepassar)}</>}
             </p>
+          )}
+          {(painel.aReceberAguardando > 0 || painel.aRepassarAguardando > 0) && (
+            <p className="mt-1 text-xs text-sky-700 dark:text-sky-400">Repassado, aguardando confirmação {brl(painel.aReceberAguardando + painel.aRepassarAguardando)}</p>
           )}
         </button>
 
@@ -105,6 +110,13 @@ export default function SummaryCards({
           </p>
           {!total && painel.totalDisponivel !== painel.resultadoMes && (
             <p className="relative mt-1 text-xs opacity-80">Total disponível: {brl(painel.totalDisponivel)}</p>
+          )}
+          {(painel.aportesCaixinha > 0 || painel.resgatesCaixinha > 0) && (
+            <p className="relative mt-1 text-xs opacity-80">
+              {painel.aportesCaixinha > 0 && <>Investido em caixinhas: {brl(painel.aportesCaixinha)} (saiu do saldo)</>}
+              {painel.aportesCaixinha > 0 && painel.resgatesCaixinha > 0 && " · "}
+              {painel.resgatesCaixinha > 0 && <>Resgatado: {brl(painel.resgatesCaixinha)}</>}
+            </p>
           )}
         </button>
       </div>

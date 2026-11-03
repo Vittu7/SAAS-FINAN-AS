@@ -32,6 +32,7 @@ import { ICONE_ABA } from "@/components/icons";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { tipoDaConta } from "@/lib/contas";
 import { useOnboarding } from "@/lib/onboarding";
+import { useMovimentosConta } from "@/hooks/useMovimentosConta";
 import { lerListaDoUsuario, salvarDoUsuario } from "@/lib/usuarioStorage";
 import { DICAS_MODULO } from "@/lib/dicasModulo";
 import MovimentacoesRecentes from "@/components/MovimentacoesRecentes";
@@ -134,10 +135,14 @@ export default function Home() {
   const dashboard = useDashboardPreferences(userId);
   const onb = useOnboarding(userId);
   const { pagamento: formasPagamento } = useOpcoes();
+  const caixinhaMovs = useMovimentosConta(); // aportes/resgates de caixinha que usaram o saldo de uma conta
   const [novaPreset, setNovaPreset] = useState<{ tipo?: "saida" | "entrada"; como?: "avista" | "parcelado" | "fixa" }>({});
   const [grupoSub, setGrupoSub] = useState<"resumo" | "lancamentos" | "repasses">("resumo");
   const [ajudaFoco, setAjudaFoco] = useState<string | null>(null);
   const [cadastrandoCartao, setCadastrandoCartao] = useState(false);
+  // O popup de perfil vem ANTES do tour de boas-vindas: "verificando" segura o tour até saber se o perfil abre
+  const [perfilStatus, setPerfilStatus] = useState<"verificando" | "aberto" | "fechado">("verificando");
+  const [tourManual, setTourManual] = useState(false); // "Rever tour" na Central de Ajuda
 
   // O histórico "Acessados recentemente" é individual: carrega só o do usuário logado.
   useEffect(() => {
@@ -271,9 +276,11 @@ export default function Home() {
     if (!incluiMinhas) return 0;
     return formasPagamento.filter((o) => tipoDaConta(o) === "debito").reduce((t, o) => t + (Number(o.saldo_inicial) || 0), 0);
   }, [formasPagamento, pessoasSel]);
+  // Aportes são só meus: entram quando a visão me inclui (Todos ou "Somente eu"), como o saldo inicial das contas
+  const movsCaixinhaVisao = useMemo(() => (pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU) ? caixinhaMovs : []), [caixinhaMovs, pessoasSel]);
   const painel = useMemo(
-    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, salarioConfig: estado.config?.salario ?? 0, escopo: escopoPessoas }) : null),
-    [estadoFiltrado, mes, saldoInicialContas, estado.config?.salario, escopoPessoas]
+    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, salarioConfig: estado.config?.salario ?? 0, escopo: escopoPessoas, caixinhaMovs: movsCaixinhaVisao }) : null),
+    [estadoFiltrado, mes, saldoInicialContas, estado.config?.salario, escopoPessoas, movsCaixinhaVisao]
   );
 
   if (verificandoAuth || !loja.pronto || !mes || !painel) {
@@ -311,6 +318,10 @@ export default function Home() {
   const puladasGuia = onb.estado.puladas ?? [];
   const mostrarGuia = onb.pronto && !onb.estado.guiaOculto && totalLanc <= 15 && passosGuia.some((p) => !p.feito && !puladasGuia.includes(p.id));
   const repasses = resumoRepasses(lancamentosDoGrupo(estado), userId || "");
+  // "Repassado" sai do pendente e passa a "aguardando confirmação" (some de vez só quando concluído)
+  const pendenteReceber = Math.round((repasses.aReceber.agora - repasses.aReceber.aguardandoAgora) * 100) / 100;
+  const pendenteRepassar = Math.round((repasses.aRepassar.agora - repasses.aRepassar.aguardandoAgora) * 100) / 100;
+  const aguardandoTotal = Math.round((repasses.aReceber.aguardandoAgora + repasses.aRepassar.aguardandoAgora) * 100) / 100;
   const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
   const dica = DICAS_MODULO[aba];
   const nomeUsuario = membros.find((m) => m.id === userId)?.nome?.split(" ")[0];
@@ -441,9 +452,11 @@ export default function Home() {
                   <span className="min-w-0">
                     <span className="block text-sm font-bold">Valores a repassar</span>
                     <span className="block text-xs text-muted">
-                      {repasses.aReceber.agora > 0 && <>Você tem <b className="text-emerald-700 dark:text-emerald-400">{brl(repasses.aReceber.agora)}</b> a receber</>}
-                      {repasses.aReceber.agora > 0 && repasses.aRepassar.agora > 0 && " · "}
-                      {repasses.aRepassar.agora > 0 && <>Você deve repassar <b className="text-amber-700 dark:text-amber-400">{brl(repasses.aRepassar.agora)}</b></>}
+                      {pendenteReceber > 0 && <>Você tem <b className="text-emerald-700 dark:text-emerald-400">{brl(pendenteReceber)}</b> a receber</>}
+                      {pendenteReceber > 0 && pendenteRepassar > 0 && " · "}
+                      {pendenteRepassar > 0 && <>Você deve repassar <b className="text-amber-700 dark:text-amber-400">{brl(pendenteRepassar)}</b></>}
+                      {pendenteReceber === 0 && pendenteRepassar === 0 && "Nada pendente no momento"}
+                      {aguardandoTotal > 0 && <><br /><span className="text-sky-700 dark:text-sky-400">Repassado, aguardando confirmação: <b>{brl(aguardandoTotal)}</b></span></>}
                     </span>
                   </span>
                   <span className="shrink-0 text-xs font-semibold text-accent">Ver</span>
@@ -513,7 +526,7 @@ export default function Home() {
                   onNova={() => abrirNova()}
                 />
               )}
-              {aba === "ajuda" && <TelaAjuda foco={ajudaFoco} onIrPara={(a) => irPara(a as AbaId)} onRever={() => { onb.reiniciar(); irPara("inicio"); }} />}
+              {aba === "ajuda" && <TelaAjuda foco={ajudaFoco} onIrPara={(a) => irPara(a as AbaId)} onRever={() => { onb.reiniciar(); setTourManual(true); irPara("inicio"); }} />}
               {aba === "ajustes" && <CentralAjustes key={secaoAjustes} secaoInicial={secaoAjustes} onGrupo={() => setModalGrupoAberto(true)} preferencias={dashboard.preferencias} pronto={dashboard.pronto} salvando={dashboard.salvando} erro={dashboard.erro} onAlterar={dashboard.alterar} />}
               {aba === "graficos" && nadaVisivel && (
                 <EstadoVazio icone={ICONE_ABA.graficos} titulo="Ainda não há dados para os gráficos" descricao="Os gráficos e relatórios são montados a partir dos seus lançamentos. Registre algumas entradas e saídas para começar a ver para onde o dinheiro vai." passos={["Toque em Nova transação", "Lance uma entrada (seu salário) e algumas saídas", "Volte aqui para ver a evolução e exportar relatórios"]} acao={{ rotulo: "Fazer o primeiro lançamento", onClick: () => abrirNova() }} />
@@ -603,11 +616,11 @@ export default function Home() {
         onFechar={() => setMenuMobile(false)}
         onGrupo={() => abrirGrupo()}
       />
-      {onb.pronto && !onb.estado.boasVindas && nadaTotal && !novaAberta && (
-        <BoasVindas nome={nomeUsuario} onConcluir={() => onb.atualizar({ boasVindas: true })} />
+      {onb.pronto && perfilStatus === "fechado" && !onb.estado.boasVindas && (nadaTotal || tourManual) && !novaAberta && (
+        <BoasVindas nome={nomeUsuario} onConcluir={() => { setTourManual(false); onb.atualizar({ boasVindas: true }); }} />
       )}
       {cadastrandoCartao && <CadastrarCartaoModal onFechar={() => setCadastrandoCartao(false)} onLancarCompra={() => abrirNova({ tipo: "saida", como: "parcelado" })} />}
-      <CompletarPerfilModal />
+      <CompletarPerfilModal onDecidir={(abrir) => setPerfilStatus(abrir ? "aberto" : "fechado")} onFechar={() => setPerfilStatus("fechado")} />
       {novaAberta && (
         <NovaTransacao
           estado={estado}

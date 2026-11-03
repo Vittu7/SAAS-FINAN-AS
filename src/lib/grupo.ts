@@ -199,16 +199,18 @@ export type PendenciaPessoa = {
   aVencer: number;
   /** Parte do "agora/a vencer" que já foi marcada como repassada e espera a confirmação de quem recebe */
   aguardando: number;
+  /** Parte de "agora" (já vencido ou do mês atual) que está aguardando confirmação */
+  aguardandoAgora: number;
   recebido: number;
   itens: LancGrupo[];
 };
 
 export type ResumoRepasses = {
-  aReceber: { agora: number; aVencer: number; aguardando: number; recebido: number; pessoas: PendenciaPessoa[] };
-  aRepassar: { agora: number; aVencer: number; aguardando: number; recebido: number; pessoas: PendenciaPessoa[] };
+  aReceber: { agora: number; aVencer: number; aguardando: number; aguardandoAgora: number; recebido: number; pessoas: PendenciaPessoa[] };
+  aRepassar: { agora: number; aVencer: number; aguardando: number; aguardandoAgora: number; recebido: number; pessoas: PendenciaPessoa[] };
 };
 
-const vazio = () => ({ agora: 0, aVencer: 0, aguardando: 0, recebido: 0, pessoas: [] as PendenciaPessoa[] });
+const vazio = () => ({ agora: 0, aVencer: 0, aguardando: 0, aguardandoAgora: 0, recebido: 0, pessoas: [] as PendenciaPessoa[] });
 
 /** Quem me deve (eu lancei) e a quem eu devo (outra pessoa lançou para mim). */
 export function resumoRepasses(lista: LancGrupo[], meuId: string): ResumoRepasses {
@@ -216,7 +218,7 @@ export function resumoRepasses(lista: LancGrupo[], meuId: string): ResumoRepasse
   const montar = (lado: ResumoRepasses["aReceber"], l: LancGrupo, pessoa: { id: string; nome: string; avatar: string | null; cor: string | null }) => {
     let p = lado.pessoas.find((x) => x.pessoaId === pessoa.id);
     if (!p) {
-      p = { pessoaId: pessoa.id, nome: pessoa.nome, avatar: pessoa.avatar, cor: pessoa.cor, agora: 0, aVencer: 0, aguardando: 0, recebido: 0, itens: [] };
+      p = { pessoaId: pessoa.id, nome: pessoa.nome, avatar: pessoa.avatar, cor: pessoa.cor, agora: 0, aVencer: 0, aguardando: 0, aguardandoAgora: 0, recebido: 0, itens: [] };
       lado.pessoas.push(p);
     }
     p.itens.push(l);
@@ -225,7 +227,10 @@ export function resumoRepasses(lista: LancGrupo[], meuId: string): ResumoRepasse
       // Só é "concluído" depois da confirmação de quem recebeu: até lá continua em aberto.
       if (l.vencido) { p.agora = arred(p.agora + l.valor); lado.agora = arred(lado.agora + l.valor); }
       else { p.aVencer = arred(p.aVencer + l.valor); lado.aVencer = arred(lado.aVencer + l.valor); }
-      if (l.situacaoRepasse === "aguardando") { p.aguardando = arred(p.aguardando + l.valor); lado.aguardando = arred(lado.aguardando + l.valor); }
+      if (l.situacaoRepasse === "aguardando") {
+        p.aguardando = arred(p.aguardando + l.valor); lado.aguardando = arred(lado.aguardando + l.valor);
+        if (l.vencido) { p.aguardandoAgora = arred(p.aguardandoAgora + l.valor); lado.aguardandoAgora = arred(lado.aguardandoAgora + l.valor); }
+      }
     }
   };
   for (const l of lista) {
@@ -241,9 +246,12 @@ export type ResumoMembro = {
   entradas: number;
   saidas: number;
   saldo: number;
-  /** repasses pendentes que o membro tem a receber / a repassar (já vencidos ou do mês atual) */
+  /** repasses AINDA NÃO informados que o membro tem a receber / a repassar (já vencidos ou do mês atual) */
   aReceber: number;
   aRepassar: number;
+  /** repasses já marcados como "Repassado", esperando a confirmação de quem recebe */
+  aReceberAguardando: number;
+  aRepassarAguardando: number;
 };
 
 /** Resumo financeiro de cada membro no mês, com base apenas no que o usuário atual pode ver. */
@@ -263,11 +271,19 @@ export function resumoPorMembro(
     const r = calcularMes(dele, { mes, salarioConfig: m.id === opts.meuId ? opts.salarioConfig : 0 });
     let aReceber = 0;
     let aRepassar = 0;
+    let aReceberAguardando = 0;
+    let aRepassarAguardando = 0;
     for (const l of lista) {
       if (l.repassePago || !l.vencido) continue;
-      if (l.autorId === m.id) aReceber += l.valor;
-      if (l.respId === m.id) aRepassar += l.valor;
+      // "Repassado" sai do pendente e passa para "aguardando confirmação"; só some de vez quando concluído
+      const aguardando = l.situacaoRepasse === "aguardando";
+      if (l.autorId === m.id) { if (aguardando) aReceberAguardando += l.valor; else aReceber += l.valor; }
+      if (l.respId === m.id) { if (aguardando) aRepassarAguardando += l.valor; else aRepassar += l.valor; }
     }
-    return { id: m.id, entradas: r.entradas, saidas: r.saidas, saldo: r.saldoRestante, aReceber: arred(aReceber), aRepassar: arred(aRepassar) };
+    return {
+      id: m.id, entradas: r.entradas, saidas: r.saidas, saldo: r.saldoRestante,
+      aReceber: arred(aReceber), aRepassar: arred(aRepassar),
+      aReceberAguardando: arred(aReceberAguardando), aRepassarAguardando: arred(aRepassarAguardando),
+    };
   });
 }

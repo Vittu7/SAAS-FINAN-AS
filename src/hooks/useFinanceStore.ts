@@ -699,7 +699,7 @@ export function useFinanceStore() {
         if (e3 && (conta || acao === "desinformar")) avisos.aviso(/registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? avisoScript : "O repasse foi atualizado, mas a conta de origem não foi registrada", /registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? undefined : e3.message);
       }
 
-      const alvo = new Set(ids);
+      const alvo = new Set(ids.map(String)); // ids podem vir como número do banco: compara sempre como texto
       const patch: Record<string, any> =
         acao === "informar" ? { repasse_informado: true, repasse_informado_em: agora, repasseInformado: true, repasse_conta_origem: conta }
         : acao === "desinformar" ? { repasse_informado: false, repasse_informado_em: null, repasseInformado: false, repasse_conta_origem: null }
@@ -707,7 +707,7 @@ export function useFinanceStore() {
         : { repasse_conta: null, repasse_conta_origem: null, repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
       setEstado((atual) => ({
         ...atual,
-        [origem]: (atual[origem] as any[]).map((item) => (alvo.has(item.id) ? { ...item, ...patch } : item)),
+        [origem]: (atual[origem] as any[]).map((item) => (alvo.has(String(item.id)) ? { ...item, ...patch } : item)),
       }) as Estado);
     }
 

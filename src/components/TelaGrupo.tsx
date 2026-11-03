@@ -15,6 +15,7 @@ import PessoaIcone from "@/components/PessoaIcone";
 import { Ico, ICONE_ABA, ICONES } from "@/components/icons";
 import { brl, rotuloMes } from "@/lib/finance";
 import { avisarPerfilAtualizado } from "@/lib/perfil";
+import { arred } from "@/lib/calculos";
 import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, resumoPorMembro, resumoRepasses, type FiltroGrupo, type LancGrupo, type PendenciaPessoa } from "@/lib/grupo";
 import type { Membro } from "@/hooks/useFinanceStore";
 
@@ -170,12 +171,15 @@ function AbaRepasses({ lista, meuId, onRepasse, onNova }: { lista: LancGrupo[]; 
   const card = (titulo: string, valor: number, sub: string, cor = "") => (
     <div className="card-glass p-4"><p className="text-xs text-muted">{titulo}</p><p className={`mt-1 text-2xl font-semibold tabular-nums ${cor}`}>{brl(valor)}</p><p className="mt-0.5 text-[11px] text-muted">{sub}</p></div>
   );
-  const sub = (l: typeof r.aReceber) => [l.aVencer > 0 && `+ ${brl(l.aVencer)} a vencer`, l.aguardando > 0 && `${brl(l.aguardando)} aguardando confirmação`].filter(Boolean).join(" · ") || "Em aberto agora";
+  // "Repassado" sai de pendente e vai para "aguardando confirmação"; só deixa de ser dívida quando concluído
+  const sub = (l: typeof r.aReceber) => [l.aVencer > 0 && `+ ${brl(l.aVencer)} a vencer`].filter(Boolean).join(" · ") || "Pendente agora";
+  const aguardando = r.aReceber.aguardandoAgora + r.aRepassar.aguardandoAgora;
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3">
-        {card("A receber", r.aReceber.agora, sub(r.aReceber), "text-emerald-700 dark:text-emerald-400")}
-        {card("A repassar", r.aRepassar.agora, sub(r.aRepassar), "text-amber-700 dark:text-amber-400")}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {card("A receber", arred(r.aReceber.agora - r.aReceber.aguardandoAgora), sub(r.aReceber), "text-emerald-700 dark:text-emerald-400")}
+        {card("A repassar", arred(r.aRepassar.agora - r.aRepassar.aguardandoAgora), sub(r.aRepassar), "text-amber-700 dark:text-amber-400")}
+        {card("Aguardando confirmação", aguardando, "Já marcados como repassados", "text-sky-700 dark:text-sky-400")}
         {card("Concluídos", r.aReceber.recebido + r.aRepassar.recebido, "Repasses confirmados")}
       </div>
       <p className="rounded-xl bg-accent/8 px-3 py-2 text-xs text-muted">Como funciona: quem deve marca <b className="text-ink">Repassei</b> (fica aguardando). O repasse só é <b className="text-ink">concluído</b> quando quem recebeu confirma.</p>
@@ -273,7 +277,7 @@ function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Memb
                   <div className="rounded-xl bg-emerald-500/10 p-3"><dt className="text-xs text-muted">Entradas</dt><dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{brl(r.entradas)}</dd></div>
                   <div className="rounded-xl bg-rose-500/10 p-3"><dt className="text-xs text-muted">Despesas</dt><dd className="font-semibold tabular-nums text-rose-700 dark:text-rose-400">{brl(r.saidas)}</dd></div>
                   <div className="rounded-xl bg-background p-3 ring-1 ring-line"><dt className="text-xs text-muted">Saldo restante</dt><dd className={`font-semibold tabular-nums ${r.saldo < 0 ? "text-rose-700 dark:text-rose-400" : ""}`}>{r.saldo < 0 ? "− " : ""}{brl(Math.abs(r.saldo))}</dd></div>
-                  <div className="rounded-xl bg-amber-500/10 p-3"><dt className="text-xs text-muted">Repasses</dt><dd className="text-xs font-semibold tabular-nums">Receber {brl(r.aReceber)}<br />Repassar {brl(r.aRepassar)}</dd></div>
+                  <div className="rounded-xl bg-amber-500/10 p-3"><dt className="text-xs text-muted">Repasses</dt><dd className="text-xs font-semibold tabular-nums">Receber {brl(r.aReceber)}<br />Repassar {brl(r.aRepassar)}{(r.aReceberAguardando > 0 || r.aRepassarAguardando > 0) && <span className="mt-1 block font-medium text-sky-700 dark:text-sky-400">Aguardando confirmação {brl(r.aReceberAguardando + r.aRepassarAguardando)}</span>}</dd></div>
                 </dl>
               )}
               {eu && (

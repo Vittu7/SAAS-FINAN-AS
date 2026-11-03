@@ -124,7 +124,8 @@ export function MobileSaldo({
           <div className="h-full rounded-full bg-white/90 transition-all" style={{ width: `${pct}%` }} />
         </div>
         <p className="relative mt-2 text-xs opacity-80">{porc(pct)} das entradas do mês já usado</p>
-        {total && <p className="relative mt-1 text-xs opacity-80">Anterior {v(painel.saldoAnterior)}{painel.repassesRecebidos > 0 ? ` · repasses ${v(painel.repassesRecebidos)}` : ""}{painel.adiantado > 0 ? ` · adiantado ${v(painel.adiantado)}` : ""}</p>}
+        {total && <p className="relative mt-1 text-xs opacity-80">Anterior {v(painel.saldoAnterior)}{painel.repassesRecebidos > 0 ? ` · repasses ${v(painel.repassesRecebidos)}` : ""}{painel.adiantado > 0 ? ` · adiantado ${v(painel.adiantado)}` : ""}{painel.aportesCaixinha > 0 ? ` · aportes ${v(painel.aportesCaixinha)}` : ""}{painel.resgatesCaixinha > 0 ? ` · resgates ${v(painel.resgatesCaixinha)}` : ""}</p>}
+        {!total && (painel.aportesCaixinha > 0 || painel.resgatesCaixinha > 0) && <p className="relative mt-1 text-xs opacity-80">Total disponível {v(painel.totalDisponivel)}{painel.aportesCaixinha > 0 ? ` · investido em caixinhas ${v(painel.aportesCaixinha)}` : ""}</p>}
       </button>
 
       <div className="mt-3 flex justify-center"><SeletorModoSaldo modo={modo} onModo={onModo} /></div>
@@ -133,6 +134,7 @@ export function MobileSaldo({
         <p className="text-xs text-muted">Saldo disponível · acumulado até o mês anterior</p>
         <p className={`mt-1 text-lg font-semibold tabular-nums ${painel.saldoAnterior < 0 ? "text-rose-700 dark:text-rose-400" : ""}`}>{v(painel.saldoAnterior)}</p>
         {(painel.aReceber > 0 || painel.aRepassar > 0) && <p className="mt-0.5 text-[11px] text-muted">{painel.aReceber > 0 && `A receber de repasses ${v(painel.aReceber)}`}{painel.aReceber > 0 && painel.aRepassar > 0 && " · "}{painel.aRepassar > 0 && `A repassar ${v(painel.aRepassar)}`}</p>}
+        {(painel.aReceberAguardando > 0 || painel.aRepassarAguardando > 0) && <p className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-400">Repassado, aguardando confirmação {v(painel.aReceberAguardando + painel.aRepassarAguardando)}</p>}
       </button>
 
       <div className="mt-3 grid grid-cols-2 gap-3">

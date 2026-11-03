@@ -10,6 +10,7 @@ import { brl, parseValor } from "@/lib/finance";
 import { type Opcao, useOpcoes } from "@/lib/useOpcoes";
 import { gradienteCartao } from "@/lib/cartao";
 import { tipoDaConta, type TipoCartao } from "@/lib/contas";
+import { nomeBaseCartao, variantesPorCartao } from "@/lib/cartoes";
 
 type Aba = "cartoes" | "pagamentos" | "categorias";
 
@@ -33,7 +34,15 @@ type Formulario = {
   ambos: boolean;
   /** Tipo que o cadastro já tinha (ao editar). Permite adicionar o outro tipo ao mesmo cartão */
   tipoOriginal: TipoCartao | null;
+  /** Edição de um cartão unificado (crédito + débito juntos): salva as duas contas de uma vez */
+  unificado?: { credito: Opcao; debito: Opcao };
 };
+
+/** Um cartão como a pessoa enxerga: crédito e/ou débito do mesmo nome base reunidos. */
+type CartaoAgrupado = { chave: string; nome: string; credito?: Opcao; debito?: Opcao };
+
+/** Troca só o nome base, mantendo o sufixo "Crédito"/"Débito" que a conta já tinha (os lançamentos apontam pelo nome). */
+const comMesmoSufixo = (nomeAntigo: string, novaBase: string) => `${novaBase}${/\s+(Crédito|Débito)$/i.exec(nomeAntigo)?.[0] ?? ""}`;
 
 function formularioVazio(aba: Aba): Formulario {
   return {
@@ -106,8 +115,17 @@ export default function GerenciarOpcoesModal({
     return termo ? base.filter((i) => i.nome.toLowerCase().includes(termo)) : base;
   }, [aba, categoria, pagamento, busca]);
 
+  // Aba "Cartões": crédito e débito do mesmo cartão viram UM cartão só
+  const cartoes = useMemo<CartaoAgrupado[]>(() => {
+    const variantes = variantesPorCartao(pagamento.filter((i) => tipoDaConta(i) !== null));
+    const termo = busca.trim().toLowerCase();
+    return [...variantes.entries()]
+      .map(([chave, v]) => ({ chave, nome: nomeBaseCartao((v.credito ?? v.debito)!.nome), credito: v.credito, debito: v.debito }))
+      .filter((g) => !termo || g.nome.toLowerCase().includes(termo));
+  }, [pagamento, busca]);
+
   const contagem: Record<Aba, number> = {
-    cartoes: pagamento.filter((i) => tipoDaConta(i) !== null).length,
+    cartoes: variantesPorCartao(pagamento.filter((i) => tipoDaConta(i) !== null)).size,
     pagamentos: pagamento.filter((i) => tipoDaConta(i) === null).length,
     categorias: categoria.length,
   };
@@ -135,6 +153,41 @@ export default function GerenciarOpcoesModal({
     });
   };
 
+  const editarGrupo = (g: CartaoAgrupado) => {
+    if (!g.credito || !g.debito) return editar((g.credito ?? g.debito)!);
+    setErro("");
+    setForm({
+      id: g.credito.id,
+      nome: g.nome,
+      cor: g.credito.cor || "#64748B",
+      tipoCartao: "credito",
+      limite: g.credito.limite ? String(g.credito.limite).replace(".", ",") : "",
+      saldo: g.debito.saldo_inicial ? String(g.debito.saldo_inicial).replace(".", ",") : "",
+      ambos: true, // mostra limite e saldo juntos
+      tipoOriginal: "credito",
+      unificado: { credito: g.credito, debito: g.debito },
+    });
+  };
+
+  const removerGrupo = async (g: CartaoAgrupado) => {
+    if (!g.credito || !g.debito) return remover((g.credito ?? g.debito)!);
+    if (!window.confirm(`Deseja excluir o cartão “${g.nome}” (crédito e débito)? Lançamentos já existentes não serão apagados.`)) return;
+    try {
+      setSalvando(true);
+      setErro("");
+      await removerPagamento(g.credito.id);
+      await removerPagamento(g.debito.id);
+      avisos.sucesso("Cartão excluído", g.nome);
+      onAtualizar?.();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Não foi possível excluir.";
+      setErro(msg);
+      avisos.erro("Não foi possível excluir", msg);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const salvar = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form) return;
@@ -153,6 +206,16 @@ export default function GerenciarOpcoesModal({
       if (!ehPagamento) {
         if (form.id) await atualizarCategoria(form.id, { nome: form.nome, cor: form.cor });
         else await adicionarCategoria(form.nome, form.cor);
+      } else if (form.unificado) {
+        // Cartão unificado: atualiza crédito e débito juntos
+        const { credito, debito } = form.unificado;
+        const base = nomeBaseCartao(form.nome);
+        await atualizarPagamento(credito.id, { nome: comMesmoSufixo(credito.nome, base), cor: form.cor, tipo_cartao: "credito", limite });
+        try {
+          await atualizarPagamento(debito.id, { nome: comMesmoSufixo(debito.nome, base), cor: form.cor, tipo_cartao: "debito", saldo_inicial: saldo });
+        } catch (e) {
+          throw new Error(`O crédito foi atualizado, mas o débito falhou: ${e instanceof Error ? e.message : "erro"}`);
+        }
       } else if (form.id) {
         await atualizarPagamento(form.id, {
           nome: form.nome,
@@ -267,16 +330,14 @@ export default function GerenciarOpcoesModal({
                 type="button"
                 onClick={() => trocarAba(a.id)}
                 aria-pressed={aba === a.id}
-                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
-                  aba === a.id ? "bg-accent text-on-accent shadow-sm" : "text-ink hover:bg-surface"
-                }`}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${aba === a.id ? "bg-accent text-on-accent shadow-sm" : "text-ink hover:bg-surface"
+                  }`}
               >
                 <Ico icon={a.icone} size={18} />
                 <span className="whitespace-nowrap">{a.nome}</span>
                 <span
-                  className={`ml-auto rounded-full px-2 py-0.5 text-[11px] ${
-                    aba === a.id ? "bg-black/15" : "bg-background text-muted"
-                  }`}
+                  className={`ml-auto rounded-full px-2 py-0.5 text-[11px] ${aba === a.id ? "bg-black/15" : "bg-background text-muted"
+                    }`}
                 >
                   {contagem[a.id]}
                 </span>
@@ -312,21 +373,27 @@ export default function GerenciarOpcoesModal({
               </p>
             )}
 
-            {lista.length === 0 ? (
+            {(aba === "cartoes" ? cartoes.length : lista.length) === 0 ? (
               <div className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-muted">
                 {busca ? "Nada encontrado para essa busca." : `Nenhum(a) ${abaAtual.singular} cadastrado(a) ainda.`}
               </div>
             ) : (
               <ul className={`grid gap-2 ${aba === "cartoes" ? "sm:grid-cols-2" : ""}`}>
-                {lista.map((item) => (
-                  <li key={item.id} className="min-w-0">
-                    {aba === "cartoes" ? (
-                      <CartaoItem item={item} bloqueado={salvando} onEditar={() => editar(item)} onExcluir={() => remover(item)} />
-                    ) : (
+                {aba === "cartoes"
+                  ? cartoes.map((g) => (
+                    <li key={g.chave} className="min-w-0">
+                      {g.credito && g.debito ? (
+                        <CartaoUnificado g={g as Required<CartaoAgrupado>} bloqueado={salvando} onEditar={() => editarGrupo(g)} onExcluir={() => removerGrupo(g)} />
+                      ) : (
+                        <CartaoItem item={(g.credito ?? g.debito)!} bloqueado={salvando} onEditar={() => editar((g.credito ?? g.debito)!)} onExcluir={() => remover((g.credito ?? g.debito)!)} />
+                      )}
+                    </li>
+                  ))
+                  : lista.map((item) => (
+                    <li key={item.id} className="min-w-0">
                       <LinhaItem item={item} bloqueado={salvando} onEditar={() => editar(item)} onExcluir={() => remover(item)} />
-                    )}
-                  </li>
-                ))}
+                    </li>
+                  ))}
               </ul>
             )}
           </div>
@@ -360,9 +427,8 @@ function BotoesAcao({ nome, bloqueado, onEditar, onExcluir, claro }: { nome: str
         onClick={onEditar}
         disabled={bloqueado}
         aria-label={`Editar ${nome}`}
-        className={`min-w-0 rounded-lg border px-2 py-2 text-xs font-medium transition disabled:opacity-50 ${
-          claro ? "border-white/30 bg-white/10 text-white hover:bg-white/20" : "border-line text-ink hover:bg-surface"
-        }`}
+        className={`min-w-0 rounded-lg border px-2 py-2 text-xs font-medium transition disabled:opacity-50 ${claro ? "border-white/30 bg-white/10 text-white hover:bg-white/20" : "border-line text-ink hover:bg-surface"
+          }`}
       >
         <span className="inline-flex items-center justify-center gap-1.5"><Ico icon={Pencil} size={14} />Editar</span>
       </button>
@@ -371,9 +437,8 @@ function BotoesAcao({ nome, bloqueado, onEditar, onExcluir, claro }: { nome: str
         onClick={onExcluir}
         disabled={bloqueado}
         aria-label={`Excluir ${nome}`}
-        className={`min-w-0 rounded-lg border px-2 py-2 text-xs font-medium transition disabled:opacity-50 ${
-          claro ? "border-white/30 bg-white/10 text-white hover:bg-red-500/60" : "border-red-500/30 text-red-500 hover:bg-red-500/10"
-        }`}
+        className={`min-w-0 rounded-lg border px-2 py-2 text-xs font-medium transition disabled:opacity-50 ${claro ? "border-white/30 bg-white/10 text-white hover:bg-red-500/60" : "border-red-500/30 text-red-500 hover:bg-red-500/10"
+          }`}
       >
         <span className="inline-flex items-center justify-center gap-1.5"><Ico icon={Trash2} size={14} />Excluir</span>
       </button>
@@ -399,6 +464,33 @@ function CartaoItem({ item, bloqueado, onEditar, onExcluir }: { item: Opcao; blo
           <p className="text-lg font-bold">{brl(Number((debito ? item.saldo_inicial : item.limite) || 0))}</p>
         </div>
         <BotoesAcao claro nome={item.nome} bloqueado={bloqueado} onEditar={onEditar} onExcluir={onExcluir} />
+      </div>
+    </div>
+  );
+}
+
+function CartaoUnificado({ g, bloqueado, onEditar, onExcluir }: { g: Required<CartaoAgrupado>; bloqueado: boolean; onEditar: () => void; onExcluir: () => void }) {
+  return (
+    <div
+      className="flex h-full min-w-0 flex-col justify-between gap-4 overflow-hidden rounded-2xl p-4 text-white shadow-md"
+      style={{ background: gradienteCartao(g.credito.cor) }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 truncate text-base font-semibold">{g.nome}</p>
+        <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[11px] font-semibold">Crédito + Débito</span>
+      </div>
+      <div className="grid min-w-0 gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[11px] text-white/70">Limite total (crédito)</p>
+            <p className="text-lg font-bold">{brl(Number(g.credito.limite || 0))}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-white/70">Saldo inicial (débito)</p>
+            <p className="text-lg font-bold">{brl(Number(g.debito.saldo_inicial || 0))}</p>
+          </div>
+        </div>
+        <BotoesAcao claro nome={g.nome} bloqueado={bloqueado} onEditar={onEditar} onExcluir={onExcluir} />
       </div>
     </div>
   );
@@ -446,10 +538,19 @@ function FormularioDialog({
       <form onSubmit={onSalvar} className="min-w-0">
         {ehPagamento && form.tipoCartao && (
           <div className="mb-4 overflow-hidden rounded-2xl p-4 text-white shadow-md" style={{ background: gradienteCartao(form.cor) }}>
-            <p className="text-[11px] text-white/70">Prévia do cartão · {form.tipoCartao === "credito" ? "Crédito" : "Débito"}</p>
+            <p className="text-[11px] text-white/70">Prévia do cartão · {form.ambos ? "Crédito + Débito" : form.tipoCartao === "credito" ? "Crédito" : "Débito"}</p>
             <p className="mt-4 truncate font-semibold">{form.nome.trim() || "Nome do cartão"}</p>
-            <p className="text-[11px] text-white/70 mt-3">{form.tipoCartao === "credito" ? "Limite total" : "Saldo inicial"}</p>
-            <p className="text-lg font-bold">{brl(parseValor(form.tipoCartao === "credito" ? form.limite : form.saldo))}</p>
+            {form.ambos ? (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div><p className="text-[11px] text-white/70">Limite total</p><p className="text-lg font-bold">{brl(parseValor(form.limite))}</p></div>
+                <div><p className="text-[11px] text-white/70">Saldo inicial</p><p className="text-lg font-bold">{brl(parseValor(form.saldo))}</p></div>
+              </div>
+            ) : (
+              <>
+                <p className="text-[11px] text-white/70 mt-3">{form.tipoCartao === "credito" ? "Limite total" : "Saldo inicial"}</p>
+                <p className="text-lg font-bold">{brl(parseValor(form.tipoCartao === "credito" ? form.limite : form.saldo))}</p>
+              </>
+            )}
           </div>
         )}
 
@@ -467,7 +568,11 @@ function FormularioDialog({
             />
           </label>
 
-          {ehPagamento && (
+          {ehPagamento && form.unificado && (
+            <p className="rounded-xl bg-accent/8 px-3 py-2 text-xs text-muted">Este cartão tem crédito e débito. Ao salvar, os dois são atualizados juntos.</p>
+          )}
+
+          {ehPagamento && !form.unificado && (
             <div>
               <span className="mb-1.5 block text-xs font-medium text-muted">Tipo</span>
               <div className="flex gap-1 rounded-xl bg-background p-1 ring-1 ring-line" role="group" aria-label="Tipo da forma de pagamento">
@@ -527,9 +632,8 @@ function FormularioDialog({
                   type="button"
                   onClick={() => setForm({ ...form, cor: c })}
                   aria-label={`Usar a cor ${c}`}
-                  className={`size-8 rounded-full ring-offset-2 ring-offset-background transition ${
-                    form.cor.toLowerCase() === c.toLowerCase() ? "scale-110 ring-2 ring-accent" : "hover:scale-105"
-                  }`}
+                  className={`size-8 rounded-full ring-offset-2 ring-offset-background transition ${form.cor.toLowerCase() === c.toLowerCase() ? "scale-110 ring-2 ring-accent" : "hover:scale-105"
+                    }`}
                   style={{ backgroundColor: c }}
                 />
               ))}

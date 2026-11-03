@@ -11,11 +11,21 @@ import { lerDoUsuario, salvarDoUsuario } from "@/lib/usuarioStorage";
 
 const campo = "h-12 w-full rounded-xl border border-line bg-background px-4 text-base text-ink outline-none focus:ring-2 focus:ring-accent";
 
+/** Conta criada há poucos dias = cadastro recente: o popup aparece mesmo que o Google já tenha trazido nome e foto. */
+const DIAS_CONTA_NOVA = 7;
+const contaRecente = (user: { created_at?: string | null }) => {
+  const criada = user.created_at ? new Date(user.created_at).getTime() : NaN;
+  return Number.isFinite(criada) && Date.now() - criada < DIAS_CONTA_NOVA * 24 * 60 * 60 * 1000;
+};
+
 /**
- * Logo após o cadastro: pede nome e foto. Aparece uma única vez por usuário
- * (e só se ele ainda não tem foto), e pode ser pulado.
+ * Logo após o cadastro: pede nome e foto. Aparece uma única vez por usuário e pode ser pulado.
+ * O login é pelo Google, que já entrega nome e foto: por isso o popup NÃO depende mais de "não ter foto"
+ * (antes, quem entrava pelo Google nunca via a tela). Ele aparece para contas novas, ou para quem segue sem foto.
+ * `onDecidir` avisa a tela se o popup vai abrir (para mostrar o tour de boas-vindas só depois) e
+ * `onFechar` avisa quando ele termina.
  */
-export default function CompletarPerfilModal() {
+export default function CompletarPerfilModal({ onDecidir, onFechar }: { onDecidir?: (abrir: boolean) => void; onFechar?: () => void } = {}) {
   const [aberto, setAberto] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [nome, setNome] = useState("");
@@ -25,21 +35,31 @@ export default function CompletarPerfilModal() {
   const [erro, setErro] = useState("");
   const input = useRef<HTMLInputElement>(null);
 
+  const decidir = useRef(onDecidir); decidir.current = onDecidir;
+
   useEffect(() => {
     let vivo = true;
     (async () => {
       const { data } = await supabase.auth.getUser();
-      if (!data.user || !vivo) return;
-      if (lerDoUsuario(data.user.id, "perfil-etapa", { feito: false }).feito) return;
+      if (!vivo) return;
+      if (!data.user) return decidir.current?.(false);
+      // Já concluiu neste aparelho OU em outro (a marca também fica nos dados da conta)
+      if (lerDoUsuario(data.user.id, "perfil-etapa", { feito: false }).feito || data.user.user_metadata?.perfil_etapa_feita) return decidir.current?.(false);
       try {
         const perfil = await garantirPerfil(supabase as any, data.user);
         if (!vivo) return;
-        if (perfil.avatar_url) return salvarDoUsuario(data.user.id, "perfil-etapa", { feito: true });
+        if (!contaRecente(data.user) && perfil.avatar_url) {
+          salvarDoUsuario(data.user.id, "perfil-etapa", { feito: true });
+          return decidir.current?.(false);
+        }
         setUser(data.user);
         setNome(perfil.nome_usuario || "");
+        setAvatar(perfil.avatar_url || null); // foto que já veio do Google: a pessoa só confirma ou troca
         setAberto(true);
+        decidir.current?.(true);
       } catch {
         /* sem perfil não há o que completar agora */
+        if (vivo) decidir.current?.(false);
       }
     })();
     return () => { vivo = false; };
@@ -49,7 +69,9 @@ export default function CompletarPerfilModal() {
 
   const concluir = () => {
     salvarDoUsuario(user.id, "perfil-etapa", { feito: true });
+    void Promise.resolve(supabase.auth.updateUser({ data: { perfil_etapa_feita: true } })).catch(() => null); // vale em qualquer aparelho
     setAberto(false);
+    onFechar?.();
   };
 
   const escolherFoto = async (arquivo?: File) => {
@@ -85,7 +107,7 @@ export default function CompletarPerfilModal() {
   return (
     <DialogResponsivo titulo="Complete seu perfil" onFechar={concluir}>
       <form onSubmit={salvar} className="space-y-5 text-center">
-        <p className="text-sm text-muted">Escolha seu nome e uma foto. Assim sua família sabe quem lançou cada despesa.</p>
+        <p className="text-sm text-muted">Bem-vindo ao HomeCash! Escolha como quer ser chamado e uma foto. Assim sua família sabe quem lançou cada despesa. Você pode mudar isso depois em Configurações.</p>
         <div className="relative mx-auto w-fit">
           <Avatar src={avatar} nome={nome} cor="var(--accent)" tamanho="xl" />
           <button type="button" onClick={() => input.current?.click()} disabled={enviando} aria-label="Escolher foto" className="absolute -bottom-1 -right-1 grid size-10 place-items-center rounded-full bg-accent text-on-accent shadow-lg ring-4 ring-[var(--surface)] disabled:opacity-60">

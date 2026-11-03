@@ -211,3 +211,24 @@ describe("repasses recebidos no saldo restante (visão Todos)", () => {
     expect(sobraDosMesesAnteriores(comSobra, "2026-11", 0, { escopo: null })).toBe(1000);
   });
 });
+
+describe("repasse 'Repassado' (aguardando) aparece no resumo", () => {
+  const informado = { ...E, cartao: E.cartao.map((c: any) => (c.id === "c1" ? { ...c, repasse_informado: true } : c)) };
+  it("sai do pendente e vai para 'aguardando' no resumo por membro", () => {
+    const antes = resumoPorMembro(E, [{ id: "vitu" }, { id: "gisa" }], REF, { meuId: "vitu", mesRef: REF });
+    const depois = resumoPorMembro(informado, [{ id: "vitu" }, { id: "gisa" }], REF, { meuId: "vitu", mesRef: REF });
+    expect(antes.find((x) => x.id === "gisa")).toMatchObject({ aRepassar: 620, aRepassarAguardando: 0 });
+    expect(depois.find((x) => x.id === "gisa")).toMatchObject({ aRepassar: 120, aRepassarAguardando: 500 });
+    expect(depois.find((x) => x.id === "vitu")).toMatchObject({ aReceber: 120, aReceberAguardando: 500 });
+  });
+  it("resumoRepasses separa o que está aguardando confirmação", () => {
+    const r = resumoRepasses(lancamentosDoGrupo(informado, REF), "gisa").aRepassar;
+    expect(r.agora).toBe(620);
+    expect(r.aguardandoAgora).toBe(500);
+  });
+  it("concluído deixa de contar como aguardando e como pendente", () => {
+    const ok = { ...E, cartao: E.cartao.map((c: any) => (c.id === "c1" ? { ...c, repasse_informado: true, repasse_pago: true } : c)) };
+    const g = resumoPorMembro(ok, [{ id: "gisa" }], REF, { meuId: "vitu", mesRef: REF })[0];
+    expect(g).toMatchObject({ aRepassar: 120, aRepassarAguardando: 0 });
+  });
+});

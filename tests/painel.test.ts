@@ -73,3 +73,31 @@ describe("painel: resultado do mês x total disponível", () => {
     expect(p).toMatchObject({ entradas: 0, saldoAnterior: 3500, totalDisponivel: 3500 });
   });
 });
+
+describe("painel: aportes em caixinhas", () => {
+  const base = { extrato: [salario], cartao: [], contas: [] };
+  it("aporte feito com o saldo da conta reduz o total disponível, sem virar despesa", () => {
+    const sem = calcularPainel(base, { mes: "2026-10" });
+    const com = calcularPainel(base, { mes: "2026-10", caixinhaMovs: [{ tipo: "aporte", valor: 300, conta: "Nubank", data: "2026-10-15" }] });
+    expect(sem.totalDisponivel).toBe(1000);
+    expect(com).toMatchObject({ totalDisponivel: 700, aportesCaixinha: 300, saidas: 0, resultadoMes: 1000, entradas: 1000 });
+  });
+  it("o efeito acumula nos meses seguintes e o resgate devolve", () => {
+    const movs = [
+      { tipo: "aporte", valor: 300, conta: "Nubank", data: "2026-10-15" },
+      { tipo: "resgate", valor: 100, conta: "Nubank", data: "2026-11-03" },
+    ];
+    expect(calcularPainel(base, { mes: "2026-11", caixinhaMovs: movs })).toMatchObject({ saldoAnterior: 700, resgatesCaixinha: 100, totalDisponivel: 800 });
+  });
+  it("aporte sem conta (não usou o saldo) não altera o disponível; rendimento também não", () => {
+    const movs = [
+      { tipo: "aporte", valor: 300, conta: "", data: "2026-10-15" },
+      { tipo: "rendimento", valor: 10, conta: "Nubank", data: "2026-10-20" },
+    ];
+    expect(calcularPainel(base, { mes: "2026-10", caixinhaMovs: movs }).totalDisponivel).toBe(1000);
+  });
+  it("repasse 'aguardando' sai de aReceber e vai para aReceberAguardando", () => {
+    const e = { extrato: [salario], cartao: [{ ...compra({ repasse_informado: true }), foraDoMeuSaldo: true }], contas: [] };
+    expect(calcularPainel(e, { mes: "2026-10" })).toMatchObject({ aReceber: 0, aReceberAguardando: 100 });
+  });
+});

@@ -13,13 +13,17 @@
  *   · Quem deve (responsável, com quem lançou fora da visão) já tem a despesa no resultado dele. O dinheiro só sai
  *     do bolso dele quando o repasse é CONCLUÍDO: até lá a despesa não reduz o disponível (fica em "a repassar")
  *     e, ao concluir, sai uma única vez. Assim "Somente eu" + "outra pessoa" sempre soma o mesmo que "Todos".
+ * - CAIXINHAS: aporte feito "pagando com o saldo da conta" tira dinheiro do disponível no mês do aporte (e o resgate
+ *   devolvido a uma conta volta). Não é despesa nem receita: entradas, saídas e "sobra do mês" não mudam.
  * - Os saldos por conta (Saldos e limites) são outro controle: dinheiro de cada conta de débito do usuário.
  */
 import { arred, calcularMes, ehEntrada, semDuplicados } from "./calculos";
 import { addMeses } from "./finance";
+import type { MovCaixinhaConta } from "./contas";
 
 type Item = Record<string, any>;
 type Dados = { extrato?: Item[]; cartao?: Item[]; contas?: Item[] };
+type Rep = { mes: string; valor: number; concluido: boolean; informado: boolean; mesRepasse: string };
 export type ModoSaldo = "mes" | "total";
 
 const num = (v: unknown) => Number(v) || 0;
@@ -27,28 +31,28 @@ const ORIGENS = ["extrato", "cartao", "contas"] as const;
 const mesDoRepasse = (i: Item): string => (i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes));
 
 /** Despesas que EU adiantei para outra pessoa (a despesa está fora do meu resultado). */
-function adiantamentos(e: Dados): { mes: string; valor: number; concluido: boolean; mesRepasse: string }[] {
-  const lista: { mes: string; valor: number; concluido: boolean; mesRepasse: string }[] = [];
+function adiantamentos(e: Dados): Rep[] {
+  const lista: Rep[] = [];
   for (const o of ORIGENS) {
     for (const i of semDuplicados(e[o] || [], o)) {
       if (!i.foraDoMeuSaldo || i.repasseSintetico || ehEntrada(i)) continue;
       if (!i.owner_id || !i.responsavel_id || i.owner_id === i.responsavel_id) continue;
-      lista.push({ mes: String(i.mes), valor: num(i.valor), concluido: Boolean(i.repasse_pago ?? i.repassePago), mesRepasse: mesDoRepasse(i) });
+      lista.push({ mes: String(i.mes), valor: num(i.valor), concluido: Boolean(i.repasse_pago ?? i.repassePago), informado: Boolean(i.repasse_informado ?? i.repasseInformado), mesRepasse: mesDoRepasse(i) });
     }
   }
   return lista;
 }
 
 /** Despesas lançadas por outra pessoa (fora da visão) em que EU sou o responsável: o repasse sai do meu bolso. */
-function devidos(e: Dados, escopo: Set<string> | null): { mes: string; valor: number; concluido: boolean; mesRepasse: string }[] {
+function devidos(e: Dados, escopo: Set<string> | null): Rep[] {
   if (!escopo) return [];
-  const lista: { mes: string; valor: number; concluido: boolean; mesRepasse: string }[] = [];
+  const lista: Rep[] = [];
   for (const o of ORIGENS) {
     for (const i of semDuplicados(e[o] || [], o)) {
       if (i.foraDoMeuSaldo || i.repasseSintetico || ehEntrada(i)) continue;
       if (!i.owner_id || !i.responsavel_id || i.owner_id === i.responsavel_id) continue;
       if (escopo.has(String(i.owner_id)) || !escopo.has(String(i.responsavel_id))) continue;
-      lista.push({ mes: String(i.mes), valor: num(i.valor), concluido: Boolean(i.repasse_pago ?? i.repassePago), mesRepasse: mesDoRepasse(i) });
+      lista.push({ mes: String(i.mes), valor: num(i.valor), concluido: Boolean(i.repasse_pago ?? i.repassePago), informado: Boolean(i.repasse_informado ?? i.repasseInformado), mesRepasse: mesDoRepasse(i) });
     }
   }
   return lista;
@@ -69,12 +73,20 @@ export type Painel = {
   repassesRecebidos: number;
   /** Despesas de outras pessoas que eu paguei neste mês (saída de caixa, não é despesa minha) */
   adiantado: number;
-  /** Adiantado até o mês e ainda sem repasse concluído */
+  /** Adiantado até o mês, sem repasse concluído e ainda não marcado como "Repassado" */
   aReceber: number;
+  /** Adiantado até o mês que já foi marcado como "Repassado" e espera a minha confirmação */
+  aReceberAguardando: number;
   /** Repasses concluídos NESTE mês que saíram do meu bolso (a despesa já está no meu resultado) */
   repassesEnviados: number;
-  /** Despesas minhas lançadas por outra pessoa, ainda sem repasse concluído (não reduzem o disponível até lá) */
+  /** Despesas minhas lançadas por outra pessoa, ainda sem repasse concluído e sem "Repassei" (não reduzem o disponível até lá) */
   aRepassar: number;
+  /** Já marquei como "Repassado": aguardando a confirmação de quem recebe */
+  aRepassarAguardando: number;
+  /** Aportes em caixinhas feitos NESTE mês com o saldo de uma conta (saíram do disponível; não são despesa) */
+  aportesCaixinha: number;
+  /** Resgates de caixinha NESTE mês devolvidos a uma conta (voltaram ao disponível; não são entrada) */
+  resgatesCaixinha: number;
   /** Quanto dinheiro existe disponível ao fim do mês selecionado */
   totalDisponivel: number;
 };
@@ -82,24 +94,31 @@ export type Painel = {
 export function calcularPainel(
   e: Dados,
   /** escopo = ids das pessoas da visão (null = todo o grupo) */
-  opts: { mes: string; saldoInicial?: number; salarioConfig?: number; escopo?: Set<string> | null },
+  opts: { mes: string; saldoInicial?: number; salarioConfig?: number; escopo?: Set<string> | null; /** aportes/resgates de caixinha ligados a uma conta (só os do usuário) */ caixinhaMovs?: MovCaixinhaConta[] },
 ): Painel {
   const { mes } = opts;
   const salarioConfig = opts.salarioConfig ?? 0;
   const adiant = adiantamentos(e);
   const deve = devidos(e, opts.escopo ?? null);
   const soma = (l: { valor: number }[]) => arred(l.reduce((s, a) => s + a.valor, 0));
+  // Só aporte/resgate que usou o saldo de uma conta mexe no disponível (sem conta, o dinheiro não saiu do saldo)
+  const movsCaixinha = (opts.caixinhaMovs || [])
+    .filter((x) => x.conta && (x.tipo === "aporte" || x.tipo === "resgate") && /^\d{4}-\d{2}/.test(String(x.data)))
+    .map((x) => ({ tipo: x.tipo, valor: num(x.valor), mes: String(x.data).slice(0, 7) }));
   const movimentoDoMes = (m: string) => {
     const r = calcularMes(e, { mes: m, salarioConfig });
     const recebidos = soma(adiant.filter((a) => a.concluido && a.mesRepasse === m));
     const adiantadoMes = soma(adiant.filter((a) => a.mes === m));
     const enviados = soma(deve.filter((a) => a.concluido && a.mesRepasse === m));
     const aindaNaoSaiu = soma(deve.filter((a) => a.mes === m)); // despesa contada no resultado, dinheiro ainda não saiu
-    return { r, recebidos, adiantadoMes, enviados, liquido: arred(r.saldoRestante + recebidos - adiantadoMes + aindaNaoSaiu - enviados) };
+    const aportes = soma(movsCaixinha.filter((x) => x.tipo === "aporte" && x.mes === m));
+    const resgates = soma(movsCaixinha.filter((x) => x.tipo === "resgate" && x.mes === m));
+    return { r, recebidos, adiantadoMes, enviados, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes + aindaNaoSaiu - enviados - aportes + resgates) };
   };
 
   const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
     .flatMap((i) => [String(i?.mes || ""), i?.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : ""])
+    .concat(movsCaixinha.map((x) => x.mes))
     .filter((m) => /^\d{4}-\d{2}$/.test(m) && m < mes);
   let saldoAnterior = arred(num(opts.saldoInicial));
   if (meses.length > 0) {
@@ -118,7 +137,9 @@ export function calcularPainel(
     ? [{ rotulo: "Salário configurado", valor: atual.r.entradas }]
     : [...porOrigem.entries()].map(([rotulo, valor]) => ({ rotulo, valor })).sort((a, b) => b.valor - a.valor);
 
-  const aReceber = arred(adiant.filter((a) => a.mes <= mes && !(a.concluido && a.mesRepasse <= mes)).reduce((s, a) => s + a.valor, 0));
+  const emAberto = (l: Rep[]) => l.filter((a) => a.mes <= mes && !(a.concluido && a.mesRepasse <= mes));
+  const aReceberAberto = emAberto(adiant);
+  const aRepassarAberto = emAberto(deve);
   return {
     mes,
     entradas: atual.r.entradas,
@@ -129,9 +150,13 @@ export function calcularPainel(
     saldoAnterior,
     repassesRecebidos: atual.recebidos,
     adiantado: atual.adiantadoMes,
-    aReceber,
+    aReceber: soma(aReceberAberto.filter((a) => !a.informado)),
+    aReceberAguardando: soma(aReceberAberto.filter((a) => a.informado)),
     repassesEnviados: atual.enviados,
-    aRepassar: arred(deve.filter((a) => a.mes <= mes && !(a.concluido && a.mesRepasse <= mes)).reduce((s, a) => s + a.valor, 0)),
+    aRepassar: soma(aRepassarAberto.filter((a) => !a.informado)),
+    aRepassarAguardando: soma(aRepassarAberto.filter((a) => a.informado)),
+    aportesCaixinha: atual.aportes,
+    resgatesCaixinha: atual.resgates,
     totalDisponivel: arred(saldoAnterior + atual.liquido),
   };
 }

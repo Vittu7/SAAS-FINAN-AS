@@ -47,7 +47,6 @@ export type ContaFixa = {
 };
 
 export type Config = {
-  salario: number;
   investido: number;
   reservaAtual: number;
   reservaMeta: number;

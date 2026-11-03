@@ -117,7 +117,7 @@ export const TUTORIAIS: Tutorial[] = [
 
 export const PERGUNTAS: Pergunta[] = [
   { id: "saldo", pergunta: "Como o saldo restante é calculado?", resposta: "Saldo restante = entradas do mês menos saídas do mês. As saídas somam lançamentos à vista, parcelas do mês e contas fixas do mês.", aba: "inicio" },
-  { id: "entrada-salario", pergunta: "Meu salário não aparece como entrada. O que faço?", resposta: "Lance uma Entrada em Nova transação (tipo “Salário”). Enquanto o mês não tiver nenhuma entrada lançada, o sistema usa o salário configurado, e isso fica indicado no cartão de Entradas." },
+  { id: "entrada-salario", pergunta: "Meu salário não aparece como entrada. O que faço?", resposta: "Lance seu salário manualmente todos os meses em Nova transação > Entrada, usando a categoria “Salário”. O sistema considera apenas o valor realmente lançado naquele mês; se não lançar, a entrada será R$ 0." },
   { id: "parcelada-fixa", pergunta: "Qual a diferença entre conta parcelada e conta fixa?", resposta: "Parcelada tem fim: uma compra dividida em X vezes no cartão. Fixa se repete todo mês sem data para acabar, como aluguel e internet." },
   { id: "falta-pagar", pergunta: "O que significa “Falta pagar”?", resposta: "É o total das contas fixas do mês que ainda não foram marcadas como pagas. É só um aviso: essas contas já contam nas saídas do mês.", aba: "contas" },
   { id: "dividir", pergunta: "Como divido uma despesa com outra pessoa?", resposta: "Em Nova transação, abra “Mais opções” e marque quem paga. O valor é dividido igualmente entre as pessoas marcadas." },

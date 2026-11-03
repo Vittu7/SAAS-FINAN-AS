@@ -44,7 +44,7 @@ describe('Ordenação por valor', () => {
 
 describe('Fatura do cartão considera todo o grupo', () => {
   const estado = {
-    config: { salario: 0, investido: 0, reservaAtual: 0, reservaMeta: 0 },
+    config: { investido: 0, reservaAtual: 0, reservaMeta: 0 },
     cartao: [],
     contas: [],
     extrato: [

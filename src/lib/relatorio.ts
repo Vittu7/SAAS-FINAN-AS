@@ -6,7 +6,7 @@ import { addMeses } from "./finance";
 import { arred, calcularMes, ehEntrada, semDuplicados } from "./calculos";
 
 type Item = Record<string, any>;
-type Fonte = { extrato?: Item[]; cartao?: Item[]; contas?: Item[]; config?: { salario?: number } };
+type Fonte = { extrato?: Item[]; cartao?: Item[]; contas?: Item[] };
 
 export type FiltroRelatorio = {
   de: string;
@@ -20,7 +20,7 @@ export type FiltroRelatorio = {
 export type MovimentoRelatorio = {
   mes: string;
   tipo: "Entrada" | "Saída";
-  origem: "Entrada" | "À vista" | "Parcela" | "Conta fixa" | "Salário configurado";
+  origem: "Entrada" | "À vista" | "Parcela" | "Conta fixa";
   descricao: string;
   categoria: string;
   forma: string;
@@ -62,15 +62,12 @@ function agrupar(mapa: Map<string, number>, total: number): Grupo[] {
 export function gerarRelatorio(e: Fonte, f: FiltroRelatorio, agora: Date = new Date()): Relatorio {
   const meses = mesesDoPeriodo(f.de, f.ate);
   const escolhidos = f.responsaveis ?? [];
-  const temFiltro = Boolean(escolhidos.length || f.categoria);
   const manter = (i: Item) => !i.foraDoMeuSaldo && (escolhidos.length === 0 || escolhidos.includes(i.responsavel)) && (!f.categoria || i.categoria === f.categoria);
   const fonte = {
     extrato: (e.extrato || []).filter(manter),
     cartao: (e.cartao || []).filter(manter),
     contas: (e.contas || []).filter(manter),
   };
-  // O salário configurado só substitui entradas ausentes quando não há filtro por pessoa/categoria
-  const salarioConfig = temFiltro ? 0 : num(e.config?.salario);
 
   const porMes: Relatorio["meses"] = [];
   const movimentos: MovimentoRelatorio[] = [];
@@ -82,14 +79,11 @@ export function gerarRelatorio(e: Fonte, f: FiltroRelatorio, agora: Date = new D
   const somar = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) || 0) + v);
 
   for (const mes of meses) {
-    const r = calcularMes(fonte, { mes, salarioConfig });
+    const r = calcularMes(fonte, { mes });
     porMes.push({ mes, entradas: r.entradas, saidas: r.saidas, saldo: r.saldoRestante });
     faltaPagar += r.faltaPagar;
     const doMes = (o: "extrato" | "cartao" | "contas") => semDuplicados(fonte[o].filter((i) => i.mes === mes), o);
 
-    if (r.fallbackSalario) {
-      movimentos.push({ mes, tipo: "Entrada", origem: "Salário configurado", descricao: "Salário configurado", categoria: "Salário", forma: "", responsavel: "", valor: r.entradas, situacao: "Previsto" });
-    }
     for (const i of doMes("extrato")) {
       const entrada = ehEntrada(i);
       const valor = num(i.valor);

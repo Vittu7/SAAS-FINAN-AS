@@ -7,7 +7,7 @@ import type { Estado } from "../src/lib/types";
 
 const M = "2026-10";
 const estado = {
-  config: { salario: 0, investido: 0, reservaAtual: 0, reservaMeta: 0 },
+  config: { investido: 0, reservaAtual: 0, reservaMeta: 0 },
   extrato: [
     { id: "e1", mes: M, tipo: "entrada", categoria: "Salário", valor: 5000, descricao: "Salário", responsavel: "EU" },
     { id: "e2", mes: M, pagamento: "Pix", categoria: "Mercado", valor: 300, descricao: "Mercado", responsavel: "EU" },
@@ -32,10 +32,10 @@ describe("calcularMes", () => {
   it("entrada não conta como saída", () => expect(r.porOrigem.extrato).toBe(300));
   it("saldo restante = entradas − saídas", () => expect(r.saldoRestante).toBe(4320));
   it("falta pagar é só informativo", () => expect(r.faltaPagar).toBe(80));
-  it("sem entradas lançadas usa o salário configurado", () => {
-    const x = calcularMes({ ...estado, extrato: [] } as any, { mes: M, salarioConfig: 3000 });
-    expect(x.entradas).toBe(3000);
-    expect(x.fallbackSalario).toBe(true);
+  it("sem entradas lançadas não considera salário automaticamente", () => {
+    const x = calcularMes({ ...estado, extrato: [] } as any, { mes: M });
+    expect(x.entradas).toBe(0);
+    expect(x.saldoRestante).toBe(-380);
   });
   it("não duplica a mesma parcela", () => {
     const dup = [...estado.cartao, { ...estado.cartao[0], id: "outro" }];
@@ -78,11 +78,11 @@ describe("sobra dos meses anteriores", () => {
     const f: any = { extrato: [{ id: "1", mes: "2026-08", tipo: "entrada", valor: 100 }, { id: "2", mes: "2026-08", valor: 500 }], cartao: [], contas: [] };
     expect(sobraDosMesesAnteriores(f, "2026-09")).toBe(0);
   });
-  it("usa o salário configurado nos meses sem entrada lançada e ignora o que é fora do saldo", () => {
+  it("considera somente lançamentos efetivos e ignora o que é fora do saldo", () => {
     const g: any = { extrato: [{ id: "1", mes: "2026-08", valor: 400 }, { id: "2", mes: "2026-08", valor: 999, foraDoMeuSaldo: true }], cartao: [], contas: [] };
-    expect(sobraDosMesesAnteriores(g, "2026-09", 2000)).toBe(1600);
+    expect(sobraDosMesesAnteriores(g, "2026-09")).toBe(0);
   });
   it("sem lançamentos antes do mês, não há sobra", () => {
-    expect(sobraDosMesesAnteriores({ extrato: [], cartao: [], contas: [] }, "2026-10", 2000)).toBe(0);
+    expect(sobraDosMesesAnteriores({ extrato: [], cartao: [], contas: [] }, "2026-10")).toBe(0);
   });
 });

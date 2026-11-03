@@ -40,7 +40,7 @@ function Lista({ titulo, itens, cor }: { titulo: string; itens: Grupo[]; cor: st
   );
 }
 
-export default function RelatorioFinanceiro({ estado, mes, rotuloResponsaveis }: { estado: { extrato: any[]; cartao: any[]; contas: any[]; config: { salario?: number } }; mes: string; rotuloResponsaveis?: string }) {
+export default function RelatorioFinanceiro({ estado, mes, rotuloResponsaveis }: { estado: { extrato: any[]; cartao: any[]; contas: any[] }; mes: string; rotuloResponsaveis?: string }) {
   const [preset, setPreset] = useState<Preset>("mes");
   const [deC, setDeC] = useState(mes);
   const [ateC, setAteC] = useState(mes);

@@ -9,7 +9,7 @@ const debito = { nome: "Conta Nubank", tipo_cartao: "debito", saldo_inicial: 500
 const credito = { nome: "Nubank Crédito", tipo_cartao: "credito", eh_cartao: true, limite: 1000 };
 
 const estado = {
-  config: { salario: 0, investido: 0, reservaAtual: 0, reservaMeta: 0 },
+  config: { investido: 0, reservaAtual: 0, reservaMeta: 0 },
   extrato: [
     { id: "e1", mes: M, tipo: "entrada", pagamento: "Conta Nubank", valor: 1000, owner_id: "eu" },
     { id: "e2", mes: M, pagamento: "Conta Nubank", valor: 200, owner_id: "eu" },

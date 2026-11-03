@@ -20,7 +20,7 @@ import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentos
 import type { Membro } from "@/hooks/useFinanceStore";
 
 type Sub = "resumo" | "lancamentos" | "repasses";
-type Dados = { extrato: any[]; cartao: any[]; contas: any[]; config?: { salario?: number } };
+type Dados = { extrato: any[]; cartao: any[]; contas: any[] };
 type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir";
 type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], acao: AcaoRepasse, conta?: string | null) => Promise<boolean>;
 
@@ -239,7 +239,7 @@ function AbaLancamentos({ lista, membros, meuId, mes, onRepasse }: { lista: Lanc
 function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Membro[]; meuId: string; mes: string }) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const resumos = useMemo(() => resumoPorMembro(dados, membros, mes, { meuId, salarioConfig: dados.config?.salario ?? 0 }), [dados, membros, mes, meuId]);
+  const resumos = useMemo(() => resumoPorMembro(dados, membros, mes, { meuId }), [dados, membros, mes, meuId]);
 
   const alternarMeuResumo = async (visivel: boolean) => {
     setSalvando(true);

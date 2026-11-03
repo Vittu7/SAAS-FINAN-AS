@@ -66,7 +66,7 @@ export function rotuloMes(mes: string): string {
 }
 
 export type Resumo = {
-  /** Entradas do mês (lançadas; se não houver, o salário configurado) */
+  /** Entradas do mês: somente valores lançados manualmente. */
   entradas: number;
   /** Saídas do mês: à vista + parcelas + contas fixas */
   totalGasto: number;
@@ -77,7 +77,6 @@ export type Resumo = {
   repassesRecebidos: number;
   /** Contas fixas ainda não pagas (informativo) */
   faltaPagar: number;
-  usandoSalarioConfigurado: boolean;
   /** Quanto sobrou dos meses anteriores e já está somado em `entradas` e `sobra` */
   sobraAnterior: number;
   porResponsavel: Record<string, number>;
@@ -85,7 +84,7 @@ export type Resumo = {
 };
 
 export function resumoDoMes(e: Estado, mes: string, repassesRecebidos = 0): Resumo {
-  const r = calcularMes(e, { mes, salarioConfig: e?.config?.salario ?? 0, repassesRecebidos });
+  const r = calcularMes(e, { mes, repassesRecebidos });
   return {
     entradas: r.entradas,
     totalGasto: r.saidas,
@@ -93,7 +92,6 @@ export function resumoDoMes(e: Estado, mes: string, repassesRecebidos = 0): Resu
     sobra: r.saldoRestante,
     repassesRecebidos: r.repassesRecebidos,
     faltaPagar: r.faltaPagar,
-    usandoSalarioConfigurado: r.fallbackSalario,
     sobraAnterior: 0,
     porResponsavel: r.porResponsavel,
     porOrigem: r.porOrigem,

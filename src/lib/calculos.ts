@@ -2,7 +2,7 @@
  * LÓGICA ÚNICA DE CÁLCULO FINANCEIRO — resumo, gráficos, extrato e filtros usam este arquivo.
  *
  * - Entradas: dinheiro recebido = lançamentos do extrato com tipo "entrada" (salário, extras, reembolsos).
- *   Compatibilidade: se o mês não tem nenhuma entrada lançada, usa o salário configurado.
+ *   Não existe salário automático: somente entradas lançadas manualmente são consideradas.
  * - Saídas (gasto do mês): lançamentos à vista + parcelas do mês + contas fixas do mês (regra original).
  * - Saldo restante = entradas − saídas.
  * - "Falta pagar" é só informativo: contas fixas ainda não marcadas como pagas.
@@ -77,7 +77,6 @@ export type ResumoMes = {
   repassesRecebidos: number;
   saidas: number;
   saldoRestante: number;
-  fallbackSalario: boolean;
   faltaPagar: number;
   porOrigem: { extrato: number; cartao: number; contas: number };
   porResponsavel: Record<string, number>;
@@ -85,7 +84,7 @@ export type ResumoMes = {
 
 export function calcularMes(
   e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
-  opts: { mes: string; salarioConfig?: number; repassesRecebidos?: number },
+  opts: { mes: string; repassesRecebidos?: number },
 ): ResumoMes {
   // Itens marcados "foraDoMeuSaldo" (lançados por mim para outra pessoa, na visão "Somente eu") não entram:
   // o gasto é de quem é o responsável, e o repasse é só um acerto entre membros (nunca vira entrada/saída).
@@ -103,8 +102,7 @@ export function calcularMes(
     porResponsavel[r] = arred((porResponsavel[r] || 0) + num(i?.valor));
   }
 
-  const fallbackSalario = entradasLancadas.length === 0 && num(opts.salarioConfig) > 0;
-  const entradas = fallbackSalario ? num(opts.salarioConfig) : soma(entradasLancadas);
+  const entradas = soma(entradasLancadas);
   const saidas = arred(porOrigem.extrato + porOrigem.cartao + porOrigem.contas);
 
   const repassesRecebidos = arred(num(opts.repassesRecebidos));
@@ -114,7 +112,6 @@ export function calcularMes(
     repassesRecebidos,
     saidas,
     saldoRestante: arred(entradas + repassesRecebidos - saidas),
-    fallbackSalario,
     faltaPagar: soma(contas.filter((i) => !i?.pago)),
     porOrigem,
     porResponsavel,
@@ -131,13 +128,12 @@ const proximoMes = (m: string) => {
 /**
  * O que SOBROU dos meses anteriores e passa para `mes` (entra como entrada do mês).
  * Vai do primeiro mês com lançamentos até o mês anterior, acumulando mês a mês: sobra = entradas − saídas
- * (com o salário configurado quando o mês não tem entrada lançada). Mês no vermelho não vira dívida para o
+ * (considerando somente as entradas efetivamente lançadas). Mês no vermelho não vira dívida para o
  * seguinte: a sobra nunca fica negativa. Sem lançamentos antes de `mes`, não há o que passar.
  */
 export function sobraDosMesesAnteriores(
   e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
   mes: string,
-  salarioConfig = 0,
   /** Informe para somar os repasses recebidos em cada mês anterior (escopo: ver repassesRecebidosNoMes). */
   repasses?: { escopo: Set<string> | null },
 ): number {
@@ -149,7 +145,7 @@ export function sobraDosMesesAnteriores(
   let sobra = 0;
   for (let n = 0; m < mes && n < 240; n++, m = proximoMes(m)) {
     const repassesRecebidos = repasses ? repassesRecebidosNoMes(e, m, repasses.escopo) : 0;
-    sobra = Math.max(0, arred(sobra + calcularMes(e, { mes: m, salarioConfig, repassesRecebidos }).saldoRestante));
+    sobra = Math.max(0, arred(sobra + calcularMes(e, { mes: m, repassesRecebidos }).saldoRestante));
   }
   return sobra;
 }

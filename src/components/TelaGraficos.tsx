@@ -13,7 +13,7 @@ import type { Resumo } from "@/lib/finance";
 export default function TelaGraficos({
   estadoCompleto, mes, resumo, painel, modo, onModo, itens, onAbrirExtrato, rotuloResponsaveis,
 }: {
-  estadoCompleto: { extrato: any[]; cartao: any[]; contas: any[]; config: { salario?: number } };
+  estadoCompleto: { extrato: any[]; cartao: any[]; contas: any[] };
   mes: string;
   resumo: Resumo;
   painel: Painel;

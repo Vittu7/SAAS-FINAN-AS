@@ -259,7 +259,7 @@ export function resumoPorMembro(
   e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
   membros: { id: string }[],
   mes: string,
-  opts: { meuId: string; salarioConfig?: number; mesRef?: string },
+  opts: { meuId: string; mesRef?: string },
 ): ResumoMembro[] {
   const lista = lancamentosDoGrupo(e, opts.mesRef);
   return membros.map((m) => {
@@ -268,7 +268,7 @@ export function resumoPorMembro(
       cartao: (e.cartao || []).filter((i) => i.responsavel_id === m.id),
       contas: (e.contas || []).filter((i) => i.responsavel_id === m.id),
     };
-    const r = calcularMes(dele, { mes, salarioConfig: m.id === opts.meuId ? opts.salarioConfig : 0 });
+    const r = calcularMes(dele, { mes });
     let aReceber = 0;
     let aRepassar = 0;
     let aReceberAguardando = 0;

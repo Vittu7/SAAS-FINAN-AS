@@ -10,13 +10,13 @@ const curto = (mes: string) => {
 };
 
 /** Entradas (verde) x saídas (vermelho) mês a mês, terminando no mês selecionado. */
-export default function GraficoEvolucao({ estado, mes }: { estado: { extrato: any[]; cartao: any[]; contas: any[]; config: { salario?: number } }; mes: string }) {
+export default function GraficoEvolucao({ estado, mes }: { estado: { extrato: any[]; cartao: any[]; contas: any[] }; mes: string }) {
   const [n, setN] = useState(6);
   const dados = useMemo(
     () =>
       Array.from({ length: n }, (_, i) => addMeses(mes, i - (n - 1))).map((m) => ({
         mes: m,
-        ...calcularMes(estado, { mes: m, salarioConfig: estado.config?.salario ?? 0 }),
+        ...calcularMes(estado, { mes: m }),
       })),
     [estado, mes, n],
   );

@@ -3,7 +3,7 @@ import { gerarRelatorio, mesesDoPeriodo, relatorioParaCSV, relatorioParaHTML } f
 import { calcularMes } from "../src/lib/calculos";
 
 const e: any = {
-  config: { salario: 0 },
+  config: {},
   extrato: [
     { id: "1", mes: "2026-09", tipo: "entrada", categoria: "Salário", valor: 4000, descricao: "Salário", responsavel: "Vitu" },
     { id: "2", mes: "2026-10", tipo: "entrada", categoria: "Salário", valor: 5000, descricao: "Salário", responsavel: "Vitu" },

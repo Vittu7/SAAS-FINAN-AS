@@ -5,6 +5,12 @@
  */
 import { tipoDaConta } from "./contas";
 import type { TipoCartao } from "./contas";
+import { COR_PADRAO } from "./useOpcoes";
+
+/** Fundo padrão dos cartões de crédito em todos os módulos (mesma cor cadastrada em Configurações). */
+export function gradienteCartao(cor?: string | null) {
+  return `linear-gradient(135deg, ${cor || COR_PADRAO}, #0f172a)`;
+}
 
 type Forma = { id: string; nome: string; cor: string; tipo_cartao?: string | null; eh_cartao?: boolean | null };
 

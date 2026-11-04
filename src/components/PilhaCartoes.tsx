@@ -4,9 +4,9 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { Ico } from "@/components/icons";
 import { useMemo, useState } from "react";
 import { useOpcoes } from "@/lib/useOpcoes";
-import { calcularFatura } from "@/lib/faturas";
+import { calcularFatura } from "@/lib/pagamentoFatura";
 import { brl, pct as porc, rotuloMes } from "@/lib/finance";
-import { gradienteCartao } from "@/lib/cartao";
+import { gradienteCartao } from "@/lib/cartoes";
 import type { Estado } from "@/lib/types";
 
 const ALTURA = 156; // altura de um cartão recolhido (px)

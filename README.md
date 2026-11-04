@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HomeCash
 
-## Getting Started
+Controle financeiro pessoal e familiar: lançamentos, cartões e faturas, contas fixas, caixinhas (reservas),
+grupo familiar com repasses entre membros e relatórios.
 
-First, run the development server:
+Next.js 16 (App Router) + React 19, Tailwind CSS 4, Supabase (Auth, Postgres com RLS e Storage) e Vitest.
+
+## Rodar localmente
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
+npx vitest run   # testes
+npm run build    # build de produção
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Crie um `.env.local` com:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Estrutura
 
-## Learn More
+```
+src/app/          rotas: / (painel), /login, /perfil, /grupo, /privacidade, /termos
+src/components/   telas e componentes (mobile/ = versão celular)
+src/hooks/        estado com Supabase: useFinanceStore (lançamentos e repasses), useCaixinhas,
+                  usePagamentosFatura, useMovimentosConta, useDashboardPreferences
+src/lib/          regras puras (sem React) + cliente Supabase
+tests/            testes Vitest das regras em src/lib
+supabase/         scripts SQL (ver abaixo)
+docs/arquivo/     material antigo, só para consulta
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Onde fica cada regra
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Assunto | Arquivo |
+|---|---|
+| Totais do mês, entradas/saídas, sem duplicados | `lib/calculos.ts`, `lib/finance.ts` |
+| Saldo das contas e disponibilidade | `lib/contas.ts` |
+| Cartões (crédito/débito unificados, cor) | `lib/cartoes.ts` |
+| Fatura do cartão e pagamentos de fatura | `lib/pagamentoFatura.ts` |
+| Caixinhas | `lib/caixinhas.ts` |
+| Grupo familiar e repasses | `lib/grupo.ts`, `lib/lancamentosGrupo.ts` |
+| Datas (AAAA-MM-DD, sem fuso) | `lib/datas.ts` |
+| Painel, relatório e gráficos | `lib/painel.ts`, `lib/relatorio.ts`, `lib/serie.ts` |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Banco de dados (Supabase)
 
-## Deploy on Vercel
+- Toda tabela tem RLS; operações sensíveis (grupo, repasses, excluir conta) passam por funções `security definer`
+  chamadas com `supabase.rpc(...)`.
+- O histórico de scripts está incompleto no repositório: os scripts 01–07 foram rodados manualmente no SQL Editor
+  e não estão versionados. `supabase/supabase-08-pagamentos-fatura.sql` é o mais recente.
+- `supabase/diagnostico-limpeza.sql` contém apenas consultas de leitura para auditar o banco antes de qualquer limpeza.
+- Novos scripts devem ser aditivos e reexecutáveis (`if not exists`, `drop policy if exists` + `create policy`).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deploy
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Push no `main` → Vercel. Quando houver SQL novo, rode-o no Supabase **antes** do deploy.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arred2, dataBR, metaAtingida, progressoCaixinha, rotuloLocal, sugestoesRendimento, totalRendimentos, type Caixinha, type Movimento } from "../src/lib/caixinhas";
+import { arred2, dataBR, hojeISO, metaAtingida, progressoCaixinha, rotuloLocal, sugestoesRendimento, totalRendimentos, type Caixinha, type Movimento } from "../src/lib/caixinhas";
 
 const base: Caixinha = {
   id: "1", nome: "Viagem", ehReserva: false, rendimento: "", meta: 1000, saldo: 250,
@@ -40,5 +40,19 @@ describe("caixinhas", () => {
     expect(totalRendimentos(lista)).toBe(15.3);
     expect(rotuloLocal(base)).toBe("CDB · Nubank");
     expect(rotuloLocal({ banco: "", tipoRendimento: null })).toBe("");
+  });
+});
+
+describe("hojeISO (fonte única em datas.ts)", () => {
+  it("caixinhas reexporta a mesma função de datas", async () => {
+    const datas = await import("../src/lib/datas");
+    const caixinhas = await import("../src/lib/caixinhas");
+    expect(caixinhas.hojeISO).toBe(datas.hojeISO);
+  });
+
+  it("usa a data local, não UTC", () => {
+    const d = new Date();
+    const esperado = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    expect(hojeISO()).toBe(esperado);
   });
 });

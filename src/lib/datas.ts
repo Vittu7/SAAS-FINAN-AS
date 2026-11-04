@@ -2,11 +2,12 @@
 
 const dois = (n: number) => String(n).padStart(2, "0");
 
-export const diasNoMes = (mes: string): number => {
+const diasNoMes = (mes: string): number => {
   const [a, m] = mes.split("-").map(Number);
   return new Date(a, m, 0).getDate();
 };
 
+/** Data local de hoje (toISOString usaria UTC e erraria o dia à noite no Brasil). */
 export const hojeISO = (): string => {
   const d = new Date();
   return `${d.getFullYear()}-${dois(d.getMonth() + 1)}-${dois(d.getDate())}`;

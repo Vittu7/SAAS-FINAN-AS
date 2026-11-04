@@ -12,7 +12,7 @@ import GerenciarOpcoesModal from "@/components/GerenciarOpcoesModal";
 import { useOpcoes, type Opcao } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 import EditarLancamentoModal from "@/components/EditarLancamentoModal";
-import { calcularFatura } from "@/lib/faturas";
+import { calcularFatura } from "@/lib/pagamentoFatura";
 import type { Estado } from "@/lib/types";
 
 // O cadastro foi centralizado em "Nova transação" (botão +). O formulário antigo fica oculto aqui.

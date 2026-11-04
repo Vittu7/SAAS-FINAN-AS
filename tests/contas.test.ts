@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { calcularSaldoConta, verificarDisponibilidade, tipoDaConta } from "../src/lib/contas";
 import { calcularMes } from "../src/lib/calculos";
-import { calcularFatura } from "../src/lib/faturas";
+import { calcularFatura } from "../src/lib/pagamentoFatura";
 import type { Estado } from "../src/lib/types";
 
 const M = "2026-10";

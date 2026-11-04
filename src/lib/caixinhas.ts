@@ -102,11 +102,8 @@ export const progressoCaixinha = (c: Pick<Caixinha, "saldo" | "meta">) =>
 
 export const metaAtingida = (c: Pick<Caixinha, "saldo" | "meta">) => c.meta > 0 && c.saldo >= c.meta;
 
-/** Data local de hoje em YYYY-MM-DD (toISOString usaria UTC e erraria o dia à noite no Brasil). */
-export const hojeISO = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+/** Data local de hoje em YYYY-MM-DD (fonte única em datas.ts). */
+export { hojeISO } from "./datas";
 
 export const dataBR = (iso: string) => iso.slice(0, 10).split("-").reverse().join("/");
 

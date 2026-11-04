@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { agruparPorOrigem, montarLinhas, ordenarPorValor, totalGastos } from '../src/lib/extrato';
-import { calcularFatura } from '../src/lib/faturas';
+import { calcularFatura } from '../src/lib/pagamentoFatura';
 import type { Estado } from '../src/lib/types';
 
 const extrato = [

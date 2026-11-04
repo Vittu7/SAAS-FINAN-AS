@@ -5,7 +5,7 @@ import { useOpcoes } from "@/lib/useOpcoes";
 import { useMovimentosConta } from "@/hooks/useMovimentosConta";
 import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
 import { calcularSaldoConta, tipoDaConta } from "@/lib/contas";
-import { calcularFatura } from "@/lib/faturas";
+import { calcularFatura } from "@/lib/pagamentoFatura";
 import { brl, rotuloMes } from "@/lib/finance";
 import type { Estado } from "@/lib/types";
 

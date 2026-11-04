@@ -21,8 +21,6 @@ export const ROTULO_ORIGEM: Record<OrigemLinha, string> = {
   contas: "Contas fixas",
 };
 
-export const ICONE_ORIGEM: Record<OrigemLinha, string> = { extrato: "≡", cartao: "▤", contas: "▣" };
-
 export type LinhaExtrato = {
   id: string;
   origem: OrigemLinha;

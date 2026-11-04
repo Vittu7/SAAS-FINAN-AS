@@ -3,8 +3,7 @@ import { calcularPainel } from "../src/lib/painel";
 import { calcularMes } from "../src/lib/calculos";
 import { calcularSaldoConta } from "../src/lib/contas";
 import { entradasDeRepasse, marcarForaDaVisao, idsDaSelecao } from "../src/lib/grupo";
-import { calcularFatura } from "../src/lib/faturas";
-import { pagamentosDaFatura, resumoFatura, validarPagamento, vencimentoDaFatura, type PagamentoFatura } from "../src/lib/pagamentoFatura";
+import { calcularFatura, pagamentosDaFatura, resumoFatura, validarPagamento, vencimentoDaFatura, type PagamentoFatura } from "../src/lib/pagamentoFatura";
 
 const M = "2026-10";
 const credito = ["Nubank"];

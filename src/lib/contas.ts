@@ -14,7 +14,7 @@
  *   continuam contando na fatura, como antes.
  */
 import { arred, ehEntrada, semDuplicados } from "./calculos";
-import { calcularFatura } from "./faturas";
+import { calcularFatura } from "./pagamentoFatura";
 import type { Estado } from "./types";
 import type { PagamentoFatura } from "./pagamentoFatura";
 

@@ -8,8 +8,6 @@ const CHAVE_OCULTAR = "valores-ocultos";
 let ocultos = false;
 const ouvintes = new Set<() => void>();
 
-export const valoresOcultos = () => ocultos;
-
 export function definirValoresOcultos(v: boolean) {
   ocultos = v;
   try { localStorage.setItem(CHAVE_OCULTAR, v ? "1" : "0"); } catch { /* sem armazenamento */ }

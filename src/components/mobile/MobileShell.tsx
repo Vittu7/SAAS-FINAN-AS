@@ -330,18 +330,3 @@ export function MobileMenu({
     document.body
   );
 }
-
-/* ---------- Gaveta que sobe de baixo ---------- */
-export function Sheet({
-  aberto,
-  onFechar,
-  titulo,
-  children,
-}: {
-  aberto: boolean;
-  onFechar: () => void;
-  titulo: string;
-  children: React.ReactNode;
-}) {
-  return aberto ? <DialogResponsivo titulo={titulo} onFechar={onFechar}><div className="space-y-1">{children}</div></DialogResponsivo> : null;
-}

@@ -1,11 +1,5 @@
 export type Responsavel = string;
 
-export const RESPONSAVEIS: string[] = ["TODOS", "EU"];
-
-export const COR_RESPONSAVEL: Record<string, string> = {
-  Geral: "#3b82f6",
-};
-
 export type Extrato = {
   id: string;
   mes: string;

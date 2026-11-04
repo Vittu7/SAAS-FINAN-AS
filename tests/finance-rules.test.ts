@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {calcularFatura} from '../src/lib/faturas';
+import {calcularFatura} from '../src/lib/pagamentoFatura';
 import {normalizarPreferencias} from '../src/lib/dashboardPreferences';
 import type {Estado} from '../src/lib/types';
 const estado: Estado = {config:{ investido:0,reservaAtual:0,reservaMeta:0},cartao:[{id:'1',mes:'2026-10',nome:'Compra',cartao:'Nubank',parcelaAtual:1,parcelaTotal:3,categoria:'Casa',valor:200,responsavel:'EU'},{id:'2',mes:'2026-10',nome:'Outro cartão',cartao:'Inter',parcelaAtual:1,parcelaTotal:1,categoria:'Casa',valor:900,responsavel:'EU'},{id:'3',mes:'2026-11',nome:'Outra parcela',cartao:'Nubank',parcelaAtual:2,parcelaTotal:3,categoria:'Casa',valor:200,responsavel:'EU'}],extrato:[{id:'1',mes:'2026-10',pagamento:'Nubank',categoria:'Mercado',valor:50,descricao:'Mercado',responsavel:'EU'}],contas:[{id:'1',mes:'2026-10',nome:'Internet',pago:false,valor:80,responsavel:'EU',formaPagamento:'Nubank'}]};

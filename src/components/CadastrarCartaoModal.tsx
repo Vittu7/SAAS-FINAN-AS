@@ -7,7 +7,7 @@ import DialogResponsivo from "@/components/DialogResponsivo";
 import { Ico } from "@/components/icons";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { parseValor, brl } from "@/lib/finance";
-import { gradienteCartao } from "@/lib/cartao";
+import { gradienteCartao } from "@/lib/cartoes";
 
 type Tipo = "credito" | "debito" | "ambos";
 

@@ -8,9 +8,8 @@ import { createPortal } from "react-dom";
 import DialogResponsivo from "./DialogResponsivo";
 import { brl, parseValor } from "@/lib/finance";
 import { type Opcao, useOpcoes } from "@/lib/useOpcoes";
-import { gradienteCartao } from "@/lib/cartao";
 import { tipoDaConta, type TipoCartao } from "@/lib/contas";
-import { nomeBaseCartao, variantesPorCartao } from "@/lib/cartoes";
+import { gradienteCartao, nomeBaseCartao, variantesPorCartao } from "@/lib/cartoes";
 
 type Aba = "cartoes" | "pagamentos" | "categorias";
 

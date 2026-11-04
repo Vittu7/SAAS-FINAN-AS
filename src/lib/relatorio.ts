@@ -62,9 +62,10 @@ function agrupar(mapa: Map<string, number>, total: number): Grupo[] {
 export function gerarRelatorio(e: Fonte, f: FiltroRelatorio, agora: Date = new Date()): Relatorio {
   const meses = mesesDoPeriodo(f.de, f.ate);
   const escolhidos = f.responsaveis ?? [];
-  const manter = (i: Item) => !i.foraDoMeuSaldo && (escolhidos.length === 0 || escolhidos.includes(i.responsavel)) && (!f.categoria || i.categoria === f.categoria);
+  // "Repasse recebido" (linha automática de entrada) conta nas entradas; as demais linhas fora da visão não
+  const manter = (i: Item) => (!i.foraDoMeuSaldo || (i.repasseSintetico && i.tipo === "entrada")) &&(escolhidos.length === 0 || escolhidos.includes(i.responsavel)) && (!f.categoria || i.categoria === f.categoria);
   const fonte = {
-    extrato: (e.extrato || []).filter(manter),
+    extrato: (e.extrato || []).filter(manter).map((i) => (i.foraDoMeuSaldo ? { ...i, foraDoMeuSaldo: false } : i)),
     cartao: (e.cartao || []).filter(manter),
     contas: (e.contas || []).filter(manter),
   };

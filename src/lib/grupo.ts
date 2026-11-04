@@ -165,24 +165,20 @@ export const PREFIXO_REPASSE = "repasse:";
  * COMPRA COMPARTILHADA (ex.: R$ 5.000 no meu cartão, R$ 2.500 meus e R$ 2.500 de X):
  * - a compra inteira continua no cartão e na fatura (são duas linhas, uma por responsável);
  * - o meu gasto pessoal é só a minha parte (R$ 2.500): a parte de X é um valor ADIANTADO, "a receber";
- * - quando X repassa e eu confirmo, o dinheiro entra na conta escolhida (saldo da conta) e aparece no extrato
- *   como "Repasse recebido", mas NÃO soma nas entradas nem no "sobrou" do mês: ele só quita o valor que X devia.
- *   Somar de novo faria o "sobrou" parecer R$ 2.500 maior do que é (a saída da parte de X nunca contou para mim).
- * Por isso a linha automática nasce com foraDoMeuSaldo (listada, mas fora dos totais).
- * Não gera linha quando a pessoa que deve também está na seleção (o gasto já é contado uma vez só).
+ * - quando X repassa e eu confirmo, o dinheiro entra na conta escolhida (saldo da conta) e vira uma ENTRADA REAL
+ *   "Repasse recebido" no extrato, nas entradas e nos gráficos. O painel soma esse valor uma única vez no mês da
+ *   confirmação e o "adiantado" já tinha saído do disponível, então o total volta sem duplicar.
+ * Vale para qualquer pessoa da visão que lançou para alguém de fora dela (itens foraDoMeuSaldo concluídos).
+ * Não gera linha quando quem deve também está na visão (o gasto já é contado uma vez só).
  */
-export function entradasDeRepasse(
-  e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
-  opts: { meuId: string; meuNome: string; incluiEu: boolean; nomesSelecionados: string[] },
-): Item[] {
-  if (!opts.incluiEu || !opts.meuId) return [];
+export function entradasDeRepasse(e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] }): Item[] {
   const saida: Item[] = [];
   for (const o of ["extrato", "cartao", "contas"] as OrigemGrupo[]) {
     for (const i of semDuplicados(e[o] || [], o)) {
-      if (i.tipo === "entrada" || i.owner_id !== opts.meuId) continue;
-      if (!i.responsavel_id || i.responsavel_id === opts.meuId) continue;
+      // foraDoMeuSaldo (ver marcarForaDaVisao): quem lançou está na visão (qualquer pessoa selecionada) e o responsável não
+      if (!i.foraDoMeuSaldo || i.repasseSintetico || i.tipo === "entrada") continue;
+      if (!i.owner_id || !i.responsavel_id || i.owner_id === i.responsavel_id) continue;
       if (!(i.repasse_pago ?? i.repassePago)) continue;
-      if (opts.nomesSelecionados.includes(i.responsavel)) continue;
       saida.push({
         id: `${PREFIXO_REPASSE}${o}:${i.id}`,
         mes: i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes),
@@ -191,11 +187,50 @@ export function entradasDeRepasse(
         descricao: `Repasse recebido (quita o a receber) · ${(o === "contas" ? i.nome : i.descricao ?? i.nome) || "lançamento"} (${i.responsavel || "Membro"})`,
         categoria: "Repasse",
         pagamento: i.repasse_conta || "",
+        owner_id: i.owner_id,
+        responsavel_id: i.owner_id,
+        responsavel: i.autorNome || "Membro",
+        repasseSintetico: true,
+        // Continua marcada: os cálculos (calcularMes) a ignoram e o painel soma o repasse uma única vez;
+        // extrato e relatório a tratam como entrada real (ver extrato.ts e relatorio.ts).
+        foraDoMeuSaldo: true,
+      });
+    }
+  }
+  return saida;
+}
+
+/**
+ * Lado de quem PAGA o repasse: quando o autor confirma o recebimento, aparece no extrato do responsável uma
+ * saída "Repasse enviado". A despesa já está nas saídas dele (é o responsável), então a linha nasce com
+ * foraDoMeuSaldo (listada, mas fora dos totais do mês) e o disponível cai uma única vez (ver painel.ts).
+ * Repasse pendente ou só "informado" não gera linha. Não gera linha quando o autor também está na seleção.
+ */
+export function saidasDeRepasse(
+  e: { extrato?: Item[]; cartao?: Item[]; contas?: Item[] },
+  opts: { meuId: string; incluiEu: boolean; nomesSelecionados: string[] },
+): Item[] {
+  if (!opts.incluiEu || !opts.meuId) return [];
+  const saida: Item[] = [];
+  for (const o of ["extrato", "cartao", "contas"] as OrigemGrupo[]) {
+    for (const i of semDuplicados(e[o] || [], o)) {
+      if (i.tipo === "entrada" || i.repasseSintetico || i.responsavel_id !== opts.meuId) continue;
+      if (!i.owner_id || i.owner_id === opts.meuId) continue;
+      if (!(i.repasse_pago ?? i.repassePago)) continue;
+      if (opts.nomesSelecionados.includes(i.autorNome)) continue;
+      saida.push({
+        id: `${PREFIXO_REPASSE}${o}:${i.id}`,
+        mes: i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes),
+        tipo: "saida",
+        valor: num(i.valor),
+        descricao: `Repasse enviado · ${(o === "contas" ? i.nome : i.descricao ?? i.nome) || "lançamento"} (para ${i.autorNome || "Membro"})`,
+        categoria: "Repasse",
+        pagamento: i.repasse_conta_origem || "",
         owner_id: opts.meuId,
         responsavel_id: opts.meuId,
-        responsavel: opts.meuNome,
+        responsavel: i.responsavel || "Eu",
         repasseSintetico: true,
-        foraDoMeuSaldo: true, // quita o "a receber"; não soma em entradas nem no sobrou
+        foraDoMeuSaldo: true, // a despesa já está nas minhas saídas; não conta de novo
       });
     }
   }

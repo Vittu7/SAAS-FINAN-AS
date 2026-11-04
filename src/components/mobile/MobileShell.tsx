@@ -127,7 +127,7 @@ export function MobileSaldo({
           <div className="h-full rounded-full bg-white/90 transition-all" style={{ width: `${pct}%` }} />
         </div>
         <p className="relative mt-2 text-xs opacity-80">{porc(pct)} das entradas do mês já usado</p>
-        {total && <p className="relative mt-1 text-xs opacity-80">Anterior {v(painel.saldoAnterior)}{painel.repassesRecebidos > 0 ? ` · repasses ${v(painel.repassesRecebidos)}` : ""}{painel.adiantado > 0 ? ` · adiantado ${v(painel.adiantado)}` : ""}{painel.aportesCaixinha > 0 ? ` · aportes ${v(painel.aportesCaixinha)}` : ""}{painel.resgatesCaixinha > 0 ? ` · resgates ${v(painel.resgatesCaixinha)}` : ""}</p>}
+        {total && <p className="relative mt-1 text-xs opacity-80">Anterior {v(painel.saldoAnterior)}{painel.adiantado > 0 ? ` · adiantado ${v(painel.adiantado)}` : ""}{painel.aportesCaixinha > 0 ? ` · aportes ${v(painel.aportesCaixinha)}` : ""}{painel.resgatesCaixinha > 0 ? ` · resgates ${v(painel.resgatesCaixinha)}` : ""}</p>}
         {!total && (painel.aportesCaixinha > 0 || painel.resgatesCaixinha > 0) && <p className="relative mt-1 text-xs opacity-80">Total disponível {v(painel.totalDisponivel)}{painel.aportesCaixinha > 0 ? ` · investido em caixinhas ${v(painel.aportesCaixinha)}` : ""}</p>}
       </button>
 
@@ -142,7 +142,7 @@ export function MobileSaldo({
         <button type="button" onClick={() => onAbrirExtrato?.("entradas")} className={cartao}>
           <p className="flex items-center gap-1.5 text-xs text-muted"><span className="grid size-5 place-items-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"><Ico icon={ArrowDownLeft} size={12} /></span>Entradas</p>
           <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{v(painel.entradas)}</p>
-          {painel.repassesRecebidos > 0 && <p className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-400">Repasses {v(painel.repassesRecebidos)} (fora das entradas)</p>}
+          {painel.repassesRecebidos > 0 && <p className="mt-0.5 text-[11px] text-sky-700 dark:text-sky-400">Inclui repasses {v(painel.repassesRecebidos)}</p>}
           {painel.entradas === 0 && <p className="mt-0.5 text-[11px] text-muted">Cadastre seu salário como entrada</p>}
         </button>
         <button type="button" onClick={() => onAbrirExtrato?.("gastos")} className={cartao}>

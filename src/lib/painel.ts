@@ -9,7 +9,8 @@
  *     recebeu estão na visão, então o repasse se anula. Nenhuma linha extra.
  *   · Visão em que só quem LANÇOU está presente (ex.: "Somente eu"): a despesa da outra pessoa fica fora do
  *     resultado (foraDoMeuSaldo), mas o dinheiro saiu do meu bolso. Entra como ADIANTADO (−) no mês da despesa
- *     e como REPASSE RECEBIDO (+) no mês em que o repasse foi CONCLUÍDO. Repasse pendente não devolve nada.
+ *     e como ENTRADA REAL "Repasse recebido" (+) no mês em que o repasse foi CONCLUÍDO (soma em entradas e no
+ *     resultado do mês). Repasse pendente é só "a receber": não gera entrada.
  *   · Quem deve (responsável, com quem lançou fora da visão) já tem a despesa no resultado dele. O dinheiro só sai
  *     do bolso dele quando o repasse é CONCLUÍDO: até lá a despesa não reduz o disponível (fica em "a repassar")
  *     e, ao concluir, sai uma única vez. Assim "Somente eu" + "outra pessoa" sempre soma o mesmo que "Todos".
@@ -191,10 +192,11 @@ export function calcularPainel(
 
   return {
     mes,
-    entradas: atual.r.entradas,
-    entradasPorOrigem,
+    // Repasse concluído = entrada real de quem recebeu (compensa o "adiantado", que já saiu do disponível)
+    entradas: arred(atual.r.entradas + atual.recebidos),
+    entradasPorOrigem: atual.recebidos > 0 ? [...entradasPorOrigem, { rotulo: "Repasse recebido", valor: atual.recebidos }].sort((a, b) => b.valor - a.valor) : entradasPorOrigem,
     saidas: atual.r.saidas,
-    resultadoMes: atual.r.saldoRestante,
+    resultadoMes: arred(atual.r.saldoRestante + atual.recebidos),
     saldoAnterior,
     repassesRecebidos: atual.recebidos,
     adiantado: atual.adiantadoMes,

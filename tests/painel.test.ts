@@ -24,13 +24,13 @@ describe("painel: resultado do mês x total disponível", () => {
     expect(out).toMatchObject({ entradas: 1000, saidas: 100, resultadoMes: 900, totalDisponivel: 900 });
   });
 
-  it("Somente eu: adiantar sai do bolso e o repasse concluído devolve, sem virar receita", () => {
+  it("Somente eu: adiantar sai do bolso e o repasse concluído vira entrada real e devolve o valor", () => {
     const antes = calcularPainel(somenteEu(compra()), { mes: "2026-10" });
     expect(antes).toMatchObject({ entradas: 1000, saidas: 0, resultadoMes: 1000, adiantado: 100, aReceber: 100, totalDisponivel: 900 });
     const pendente = calcularPainel(somenteEu(compra()), { mes: "2026-11" });
     expect(pendente).toMatchObject({ saldoAnterior: 900, totalDisponivel: 900, repassesRecebidos: 0, aReceber: 100 });
     const concluido = calcularPainel(somenteEu(compra(pago)), { mes: "2026-11" });
-    expect(concluido).toMatchObject({ entradas: 0, resultadoMes: 0, repassesRecebidos: 100, aReceber: 0, saldoAnterior: 900, totalDisponivel: 1000 });
+    expect(concluido).toMatchObject({ entradas: 100, resultadoMes: 100, repassesRecebidos: 100, aReceber: 0, saldoAnterior: 900, totalDisponivel: 1000 });
   });
 
   it("repasse concluído só conta a partir do mês da conclusão", () => {

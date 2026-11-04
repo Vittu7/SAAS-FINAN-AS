@@ -25,7 +25,7 @@ import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
 import { calcularPainel, type ModoSaldo } from "@/lib/painel";
-import { autorNaVisao, entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, resumoRepasses } from "@/lib/grupo";
+import { autorNaVisao, entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, resumoRepasses, saidasDeRepasse } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
@@ -194,8 +194,10 @@ export default function Home() {
       contas: daVisao(estado.contas),
     };
     // Repasse confirmado = entrada para quem lançou (a despesa continua só no resumo do responsável)
-    const repasses = entradasDeRepasse(filtrado, { meuId: userId || "", meuNome: pessoaEu?.nome || "Eu", incluiEu: pessoasSel.includes(TOKEN_EU), nomesSelecionados: nomesSel });
-    return { ...estado, ...filtrado, extrato: [...filtrado.extrato, ...repasses] };
+    const repasses = entradasDeRepasse(filtrado);
+    // Repasse confirmado = saída ("Repasse enviado") para quem deve; a despesa já está no resumo dele
+    const enviados = saidasDeRepasse(filtrado, { meuId: userId || "", incluiEu: pessoasSel.includes(TOKEN_EU), nomesSelecionados: nomesSel });
+    return { ...estado, ...filtrado, extrato: [...filtrado.extrato, ...repasses, ...enviados] };
   }, [estado, passaFiltro, escopoPessoas, pessoasSel, userId, pessoaEu?.nome]);
 
   const arraysMensais = useMemo(

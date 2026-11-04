@@ -98,7 +98,8 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       autor: i.lancadoPorOutro ? i.autorNome : null,
       autorAvatar: i.autorAvatar,
       autorCor: i.autorCor,
-      foraDoSaldo: Boolean(i.foraDoMeuSaldo),
+      // "Repasse recebido" (linha automática) é entrada real; as demais linhas fora da visão continuam fora do saldo
+      foraDoSaldo: Boolean(i.foraDoMeuSaldo) && !(i.repasseSintetico && ehEntrada(i)),
       repasse: (i.repasseDevido ? (i.repassePago ? "pago" : i.repasseInformado ? "aguardando" : "pendente") : null) as "pendente" | "aguardando" | "pago" | null,
       valor: num(i.valor),
       data: dataDoItem(i),

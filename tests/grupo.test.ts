@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas, entradasDeRepasse } from "../src/lib/grupo";
+import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas, entradasDeRepasse, saidasDeRepasse, marcarForaDaVisao } from "../src/lib/grupo";
 import { calcularMes, repassesRecebidosNoMes, sobraDosMesesAnteriores } from "../src/lib/calculos";
 
 const REF = "2026-10";
@@ -141,7 +141,11 @@ describe("compra compartilhada: R$ 5.000 no meu cartão, R$ 2.500 meus e R$ 2.50
   // visão "somente eu": a parte de X fica fora do meu saldo, como a tela inicial faz
   const meuPainel = (e: any, extra: any[] = []) =>
     calcularMes({ extrato: extra, cartao: e.cartao.map((c: any) => (c.responsavel_id !== "eu" ? { ...c, foraDoMeuSaldo: true } : c)), contas: [] }, { mes: "2026-10" });
-  const o = { meuId: "eu", meuNome: "Eu", incluiEu: true, nomesSelecionados: [] as string[] };
+  // mesma marcação que a tela inicial faz (marcarForaDaVisao) para a visão escolhida
+  const naVisao = (e: any, escopo: string[] | null) => ({
+    ...e,
+    cartao: e.cartao.map((c: any) => marcarForaDaVisao(c, escopo ? new Set(escopo) : null)),
+  });
 
   it("o meu gasto pessoal é só R$ 2.500, mas a fatura do cartão continua com os R$ 5.000", () => {
     const e = compra(false);
@@ -150,9 +154,9 @@ describe("compra compartilhada: R$ 5.000 no meu cartão, R$ 2.500 meus e R$ 2.50
   });
   it("ao confirmar o repasse: aparece no extrato, mas não duplica entradas nem saídas", () => {
     const e = compra(true);
-    const linhas = entradasDeRepasse(e, o);
+    const linhas = entradasDeRepasse(naVisao(e, ["eu"]));
     expect(linhas).toHaveLength(1);
-    expect(linhas[0]).toMatchObject({ valor: 2500, tipo: "entrada", mes: "2026-10", pagamento: "Conta", foraDoMeuSaldo: true });
+    expect(linhas[0]).toMatchObject({ valor: 2500, tipo: "entrada", mes: "2026-10", pagamento: "Conta", owner_id: "eu", foraDoMeuSaldo: true });
     const p = meuPainel(e, linhas);
     expect(p.entradas).toBe(0);
     expect(p.saidas).toBe(2500);
@@ -162,11 +166,37 @@ describe("compra compartilhada: R$ 5.000 no meu cartão, R$ 2.500 meus e R$ 2.50
     expect(resumoRepasses(lancamentosDoGrupo(compra(false), "2026-10"), "eu").aReceber.agora).toBe(2500);
     expect(resumoRepasses(lancamentosDoGrupo(compra(true), "2026-10"), "eu").aReceber.agora).toBe(0);
   });
-  it("não gera linha se pendente, se X está selecionado, se eu estou fora da seleção ou se não sou o autor", () => {
-    expect(entradasDeRepasse(compra(false), o)).toEqual([]);
-    expect(entradasDeRepasse(compra(true), { ...o, nomesSelecionados: ["X"] })).toEqual([]);
-    expect(entradasDeRepasse(compra(true), { ...o, incluiEu: false })).toEqual([]);
-    expect(entradasDeRepasse(compra(true), { ...o, meuId: "x" })).toEqual([]);
+  it("não gera linha se pendente, se X está na visão, em Todos ou se quem lançou está fora da visão", () => {
+    expect(entradasDeRepasse(naVisao(compra(false), ["eu"]))).toEqual([]);
+    expect(entradasDeRepasse(naVisao(compra(true), ["eu", "x"]))).toEqual([]);
+    expect(entradasDeRepasse(naVisao(compra(true), null))).toEqual([]);
+    expect(entradasDeRepasse(naVisao(compra(true), ["x"]))).toEqual([]);
+  });
+  it("visão de outra pessoa que lançou: a linha nasce para o autor selecionado", () => {
+    const e = compra(true);
+    e.cartao[1].owner_id = "maria"; // Maria lançou para X; a visão é só da Maria
+    const linhas = entradasDeRepasse(naVisao(e, ["maria"]));
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).toMatchObject({ owner_id: "maria", valor: 2500 });
+  });
+});
+describe("repasse enviado (lado de quem paga)", () => {
+  const item = (extra: any = {}) => ({ id: "b", owner_id: "autor", autorNome: "Autor", responsavel_id: "eu", responsavel: "Eu", mes: "2026-10", nome: "TV", cartao: "Nubank", valor: 100, parcelaAtual: 1, parcelaTotal: 1, ...extra });
+  const pago = { repasse_pago: true, repasse_pago_em: "2026-10-20T10:00:00Z", repasse_conta_origem: "Conta Nubank" };
+  const o = { meuId: "eu", incluiEu: true, nomesSelecionados: [] as string[] };
+  it("concluído: gera saída que não duplica o resultado do mês", () => {
+    const e = { cartao: [item(pago)] };
+    const linhas = saidasDeRepasse(e, o);
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).toMatchObject({ valor: 100, tipo: "saida", mes: "2026-10", pagamento: "Conta Nubank", foraDoMeuSaldo: true });
+    expect(calcularMes({ extrato: linhas, cartao: e.cartao, contas: [] }, { mes: "2026-10" }).saidas).toBe(100);
+  });
+  it("pendente/aguardando, autor selecionado, fora da seleção ou não sou o responsável: sem linha", () => {
+    expect(saidasDeRepasse({ cartao: [item()] }, o)).toEqual([]);
+    expect(saidasDeRepasse({ cartao: [item({ repasse_informado: true })] }, o)).toEqual([]);
+    expect(saidasDeRepasse({ cartao: [item(pago)] }, { ...o, nomesSelecionados: ["Autor"] })).toEqual([]);
+    expect(saidasDeRepasse({ cartao: [item(pago)] }, { ...o, incluiEu: false })).toEqual([]);
+    expect(saidasDeRepasse({ cartao: [item(pago)] }, { ...o, meuId: "autor" })).toEqual([]);
   });
 });
 describe("repasses recebidos no saldo restante (visão Todos)", () => {

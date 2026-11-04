@@ -51,7 +51,6 @@ export default function SummaryCards({
     total && { rotulo: "Saldo anterior", valor: painel.saldoAnterior, sinal: "" as const, tom: painel.saldoAnterior < 0 ? TOM.neg : TOM.neutro, icone: CalendarDays, dica: `Até ${rotuloMes(addMeses(painel.mes, -1))}` },
     { rotulo: "Entradas", valor: painel.entradas, sinal: "+" as const, tom: TOM.pos, icone: ArrowDownLeft },
     { rotulo: "Saídas", valor: painel.saidas, sinal: "−" as const, tom: TOM.neg, icone: ArrowUpRight },
-    total && painel.repassesRecebidos > 0 && { rotulo: "Repasses recebidos", valor: painel.repassesRecebidos, sinal: "+" as const, tom: TOM.pos, icone: HandCoins, dica: "Concluídos no mês" },
     total && painel.adiantado > 0 && { rotulo: "Pago para outra pessoa", valor: painel.adiantado, sinal: "−" as const, tom: TOM.neg, icone: HandCoins, dica: "Volta quando o repasse for concluído" },
     total && painel.despesasARepassar > 0 && { rotulo: "Ainda a repassar", valor: painel.despesasARepassar, sinal: "+" as const, tom: TOM.info, icone: HandCoins, dica: "Sai do saldo quando você repassar" },
     total && painel.repassesEnviados > 0 && { rotulo: "Repasses enviados", valor: painel.repassesEnviados, sinal: "−" as const, tom: TOM.neg, icone: HandCoins, dica: "Concluídos no mês" },

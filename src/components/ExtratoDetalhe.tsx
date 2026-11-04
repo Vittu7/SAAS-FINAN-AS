@@ -90,7 +90,6 @@ export default function ExtratoDetalhe({
     const extras: LinhaExtrato[] = totalModo && painel
       ? [
           ...(painel.saldoAnterior !== 0 ? [{ id: "saldo-anterior", origem: "extrato" as const, descricao: "Saldo acumulado dos meses anteriores", categoria: "", forma: "", responsavel: "", valor: painel.saldoAnterior, entrada: true }] : []),
-          ...(painel.repassesRecebidos > 0 ? [{ id: "repasses-recebidos", origem: "extrato" as const, descricao: "Repasses recebidos (transferência interna)", categoria: "Repasse", forma: "", responsavel: "", valor: painel.repassesRecebidos, entrada: true }] : []),
           ...(painel.resgatesCaixinha > 0 ? [{ id: "resgates-caixinha", origem: "extrato" as const, descricao: "Resgates de caixinhas (voltaram para a conta)", categoria: "Investimentos", forma: "", responsavel: "", valor: painel.resgatesCaixinha, entrada: true }] : []),
           ...(painel.aportesCaixinha > 0 ? [{ id: "aportes-caixinha", origem: "extrato" as const, descricao: "Aportes em caixinhas (saíram do saldo, não é despesa)", categoria: "Investimentos", forma: "", responsavel: "", valor: painel.aportesCaixinha, entrada: false }] : []),
         ]
@@ -124,7 +123,7 @@ export default function ExtratoDetalhe({
               : tipo === "entradas"
               ? `${entradasLinhas.length} ${entradasLinhas.length === 1 ? "entrada" : "entradas"} no mês`
               : totalModo && painel
-              ? `Anterior ${brl(painel.saldoAnterior)} + entradas ${brl(painel.entradas)}${painel.repassesRecebidos > 0 ? ` + repasses ${brl(painel.repassesRecebidos)}` : ""} − saídas ${brl(painel.saidas)}${painel.adiantado > 0 ? ` − adiantado ${brl(painel.adiantado)}` : ""}${painel.aportesCaixinha > 0 ? ` − aportes em caixinhas ${brl(painel.aportesCaixinha)}` : ""}${painel.resgatesCaixinha > 0 ? ` + resgates ${brl(painel.resgatesCaixinha)}` : ""}`
+              ? `Anterior ${brl(painel.saldoAnterior)} + entradas ${brl(painel.entradas)} − saídas ${brl(painel.saidas)}${painel.adiantado > 0 ? ` − adiantado ${brl(painel.adiantado)}` : ""}${painel.aportesCaixinha > 0 ? ` − aportes em caixinhas ${brl(painel.aportesCaixinha)}` : ""}${painel.resgatesCaixinha > 0 ? ` + resgates ${brl(painel.resgatesCaixinha)}` : ""}`
               : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}`}
           </p>
         </div>

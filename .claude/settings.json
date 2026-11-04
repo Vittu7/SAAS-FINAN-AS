@@ -1,0 +1,8 @@
+{
+  "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": true,
+    "superpowers@anthropic-plugin-directory": true,
+    "i-have-adhd@i-have-adhd": true,
+    "octo@nyldn-plugins": true
+  }
+}

@@ -127,7 +127,7 @@ export function MobileSaldo({
           <div className="h-full rounded-full bg-white/90 transition-all" style={{ width: `${pct}%` }} />
         </div>
         <p className="relative mt-2 text-xs opacity-80">{porc(pct)} das entradas do mês já usado</p>
-        {total && <p className="relative mt-1 text-xs opacity-80">Anterior {v(painel.saldoAnterior)}{painel.adiantado > 0 ? ` · adiantado ${v(painel.adiantado)}` : ""}{painel.aportesCaixinha > 0 ? ` · aportes ${v(painel.aportesCaixinha)}` : ""}{painel.resgatesCaixinha > 0 ? ` · resgates ${v(painel.resgatesCaixinha)}` : ""}</p>}
+        {total && <p className="relative mt-1 text-xs opacity-80">Anterior {v(painel.saldoAnterior)}{painel.adiantado > 0 ? ` · adiantado ${v(painel.adiantado)}` : ""}{painel.faturaEmAberto > 0 ? ` · fatura a pagar ${v(painel.faturaEmAberto)}` : ""}{painel.aportesCaixinha > 0 ? ` · aportes ${v(painel.aportesCaixinha)}` : ""}{painel.resgatesCaixinha > 0 ? ` · resgates ${v(painel.resgatesCaixinha)}` : ""}</p>}
         {!total && (painel.aportesCaixinha > 0 || painel.resgatesCaixinha > 0) && <p className="relative mt-1 text-xs opacity-80">Total disponível {v(painel.totalDisponivel)}{painel.aportesCaixinha > 0 ? ` · investido em caixinhas ${v(painel.aportesCaixinha)}` : ""}</p>}
       </button>
 

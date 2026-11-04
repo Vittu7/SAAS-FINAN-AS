@@ -22,10 +22,11 @@ import { arred, calcularMes, ehEntrada, semDuplicados } from "./calculos";
 import { addMeses } from "./finance";
 import { lancamentosDoGrupo } from "./grupo";
 import type { MovCaixinhaConta } from "./contas";
+import { ajusteDeFaturas, compraDeTerceirosNoCredito, type PagamentoFatura } from "./pagamentoFatura";
 
 type Item = Record<string, any>;
 type Dados = { extrato?: Item[]; cartao?: Item[]; contas?: Item[] };
-type Rep = { mes: string; valor: number; concluido: boolean; informado: boolean; mesRepasse: string };
+type Rep = { mes: string; valor: number; concluido: boolean; informado: boolean; mesRepasse: string; /** crédito do titular: o dinheiro só sai quando a fatura é paga (ver pagamentoFatura.ts) */ naFatura?: boolean };
 export type ModoSaldo = "mes" | "total";
 
 const num = (v: unknown) => Number(v) || 0;
@@ -33,13 +34,13 @@ const ORIGENS = ["extrato", "cartao", "contas"] as const;
 const mesDoRepasse = (i: Item): string => (i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes));
 
 /** Despesas que EU adiantei para outra pessoa (a despesa está fora do meu resultado). */
-function adiantamentos(e: Dados): Rep[] {
+function adiantamentos(e: Dados, naFatura: (o: (typeof ORIGENS)[number], i: Item) => boolean): Rep[] {
   const lista: Rep[] = [];
   for (const o of ORIGENS) {
     for (const i of semDuplicados(e[o] || [], o)) {
       if (!i.foraDoMeuSaldo || i.repasseSintetico || ehEntrada(i)) continue;
       if (!i.owner_id || !i.responsavel_id || i.owner_id === i.responsavel_id) continue;
-      lista.push({ mes: String(i.mes), valor: num(i.valor), concluido: Boolean(i.repasse_pago ?? i.repassePago), informado: Boolean(i.repasse_informado ?? i.repasseInformado), mesRepasse: mesDoRepasse(i) });
+      lista.push({ naFatura: naFatura(o, i), mes: String(i.mes), valor: num(i.valor), concluido: Boolean(i.repasse_pago ?? i.repassePago), informado: Boolean(i.repasse_informado ?? i.repasseInformado), mesRepasse: mesDoRepasse(i) });
     }
   }
   return lista;
@@ -94,8 +95,10 @@ export type Painel = {
   saldoAnterior: number;
   /** Repasses concluídos NESTE mês: transferência interna que entrou no meu bolso */
   repassesRecebidos: number;
-  /** Despesas de outras pessoas que eu paguei neste mês (saída de caixa, não é despesa minha) */
+  /** Despesas de outras pessoas que eu paguei neste mês (saída de caixa, não é despesa minha). No crédito, é a parte das faturas pagas no mês */
   adiantado: number;
+  /** Compras no crédito feitas para pessoas da visão, em faturas ainda não pagas: já estão nas saídas, mas o dinheiro ainda não saiu */
+  faturaEmAberto: number;
   /** Adiantado até o mês, sem repasse concluído e ainda não marcado como "Repassado" */
   aReceber: number;
   /** Adiantado até o mês que já foi marcado como "Repassado" e espera a minha confirmação */
@@ -121,10 +124,13 @@ export type Painel = {
 export function calcularPainel(
   e: Dados,
   /** escopo = ids das pessoas da visão (null = todo o grupo) */
-  opts: { mes: string; saldoInicial?: number; /** id de quem está usando o app (habilita o bloco de repasses) */ meuId?: string | null; /** lançamentos SEM filtro de pessoas, para os repasses (padrão: os mesmos de `e`) */ dadosRepasses?: Dados; escopo?: Set<string> | null; /** aportes/resgates de caixinha ligados a uma conta (só os do usuário) */ caixinhaMovs?: MovCaixinhaConta[] },
+  opts: { mes: string; saldoInicial?: number; /** id de quem está usando o app (habilita o bloco de repasses) */ meuId?: string | null; /** lançamentos SEM filtro de pessoas, para os repasses (padrão: os mesmos de `e`) */ dadosRepasses?: Dados; escopo?: Set<string> | null; /** aportes/resgates de caixinha ligados a uma conta (só os do usuário) */ caixinhaMovs?: MovCaixinhaConta[]; /** nomes dos cartões de crédito do usuário (para saber o que é fatura) */ cartoesCredito?: string[]; /** pagamentos de fatura do usuário */ pagamentosFatura?: PagamentoFatura[] },
 ): Painel {
   const { mes } = opts;
-  const adiant = adiantamentos(e);
+  // Sem `meuId` (ou sem cartões) nada é rastreado como fatura: vale a regra antiga (o adiantado sai na compra)
+  const credito = new Set(opts.cartoesCredito ?? []);
+  const adiant = adiantamentos(e, (o, i) => compraDeTerceirosNoCredito(o, i, opts.meuId, credito));
+  const faturas = ajusteDeFaturas(opts.dadosRepasses ?? e, opts.pagamentosFatura ?? [], { meuId: opts.meuId, escopo: opts.escopo ?? null, cartoesCredito: credito });
   const deve = devidos(e, opts.escopo ?? null);
   const soma = (l: { valor: number }[]) => arred(l.reduce((s, a) => s + a.valor, 0));
   // Só aporte/resgate que usou o saldo de uma conta mexe no disponível (sem conta, o dinheiro não saiu do saldo)
@@ -134,17 +140,19 @@ export function calcularPainel(
   const movimentoDoMes = (m: string) => {
     const r = calcularMes(e, { mes: m });
     const recebidos = soma(adiant.filter((a) => a.concluido && a.mesRepasse === m));
-    const adiantadoMes = soma(adiant.filter((a) => a.mes === m));
+    // Compra no crédito do titular só tira dinheiro quando a fatura é paga (faturas.pago); as demais, na compra
+    const adiantadoMes = arred(soma(adiant.filter((a) => a.mes === m && !a.naFatura)) + (faturas.pago[m] || 0));
+    const faturaAberta = faturas.emAberto[m] || 0;
     const enviados = soma(deve.filter((a) => a.concluido && a.mesRepasse === m));
     const aindaNaoSaiu = soma(deve.filter((a) => a.mes === m)); // despesa contada no resultado, dinheiro ainda não saiu
     const aportes = soma(movsCaixinha.filter((x) => x.tipo === "aporte" && x.mes === m));
     const resgates = soma(movsCaixinha.filter((x) => x.tipo === "resgate" && x.mes === m));
-    return { r, recebidos, adiantadoMes, enviados, aindaNaoSaiu, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes + aindaNaoSaiu - enviados - aportes + resgates) };
+    return { r, recebidos, adiantadoMes, faturaAberta, enviados, aindaNaoSaiu, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes + faturaAberta + aindaNaoSaiu - enviados - aportes + resgates) };
   };
 
   const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
     .flatMap((i) => [String(i?.mes || ""), i?.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : ""])
-    .concat(movsCaixinha.map((x) => x.mes))
+    .concat(movsCaixinha.map((x) => x.mes), Object.keys(faturas.pago))
     .filter((m) => /^\d{4}-\d{2}$/.test(m) && m < mes);
   let saldoAnterior = arred(num(opts.saldoInicial));
   if (meses.length > 0) {
@@ -200,6 +208,7 @@ export function calcularPainel(
     saldoAnterior,
     repassesRecebidos: atual.recebidos,
     adiantado: atual.adiantadoMes,
+    faturaEmAberto: atual.faturaAberta,
     aReceber: soma(aReceberAberto.filter((a) => !a.informado)),
     aReceberAguardando: soma(aReceberAberto.filter((a) => a.informado)),
     repassesEnviados: atual.enviados,

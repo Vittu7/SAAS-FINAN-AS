@@ -52,6 +52,7 @@ export default function SummaryCards({
     { rotulo: "Entradas", valor: painel.entradas, sinal: "+" as const, tom: TOM.pos, icone: ArrowDownLeft },
     { rotulo: "Saídas", valor: painel.saidas, sinal: "−" as const, tom: TOM.neg, icone: ArrowUpRight },
     total && painel.adiantado > 0 && { rotulo: "Pago para outra pessoa", valor: painel.adiantado, sinal: "−" as const, tom: TOM.neg, icone: HandCoins, dica: "Volta quando o repasse for concluído" },
+    total && painel.faturaEmAberto > 0 && { rotulo: "Fatura ainda não paga", valor: painel.faturaEmAberto, sinal: "+" as const, tom: TOM.info, icone: HandCoins, dica: "Compras no crédito para outros: sai do saldo ao pagar a fatura" },
     total && painel.despesasARepassar > 0 && { rotulo: "Ainda a repassar", valor: painel.despesasARepassar, sinal: "+" as const, tom: TOM.info, icone: HandCoins, dica: "Sai do saldo quando você repassar" },
     total && painel.repassesEnviados > 0 && { rotulo: "Repasses enviados", valor: painel.repassesEnviados, sinal: "−" as const, tom: TOM.neg, icone: HandCoins, dica: "Concluídos no mês" },
     total && painel.aportesCaixinha > 0 && { rotulo: "Aportes em caixinhas", valor: painel.aportesCaixinha, sinal: "−" as const, tom: TOM.info, icone: PiggyBank, dica: "Saiu do saldo, não é despesa" },

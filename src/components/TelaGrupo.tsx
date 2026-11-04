@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { useMovimentosConta } from "@/hooks/useMovimentosConta";
+import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
 import { calcularSaldoConta, tipoDaConta } from "@/lib/contas";
 import { ArrowRight, Check, HandCoins, Lock, Settings2, Undo2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -28,6 +29,7 @@ type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[]
 function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfirmar, onFechar }: { modo: "receber" | "repassar"; lista: LancGrupo[]; dados: Dados; userId: string; mes: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
   const { pagamento } = useOpcoes();
   const caixinhaMovs = useMovimentosConta();
+  const { pagamentos: pagamentosFatura } = usePagamentosFatura();
   const contas = useMemo(() => pagamento.filter((o) => tipoDaConta(o) === "debito"), [pagamento]);
   const [escolhida, setEscolhida] = useState<string>("");
   const total = lista.reduce((t, l) => t + l.valor, 0);
@@ -41,7 +43,7 @@ function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfirmar, on
         ) : (
           <div role="radiogroup" aria-label="Conta de destino" className="space-y-2">
             {contas.map((c) => {
-              const saldo = calcularSaldoConta(dados as any, c, { userId, ateMes: mes, caixinhaMovs }).saldo;
+              const saldo = calcularSaldoConta(dados as any, c, { userId, ateMes: mes, caixinhaMovs, pagamentosFatura }).saldo;
               return (
                 <label key={c.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm ${sel === c.nome ? "border-accent bg-accent/10" : "border-line"}`}>
                   <input type="radio" name="conta-repasse" checked={sel === c.nome} onChange={() => setEscolhida(c.nome)} className="accent-[var(--accent)]" />

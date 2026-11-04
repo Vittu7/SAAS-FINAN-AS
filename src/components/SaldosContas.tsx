@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { useMovimentosConta } from "@/hooks/useMovimentosConta";
+import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
 import { calcularSaldoConta, tipoDaConta } from "@/lib/contas";
 import { calcularFatura } from "@/lib/faturas";
 import { brl, rotuloMes } from "@/lib/finance";
@@ -14,12 +15,13 @@ type Linha = { id: string; nome: string; cor: string; valor: number; extra?: str
 export default function SaldosContas({ estado, userId, mes }: { estado: Estado; userId: string | null; mes: string }) {
   const { pagamento } = useOpcoes();
   const caixinhaMovs = useMovimentosConta();
+  const { pagamentos: pagamentosFatura } = usePagamentosFatura();
 
   const { debitos, creditos } = useMemo(
     () => ({
       debitos: pagamento
         .filter((o) => tipoDaConta(o) === "debito")
-        .map((o) => ({ o, saldo: calcularSaldoConta(estado, o, { userId, ateMes: mes, caixinhaMovs }).saldo })),
+        .map((o) => ({ o, saldo: calcularSaldoConta(estado, o, { userId, ateMes: mes, caixinhaMovs, pagamentosFatura }).saldo })),
       creditos: pagamento
         .filter((o) => tipoDaConta(o) === "credito")
         .map((o) => {
@@ -27,7 +29,7 @@ export default function SaldosContas({ estado, userId, mes }: { estado: Estado; 
           return { o, limite, disponivel: calcularFatura(estado, o.nome, mes, limite).disponivel };
         }),
     }),
-    [pagamento, estado, userId, mes, caixinhaMovs],
+    [pagamento, estado, userId, mes, caixinhaMovs, pagamentosFatura],
   );
 
   if (!debitos.length && !creditos.length) return null;

@@ -16,6 +16,7 @@
 import { arred, ehEntrada, semDuplicados } from "./calculos";
 import { calcularFatura } from "./faturas";
 import type { Estado } from "./types";
+import type { PagamentoFatura } from "./pagamentoFatura";
 
 /** Aporte/resgate de caixinha ligado a uma conta de débito (só o necessário para o saldo). */
 export type MovCaixinhaConta = { tipo: string; valor: number; conta: string; data: string };
@@ -46,7 +47,7 @@ const mesDoRepasse = (i: any): string => (i.repasse_pago_em ? String(i.repasse_p
 export function calcularSaldoConta(
   estado: Pick<Estado, "extrato" | "contas"> & { cartao?: Estado["cartao"] },
   conta: Pick<ContaOpcao, "nome" | "saldo_inicial">,
-  opts: { userId?: string | null; ateMes?: string; caixinhaMovs?: MovCaixinhaConta[] } = {},
+  opts: { userId?: string | null; ateMes?: string; caixinhaMovs?: MovCaixinhaConta[]; pagamentosFatura?: PagamentoFatura[] } = {},
 ) {
   const extrato = semDuplicados(estado.extrato as any[], "extrato").filter(
     (i) => i.pagamento === conta.nome && doUsuario(i, opts.userId) && ate(i, opts.ateMes),
@@ -74,11 +75,13 @@ export function calcularSaldoConta(
   const movsConta = (opts.caixinhaMovs || []).filter((m) => m.conta === conta.nome && (!opts.ateMes || String(m.data).slice(0, 7) <= opts.ateMes));
   const aportesCaixinha = soma(movsConta.filter((m) => m.tipo === "aporte"));
   const resgatesCaixinha = soma(movsConta.filter((m) => m.tipo === "resgate"));
+  // Pagamentos de fatura feitos com esta conta: saem do saldo da conta (não são despesa; a compra já contou)
+  const faturasPagas = soma((opts.pagamentosFatura || []).filter((p) => p.conta === conta.nome && (!opts.ateMes || String(p.data).slice(0, 7) <= opts.ateMes)));
   const inicial = num(conta.saldo_inicial);
   const entradas = soma(extrato.filter(ehEntrada));
   const saidas = soma(extrato.filter((i) => !ehEntrada(i)));
   const fixas = soma(fixasPagas);
-  return { inicial, entradas, saidas, fixas, repasses: repassesRecebidos, repassesPagos, aportesCaixinha, resgatesCaixinha, saldo: arred(inicial + entradas + repassesRecebidos + resgatesCaixinha - saidas - fixas - repassesPagos - aportesCaixinha) };
+  return { inicial, entradas, saidas, fixas, repasses: repassesRecebidos, repassesPagos, aportesCaixinha, resgatesCaixinha, faturasPagas, saldo: arred(inicial + entradas + repassesRecebidos + resgatesCaixinha - saidas - fixas - repassesPagos - aportesCaixinha - faturasPagas) };
 }
 
 export type Disponibilidade = {
@@ -95,11 +98,11 @@ export function verificarDisponibilidade(
   estado: Estado,
   conta: ContaOpcao,
   valor: number,
-  opts: { userId?: string | null; mes: string; caixinhaMovs?: MovCaixinhaConta[] },
+  opts: { userId?: string | null; mes: string; caixinhaMovs?: MovCaixinhaConta[]; pagamentosFatura?: PagamentoFatura[] },
 ): Disponibilidade {
   const tipo = tipoDaConta(conta);
   if (tipo === "debito") {
-    const { saldo } = calcularSaldoConta(estado, conta, { userId: opts.userId, ateMes: opts.mes, caixinhaMovs: opts.caixinhaMovs });
+    const { saldo } = calcularSaldoConta(estado, conta, { userId: opts.userId, ateMes: opts.mes, caixinhaMovs: opts.caixinhaMovs, pagamentosFatura: opts.pagamentosFatura });
     const faltante = Math.max(0, arred(valor - saldo));
     return { tipo, rotulo: "Saldo disponível", disponivel: saldo, ok: faltante === 0, faltante };
   }

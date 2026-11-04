@@ -123,7 +123,7 @@ export default function ExtratoDetalhe({
               : tipo === "entradas"
               ? `${entradasLinhas.length} ${entradasLinhas.length === 1 ? "entrada" : "entradas"} no mês`
               : totalModo && painel
-              ? `Anterior ${brl(painel.saldoAnterior)} + entradas ${brl(painel.entradas)} − saídas ${brl(painel.saidas)}${painel.adiantado > 0 ? ` − adiantado ${brl(painel.adiantado)}` : ""}${painel.aportesCaixinha > 0 ? ` − aportes em caixinhas ${brl(painel.aportesCaixinha)}` : ""}${painel.resgatesCaixinha > 0 ? ` + resgates ${brl(painel.resgatesCaixinha)}` : ""}`
+              ? `Anterior ${brl(painel.saldoAnterior)} + entradas ${brl(painel.entradas)} − saídas ${brl(painel.saidas)}${painel.adiantado > 0 ? ` − adiantado ${brl(painel.adiantado)}` : ""}${painel.faturaEmAberto > 0 ? ` + fatura ainda não paga ${brl(painel.faturaEmAberto)}` : ""}${painel.aportesCaixinha > 0 ? ` − aportes em caixinhas ${brl(painel.aportesCaixinha)}` : ""}${painel.resgatesCaixinha > 0 ? ` + resgates ${brl(painel.resgatesCaixinha)}` : ""}`
               : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}`}
           </p>
         </div>

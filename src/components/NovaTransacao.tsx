@@ -14,6 +14,7 @@ import { tipoDaConta, verificarDisponibilidade } from "@/lib/contas";
 import type { TipoCartao } from "@/lib/contas";
 import { formaEscolhida, nomeBaseCartao, nomeNoSeletor, unificarCartoes, variantesPorCartao } from "@/lib/cartoes";
 import { useMovimentosConta } from "@/hooks/useMovimentosConta";
+import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
 import type { Estado } from "@/lib/types";
 import type { Membro } from "@/hooks/useFinanceStore";
 
@@ -53,6 +54,7 @@ export default function NovaTransacao({
 }) {
   const { pagamento: formas, categoria: categorias, recarregar } = useOpcoes();
   const caixinhaMovs = useMovimentosConta();
+  const { pagamentos: pagamentosFatura } = usePagamentosFatura();
   const [tipo, setTipo] = useState<Tipo>(tipoInicial);
   const [como, setComo] = useState<Como>(comoInicial);
   const [cadastrandoCartao, setCadastrandoCartao] = useState(false);
@@ -111,7 +113,7 @@ export default function NovaTransacao({
   const valorNum = parseValor(valor);
   // Conta fixa só desconta quando for marcada como paga: não valida na criação.
   const valida = saida ? como !== "fixa" : true;
-  const disp = contaSel && valida ? verificarDisponibilidade(estado, contaSel, valorNum, { userId, mes, caixinhaMovs }) : null;
+  const disp = contaSel && valida ? verificarDisponibilidade(estado, contaSel, valorNum, { userId, mes, caixinhaMovs, pagamentosFatura }) : null;
 
   const cor = saida ? "bg-rose-700 text-white" : "bg-emerald-700 text-white";
 
@@ -127,7 +129,7 @@ export default function NovaTransacao({
 
     // Aviso (não bloqueia): saldo do débito ou limite do crédito insuficiente
     if (saida && como !== "fixa" && contaSel) {
-      const v = verificarDisponibilidade(estado, contaSel, total, { userId, mes, caixinhaMovs });
+      const v = verificarDisponibilidade(estado, contaSel, total, { userId, mes, caixinhaMovs, pagamentosFatura });
       if (!v.ok && !window.confirm(`O valor excede o ${v.rotulo.toLowerCase()} de ${contaSel.nome} em ${brl(v.faltante)}. Lançar mesmo assim?`)) return;
     }
 

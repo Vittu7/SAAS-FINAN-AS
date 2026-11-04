@@ -15,6 +15,8 @@ export interface Opcao {
   tipo_cartao?: "credito" | "debito" | null;
   /** Saldo inicial da conta de débito */
   saldo_inicial?: number | null;
+  /** Dia do vencimento da fatura do cartão de crédito (1 a 31) */
+  dia_vencimento?: number | null;
 }
 
 type DadosPagamento = {
@@ -157,7 +159,7 @@ export function useOpcoes() {
 
   const atualizarPagamento = async (
     id: string,
-    patch: Partial<Pick<Opcao, "nome" | "cor" | "eh_cartao" | "limite" | "tipo_cartao" | "saldo_inicial">>,
+    patch: Partial<Pick<Opcao, "nome" | "cor" | "eh_cartao" | "limite" | "tipo_cartao" | "saldo_inicial" | "dia_vencimento">>,
   ) => {
     const dados: Record<string, unknown> = { ...patch };
 

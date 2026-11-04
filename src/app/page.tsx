@@ -25,6 +25,7 @@ import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
 import { calcularPainel, type ModoSaldo } from "@/lib/painel";
+import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
 import { autorNaVisao, entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, resumoRepasses, saidasDeRepasse } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
@@ -136,6 +137,7 @@ export default function Home() {
   const onb = useOnboarding(userId);
   const { pagamento: formasPagamento } = useOpcoes();
   const caixinhaMovs = useMovimentosConta(); // aportes/resgates de caixinha que usaram o saldo de uma conta
+  const { pagamentos: pagamentosFatura } = usePagamentosFatura(); // pagamentos de fatura (só do usuário)
   const [novaPreset, setNovaPreset] = useState<{ tipo?: "saida" | "entrada"; como?: "avista" | "parcelado" | "fixa" }>({});
   const [grupoSub, setGrupoSub] = useState<"resumo" | "lancamentos" | "repasses">("resumo");
   const [ajudaFoco, setAjudaFoco] = useState<string | null>(null);
@@ -279,9 +281,12 @@ export default function Home() {
   }, [formasPagamento, pessoasSel]);
   // Aportes são só meus: entram quando a visão me inclui (Todos ou "Somente eu"), como o saldo inicial das contas
   const movsCaixinhaVisao = useMemo(() => (pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU) ? caixinhaMovs : []), [caixinhaMovs, pessoasSel]);
+  // Pagamentos de fatura são meus: entram quando a visão me inclui (a conta de onde saem também é minha)
+  const pagamentosFaturaVisao = useMemo(() => (pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU) ? pagamentosFatura : []), [pagamentosFatura, pessoasSel]);
+  const cartoesCredito = useMemo(() => formasPagamento.filter((o) => tipoDaConta(o) === "credito").map((o) => o.nome), [formasPagamento]);
   const painel = useMemo(
-    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, meuId: userId, dadosRepasses: estado, escopo: escopoPessoas, caixinhaMovs: movsCaixinhaVisao }) : null),
-    [estadoFiltrado, estado, mes, saldoInicialContas, userId, escopoPessoas, movsCaixinhaVisao]
+    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, meuId: userId, dadosRepasses: estado, escopo: escopoPessoas, caixinhaMovs: movsCaixinhaVisao, cartoesCredito, pagamentosFatura: pagamentosFaturaVisao }) : null),
+    [estadoFiltrado, estado, mes, saldoInicialContas, userId, escopoPessoas, movsCaixinhaVisao, cartoesCredito, pagamentosFaturaVisao]
   );
 
   if (verificandoAuth || !loja.pronto || !mes || !painel) {
@@ -546,7 +551,7 @@ export default function Home() {
                 />
               )}
               {aba === "investimentos" && <TelaInvestimentos />}
-              {aba === "fatura" && <FaturaCartao estado={estado} estadoLista={estadoFiltrado} mes={mes} setMes={setMes} />}
+              {aba === "fatura" && <FaturaCartao estado={estado} estadoLista={estadoFiltrado} mes={mes} setMes={setMes} userId={userId} />}
               {aba === "extrato" && nadaVisivel && (
                 <EstadoVazio icone={ICONE_ABA.extrato} titulo="Seu extrato está vazio" descricao="O extrato reúne tudo o que você lançar: entradas, compras, parcelas e contas fixas." passos={["Toque em Nova transação", "Escolha Entrada ou Saída e preencha o valor", "Salve e o lançamento aparece aqui"]} acao={{ rotulo: "Fazer o primeiro lançamento", onClick: () => abrirNova() }} />
               )}

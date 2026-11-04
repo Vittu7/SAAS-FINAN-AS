@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calcularPainel } from "../src/lib/painel";
+import { marcarForaDaVisao } from "../src/lib/grupo";
 
 // Vitu recebe 1000 em outubro e paga no cartão dele uma compra de 100 da Gisa; a Gisa repassa em novembro.
 const salario = { id: "s", mes: "2026-10", tipo: "entrada", categoria: "Salário", valor: 1000, owner_id: "vitu", responsavel_id: "vitu" };
@@ -99,5 +100,28 @@ describe("painel: aportes em caixinhas", () => {
   it("repasse 'aguardando' sai de aReceber e vai para aReceberAguardando", () => {
     const e = { extrato: [salario], cartao: [{ ...compra({ repasse_informado: true }), foraDoMeuSaldo: true }], contas: [] };
     expect(calcularPainel(e, { mes: "2026-10" })).toMatchObject({ aReceber: 0, aReceberAguardando: 100 });
+  });
+});
+
+describe("painel: visão individual de quem recebeu o repasse", () => {
+  // Gisa lança uma compra de 100 para o Vitu; o Vitu repassa (concluído em novembro).
+  const salGisa = { id: "sg", mes: "2026-10", tipo: "entrada", categoria: "Salário", valor: 1000, owner_id: "gisa", responsavel_id: "gisa" };
+  const compraVitu = (extra: any = {}) => ({ id: "cv", mes: "2026-10", nome: "Mercado", cartao: "Inter", parcelaAtual: 1, parcelaTotal: 1, valor: 100, owner_id: "gisa", responsavel_id: "vitu", ...extra });
+  const visaoGisa = (c: any) => {
+    const escopo = new Set(["gisa"]);
+    return { escopo, dados: { extrato: [salGisa], cartao: [marcarForaDaVisao(c, escopo)], contas: [] } };
+  };
+
+  it("marca como fora do saldo só quando o responsável não está na visão", () => {
+    expect(marcarForaDaVisao(compraVitu(), new Set(["gisa"])).foraDoMeuSaldo).toBe(true);
+    expect(marcarForaDaVisao(compraVitu(), new Set(["gisa", "vitu"])).foraDoMeuSaldo).toBeUndefined();
+    expect(marcarForaDaVisao(compraVitu(), null).foraDoMeuSaldo).toBeUndefined();
+  });
+
+  it("repasse concluído soma (+) no Total Disponível de quem recebeu", () => {
+    const pend = visaoGisa(compraVitu());
+    expect(calcularPainel(pend.dados, { mes: "2026-11", escopo: pend.escopo })).toMatchObject({ saldoAnterior: 900, totalDisponivel: 900, repassesRecebidos: 0 });
+    const ok = visaoGisa(compraVitu(pago));
+    expect(calcularPainel(ok.dados, { mes: "2026-11", escopo: ok.escopo })).toMatchObject({ repassesRecebidos: 100, totalDisponivel: 1000 });
   });
 });

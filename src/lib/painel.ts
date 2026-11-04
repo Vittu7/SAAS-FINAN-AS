@@ -101,6 +101,8 @@ export type Painel = {
   aReceberAguardando: number;
   /** Repasses concluídos NESTE mês que saíram do meu bolso (a despesa já está no meu resultado) */
   repassesEnviados: number;
+  /** Despesas minhas deste mês lançadas por outra pessoa: estão nas saídas, mas o dinheiro só sai quando o repasse é concluído */
+  despesasARepassar: number;
   /** Despesas minhas lançadas por outra pessoa, ainda sem repasse concluído e sem "Repassei" (não reduzem o disponível até lá) */
   aRepassar: number;
   /** Já marquei como "Repassado": aguardando a confirmação de quem recebe */
@@ -136,7 +138,7 @@ export function calcularPainel(
     const aindaNaoSaiu = soma(deve.filter((a) => a.mes === m)); // despesa contada no resultado, dinheiro ainda não saiu
     const aportes = soma(movsCaixinha.filter((x) => x.tipo === "aporte" && x.mes === m));
     const resgates = soma(movsCaixinha.filter((x) => x.tipo === "resgate" && x.mes === m));
-    return { r, recebidos, adiantadoMes, enviados, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes + aindaNaoSaiu - enviados - aportes + resgates) };
+    return { r, recebidos, adiantadoMes, enviados, aindaNaoSaiu, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes + aindaNaoSaiu - enviados - aportes + resgates) };
   };
 
   const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
@@ -199,6 +201,7 @@ export function calcularPainel(
     aReceber: soma(aReceberAberto.filter((a) => !a.informado)),
     aReceberAguardando: soma(aReceberAberto.filter((a) => a.informado)),
     repassesEnviados: atual.enviados,
+    despesasARepassar: atual.aindaNaoSaiu,
     aRepassar: soma(aRepassarAberto.filter((a) => !a.informado)),
     aRepassarAguardando: soma(aRepassarAberto.filter((a) => a.informado)),
     aportesCaixinha: atual.aportes,

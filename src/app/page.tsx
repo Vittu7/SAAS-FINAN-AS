@@ -25,7 +25,7 @@ import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
 import { calcularPainel, type ModoSaldo } from "@/lib/painel";
-import { entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, resumoRepasses } from "@/lib/grupo";
+import { autorNaVisao, entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, resumoRepasses } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
@@ -180,23 +180,23 @@ export default function Home() {
   const nomesSelecionados = pessoasSel.map((t) => (t === TOKEN_EU ? pessoaEu?.nome || "Eu" : t));
 
 
+  const escopoPessoas = useMemo(() => idsDaSelecao(pessoasSel, membros, userId || "", TOKEN_EU), [pessoasSel, membros, userId]);
+
   const estadoFiltrado = useMemo(() => {
-    // O que eu lancei para outra pessoa só entra nos MEUS totais quando essa pessoa não está selecionada:
-    // evita contar o mesmo repasse duas vezes.
+    // O que alguém da visão lançou para uma pessoa fora dela vira "adiantado" (foraDoMeuSaldo) e o repasse
+    // concluído volta ao saldo de quem recebeu. Vale para "Somente eu" e para qualquer pessoa filtrada.
     const nomesSel = pessoasSel.filter((t) => t !== TOKEN_EU);
-    const marcar = (item: any) =>
-      pessoasSel.includes(TOKEN_EU) && item.lancadoParaOutro && !nomesSel.includes(item.responsavel)
-        ? { ...item, foraDoMeuSaldo: true }
-        : item;
+    const daVisao = (lista: any[]) =>
+      lista.filter((item) => passaFiltro(item) || autorNaVisao(item, escopoPessoas)).map((item) => marcarForaDaVisao(item, escopoPessoas));
     const filtrado = {
-      extrato: estado.extrato.filter(passaFiltro).map(marcar),
-      cartao: estado.cartao.filter(passaFiltro).map(marcar),
-      contas: estado.contas.filter(passaFiltro).map(marcar),
+      extrato: daVisao(estado.extrato),
+      cartao: daVisao(estado.cartao),
+      contas: daVisao(estado.contas),
     };
     // Repasse confirmado = entrada para quem lançou (a despesa continua só no resumo do responsável)
     const repasses = entradasDeRepasse(filtrado, { meuId: userId || "", meuNome: pessoaEu?.nome || "Eu", incluiEu: pessoasSel.includes(TOKEN_EU), nomesSelecionados: nomesSel });
     return { ...estado, ...filtrado, extrato: [...filtrado.extrato, ...repasses] };
-  }, [estado, passaFiltro, pessoasSel, userId, pessoaEu?.nome]);
+  }, [estado, passaFiltro, escopoPessoas, pessoasSel, userId, pessoaEu?.nome]);
 
   const arraysMensais = useMemo(
     () => ({
@@ -269,7 +269,6 @@ export default function Home() {
 
   // Painel: resultado do mês (entradas − saídas) x total disponível (acumulado + repasses concluídos).
   // Usa todos os meses da visão escolhida (Todos / Somente eu / pessoas); repasse é transferência interna.
-  const escopoPessoas = useMemo(() => idsDaSelecao(pessoasSel, membros, userId || "", TOKEN_EU), [pessoasSel, membros, userId]);
   const saldoInicialContas = useMemo(() => {
     // Só as minhas contas de débito: entram quando a visão me inclui (Todos ou "Somente eu"); as contas dos outros são privadas.
     const incluiMinhas = pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU);

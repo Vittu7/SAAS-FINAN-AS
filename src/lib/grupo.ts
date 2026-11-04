@@ -145,6 +145,20 @@ export function filtrarGrupoPorPessoas(lista: LancGrupo[], ids: Set<string> | nu
   return lista.filter((l) => ids.has(l.respId) || ids.has(l.autorId));
 }
 
+/** Quem lançou está na visão (escopo = ids selecionados; null = todo o grupo). */
+export const autorNaVisao = (item: Item, escopo: Set<string> | null) => Boolean(escopo && item.owner_id && escopo.has(String(item.owner_id)));
+
+/**
+ * Visão individual (uma ou mais pessoas): se quem lançou está na visão e o responsável não, a despesa é de outra
+ * pessoa. Marca `foraDoMeuSaldo`: vira "adiantado" (−) e, quando o repasse é concluído, volta como (+) no Total
+ * Disponível de quem recebeu. Vale para "Somente eu" e para qualquer outra pessoa filtrada.
+ */
+export function marcarForaDaVisao<T extends Item>(item: T, escopo: Set<string> | null): T {
+  const resp = item.responsavel_id ? String(item.responsavel_id) : "";
+  if (!escopo || !autorNaVisao(item, escopo) || !resp || resp === String(item.owner_id) || escopo.has(resp)) return item;
+  return { ...item, foraDoMeuSaldo: true };
+}
+
 export const PREFIXO_REPASSE = "repasse:";
 
 /**

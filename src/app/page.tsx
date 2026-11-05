@@ -32,7 +32,7 @@ import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
 import { calcularPainel, serieEntradasSaidas, type ModoSaldo } from "@/lib/painel";
 import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
-import { autorNaVisao, entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, resumoRepasses, saidasDeRepasse } from "@/lib/grupo";
+import { autorNaVisao, entradasDeRepasse, filtrarGrupoPorPessoas, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, repassesDoMes, resumoRepasses, saidasDeRepasse } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
@@ -53,6 +53,7 @@ import FiltrosLancamentos, { FILTROS_INICIAIS, type FiltrosLancamentoState } fro
 import FiltroResponsaveis, { TOKEN_EU } from "@/components/FiltroResponsaveis";
 import { ordenarPorValor } from "@/lib/extrato";
 import { dataDoItem } from "@/lib/datas";
+import { arred } from "@/lib/calculos";
 import { useFinanceStore } from "@/hooks/useFinanceStore";
 import {
   addMeses,
@@ -64,7 +65,7 @@ import {
   rotuloMes,
 } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
-import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes } from "@/components/mobile/MobileShell";
+import { MobileBottomNav, MobileHeader, MobileMenu } from "@/components/mobile/MobileShell";
 import SaldosContas from "@/components/SaldosContas";
 
 /** Campos de um lançamento usados pelas travas do fechamento e pela conferência */
@@ -425,7 +426,9 @@ export default function Home() {
   ];
   const puladasGuia = onb.estado.puladas ?? [];
   const mostrarGuia = onb.pronto && !onb.estado.guiaOculto && totalLanc <= 15 && passosGuia.some((p) => !p.feito && !puladasGuia.includes(p.id));
-  const repasses = resumoRepasses(lancamentosDoGrupo(estado), userId || "");
+  // Repasses da tela inicial: só os do mês selecionado e das pessoas da visão (meses anteriores ficam no módulo Grupo, ao trocar o mês)
+  const repasses = resumoRepasses(repassesDoMes(filtrarGrupoPorPessoas(lancamentosDoGrupo(estado), escopoPessoas), mes), userId || "");
+  const repassesDoMesResumo = { receber: arred(repasses.aReceber.agora + repasses.aReceber.aVencer), receberAguardando: repasses.aReceber.aguardando, repassar: arred(repasses.aRepassar.agora + repasses.aRepassar.aVencer) };
   // Ações de repasse que dependem de mim (no Resumo, levam ao módulo de Repasses, onde a conta é escolhida)
   const acoesRepasse: AcaoRepasseResumo[] = [
     ...repasses.aReceber.pessoas.filter((p) => p.aguardandoAgora > 0).map((p) => ({ id: `r:${p.pessoaId}`, tipo: "confirmar" as const, titulo: `${p.nome} repassou ${brl(p.aguardandoAgora)}`, detalhe: "Confirme quando o dinheiro entrar" })),
@@ -514,32 +517,11 @@ export default function Home() {
         className={`min-h-screen min-w-0 pb-28 transition-[padding] duration-200 md:pb-0 ${sidebarExpandida ? "md:pl-60" : "md:pl-16"
           }`}
       >
-        <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
-          <MobileHeader
-            titulo={
-              aba === "grupo" ? "Grupo familiar" : aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
-                ? "Olá 👋"
-                : aba === "extrato"
-                  ? "Extrato"
-                  : aba === "lancamentos"
-                    ? "Lançamentos do mês"
-                    : aba === "cartao"
-                      ? "Contas parceladas"
-                      : "Contas fixas"
-            }
-            mostrarMes={mostrarMesNoCabecalho}
-            filtro={filtroResp}
-            mes={mes}
-            setMes={setMes}
-            controleMes={<SeletorMes compacto mes={mes} status={sMes} onAnterior={() => irParaMes(addMeses(mes, -1))} onProximo={() => irParaMes(addMeses(mes, 1))} onAbrirMeses={fech.habilitado ? () => setListaMeses(true) : undefined} />}
-            onAbrirMenu={() => setMenuMobile(true)}
-          />
-
-          <header className="hc-topbar sticky top-0 z-30 -mx-8 -mt-8 hidden min-w-0 flex-wrap items-center justify-between gap-4 border-b border-line px-8 py-4 backdrop-blur-xl md:flex">
+          <header className="hc-topbar sticky top-0 z-30 hidden w-full min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-line px-8 py-4 backdrop-blur-xl md:flex">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight">
                 {aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
-                  ? "Olá 👋 Visão geral"
+                  ? `Olá${nomeUsuario ? `, ${nomeUsuario}` : ""}! 👋`
                   : aba === "extrato"
                     ? "Extrato"
                     : aba === "lancamentos"
@@ -550,7 +532,7 @@ export default function Home() {
               </h1>
               <p className="mt-1 text-sm text-muted">
                 {mostrarPainel
-                  ? "Seu mês, organizado em um só lugar."
+                  ? "Sua situação financeira em poucos segundos."
                   : aba === "extrato"
                     ? "Todas as movimentações do mês em um só lugar."
                     : aba === "grupo"
@@ -569,22 +551,49 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {filtroResp}
 
               {mostrarMesNoCabecalho && <SeletorMes mes={mes} status={sMes} onAnterior={() => irParaMes(addMeses(mes, -1))} onProximo={() => irParaMes(addMeses(mes, 1))} onAbrirMeses={fech.habilitado ? () => setListaMeses(true) : undefined} />}
 
               <div className="hidden md:block"><BotaoOcultarValores /></div>
-              <AjudaEInstalacao mostrarConvite={mostrarPainel} onAbrirCentral={() => abrirAjuda()} />
+              <AjudaEInstalacao onAbrirCentral={() => abrirAjuda()} />
               <ThemeToggle />
             </div>
           </header>
+        <div key={aba} className="anim-page mx-auto w-full max-w-6xl space-y-5 px-4 pb-4 md:p-8">
+          <MobileHeader
+            titulo={
+              aba === "grupo" ? "Grupo familiar" : aba === "ajuda" ? "Central de ajuda" : aba === "graficos" ? "Gráficos e relatórios" : aba === "investimentos" ? "Investimentos" : aba === "ajustes" ? "Configurações" : aba === "fatura" ? "Cartões e Faturas" : mostrarPainel
+                ? `Olá${nomeUsuario ? `, ${nomeUsuario}` : ""}! 👋`
+                : aba === "extrato"
+                  ? "Extrato"
+                  : aba === "lancamentos"
+                    ? "Lançamentos do mês"
+                    : aba === "cartao"
+                      ? "Contas parceladas"
+                      : "Contas fixas"
+            }
+            mostrarMes={mostrarMesNoCabecalho}
+            filtro={filtroResp}
+            mes={mes}
+            setMes={setMes}
+            controleMes={<SeletorMes compacto mes={mes} status={sMes} onAnterior={() => irParaMes(addMeses(mes, -1))} onProximo={() => irParaMes(addMeses(mes, 1))} onAbrirMeses={fech.habilitado ? () => setListaMeses(true) : undefined} />}
+            onAbrirMenu={() => setMenuMobile(true)}
+          />
+
 
           {/* Situação do mês (fechamento mensal): aparece em todos os módulos que mostram um mês */}
           {mostrarMesNoCabecalho && faixaMes}
 
+          {/* Convite "adicionar à tela inicial": fica fora do contêiner da Dashboard (o diálogo dele é fixo na tela) */}
+          {mostrarPainel && <div className="hidden md:block"><AjudaEInstalacao modo="convite" onAbrirCentral={() => abrirAjuda()} /></div>}
+
           {mostrarPainel && (
-            <div className="anim-stagger space-y-5">
+            // Tela inicial = consulta rápida. "@container": as colunas respondem à largura do conteúdo (com a barra lateral aberta ou fechada).
+            // Ordem: situação do mês → cartões e contas → divisão de gastos e caixinhas → últimas movimentações.
+            // Análises e histórico (evolução dos meses, "como chegamos ao disponível") ficam em Gráficos e relatórios.
+            <div className="@container grid gap-5">
               {mostrarGuia && <GuiaInicial passos={passosGuia} puladas={puladasGuia} onPular={onb.pularEtapa} onRetomar={onb.retomarEtapa} onOcultar={() => onb.atualizar({ guiaOculto: true })} onAjuda={() => abrirAjuda()} />}
               {dashboard.preferencias.resumo && (
                 <PainelResumo
@@ -592,22 +601,30 @@ export default function Home() {
                   mesCorrente={mesCorrente}
                   contasDoMes={contas}
                   faturas={faturasAbertas}
-                  serie={serieResumo}
                   acoes={acoesRepasse}
+                  repasses={repassesDoMesResumo}
                   onAbrirExtrato={setDetalheExtrato}
                   onAbrirRepasses={() => abrirGrupo("repasses")}
+                  onAbrirContas={() => irPara("contas")}
+                  onAbrirFaturas={() => irPara("fatura")}
                   somenteConsulta={consultaApenas}
-                  extra={<HistoricoFechamento mes={mes} eventos={eventosMes} />}
                 />
               )}
-              <MobileRecentes recentes={recentes} onAba={irPara} />
-              {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
-              {dashboard.preferencias.faturas && <SaldosContas estado={estado} userId={userId} mes={mes} />}
-              <div className="grid items-start gap-4 lg:grid-cols-2">
-                {dashboard.preferencias.graficos && <div id="graficos" className="min-w-0"><ResponsavelPanel resumo={resumo} itens={{ extrato, cartao, contas }} /></div>}
-                {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0"><InvestimentosReservaCard /></div>}
-              </div>
+              {/* Cada bloco some sozinho quando não há dados; se sobrar um só, ele ocupa a linha inteira */}
+              {dashboard.preferencias.faturas && (
+                <div className="grid items-start gap-5 @2xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] @2xl:[&>*:only-child]:col-span-full">
+                  <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />
+                  <SaldosContas estado={estado} userId={userId} mes={mes} />
+                </div>
+              )}
+              {(dashboard.preferencias.graficos || dashboard.preferencias.investimentos) && (
+                <div className="grid items-start gap-5 @3xl:grid-cols-2 @3xl:[&>*:only-child]:col-span-full">
+                  {dashboard.preferencias.graficos && <ResponsavelPanel compacto resumo={resumo} itens={{ extrato, cartao, contas }} onAbrir={() => irPara("graficos")} />}
+                  {dashboard.preferencias.investimentos && <div id="investimentos" className="min-w-0"><InvestimentosReservaCard /></div>}
+                </div>
+              )}
               <MovimentacoesRecentes extrato={extrato} cartao={cartao} contas={contas} mes={mes} onVerTudo={() => irPara("extrato")} />
+              <HistoricoFechamento mes={mes} eventos={eventosMes} />
               <div className="flex justify-center pt-1">
                 <button type="button" onClick={() => { setSecaoAjustes("dashboard"); irPara("ajustes"); }} className="rounded-full bg-surface px-4 py-2 text-xs font-medium text-muted ring-1 ring-line transition hover:text-ink">
                   <span className="inline-flex items-center gap-1.5"><Ico icon={Pencil} size={14} />Personalizar tela inicial</span>
@@ -672,8 +689,10 @@ export default function Home() {
                   estadoCompleto={estadoFiltrado}
                   rotuloResponsaveis={rotuloVisualizacao}
                   mes={mes}
+                  mesCorrente={mesCorrente}
                   resumo={resumo}
                   painel={painel}
+                  serie={serieResumo}
                   modo={modoSaldo}
                   onModo={setModoSaldo}
                   itens={{ extrato, cartao, contas }}

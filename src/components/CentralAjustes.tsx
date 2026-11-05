@@ -22,10 +22,10 @@ const SECOES: { id: SecaoAjustes; nome: string; desc: string; s: LucideIcon }[] 
 ];
 
 const ITENS_DASH: { id: keyof PreferenciasDashboard; nome: string; desc: string }[] = [
-  { id: 'resumo', nome: 'Resumo do mês', desc: 'Saldo, salário e gastos' },
-  { id: 'graficos', nome: 'Gráficos', desc: 'Divisão por responsável e categoria' },
-  { id: 'faturas', nome: 'Faturas do mês', desc: 'Total de cada cartão' },
-  { id: 'investimentos', nome: 'Investimentos e reserva', desc: 'Metas e aportes' },
+  { id: 'resumo', nome: 'Resumo do mês', desc: 'Saldo disponível, entradas, saídas e compromissos' },
+  { id: 'graficos', nome: 'Divisão de gastos', desc: 'Por categoria, pessoa e cartão' },
+  { id: 'faturas', nome: 'Cartões e contas', desc: 'Meus cartões e saldo das contas de débito' },
+  { id: 'investimentos', nome: 'Caixinhas de investimento', desc: 'Objetivos, aportes e progresso das metas' },
 ];
 
 function Switch({ ligado, onChange, desabilitado, rotulo }: { ligado: boolean; onChange: (v: boolean) => void; desabilitado?: boolean; rotulo: string }) {

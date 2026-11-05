@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas, entradasDeRepasse, saidasDeRepasse, marcarForaDaVisao, travadoPorRepasse } from "../src/lib/grupo";
+import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, repassesDoMes, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas, entradasDeRepasse, saidasDeRepasse, marcarForaDaVisao, travadoPorRepasse } from "../src/lib/grupo";
 import { calcularMes, repassesRecebidosNoMes, sobraDosMesesAnteriores } from "../src/lib/calculos";
 
 const REF = "2026-10";
@@ -279,5 +279,33 @@ describe("travadoPorRepasse (regra 3)", () => {
     expect(travadoPorRepasse(itens, ["2", "4"])).toBe(false);
     expect(travadoPorRepasse(itens, ["99"])).toBe(false);
     expect(travadoPorRepasse([], ["1"])).toBe(false);
+  });
+});
+
+describe("repasses só do mês pedido", () => {
+  const rep = (id: string, mes: string, extra: any = {}) => ({ id, owner_id: "vitu", responsavel_id: "gisa", mes, descricao: id, valor: 100, autorNome: "Vitu", responsavel: "Gisa", ...extra });
+  const dados: any = {
+    extrato: [rep("nov26", "2026-11"), rep("out26", "2026-10"), rep("nov25", "2025-11"), rep("dez26", "2026-12"), rep("out26-pago", "2026-10", { repasse_pago: true })],
+    cartao: [],
+    contas: [],
+  };
+  const lista = lancamentosDoGrupo(dados, "2026-11");
+
+  it("novembro de 2026 não mistura com outubro, dezembro nem com novembro de 2025", () => {
+    expect(repassesDoMes(lista, "2026-11").map((l) => l.id)).toEqual(["nov26"]);
+    expect(repassesDoMes(lista, "2025-11").map((l) => l.id)).toEqual(["nov25"]);
+  });
+  it("os meses anteriores continuam disponíveis ao trocar o mês, com o repasse concluído incluído", () => {
+    expect(repassesDoMes(lista, "2026-10").map((l) => l.id).sort()).toEqual(["out26", "out26-pago"]);
+  });
+  it("o resumo do mês só soma o que é do mês", () => {
+    const r = resumoRepasses(repassesDoMes(lista, "2026-11"), "vitu");
+    expect(r.aReceber.agora + r.aReceber.aVencer).toBe(100);
+    expect(r.aReceber.recebido).toBe(0);
+  });
+  it("o resumo por membro ignora repasses em aberto de outros meses", () => {
+    const r = resumoPorMembro(dados, [{ id: "vitu" }, { id: "gisa" }], "2026-11", { meuId: "vitu", mesRef: "2026-11" });
+    expect(r.find((x) => x.id === "vitu")!.aReceber).toBe(100);
+    expect(r.find((x) => x.id === "gisa")!.aRepassar).toBe(100);
   });
 });

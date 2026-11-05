@@ -1,22 +1,22 @@
 "use client";
 
 import type { ModoSaldo, Painel } from "@/lib/painel";
-import { useState } from "react";
-import SummaryCards from "@/components/SummaryCards";
-import ResponsavelPanel from "@/components/ResponsavelPanel";
-import GraficoEvolucao from "@/components/GraficoEvolucao";
-import RelatorioFinanceiro from "@/components/RelatorioFinanceiro";
-import { MobileSaldo, type TipoResumo } from "@/components/mobile/MobileShell";
+import PainelRelatorios from "@/components/relatorios/PainelRelatorios";
+import type { TipoResumo } from "@/components/mobile/MobileShell";
 import type { Resumo } from "@/lib/finance";
 
-/** Tela própria de Gráficos, com a aba Relatórios (filtros por período e exportação). */
+/** Módulo de Gráficos/Relatórios: análises por aba (sem repetir o resumo da tela inicial). As props de resumo seguem aceitas para não mexer em page.tsx. */
 export default function TelaGraficos({
-  estadoCompleto, mes, resumo, painel, modo, onModo, itens, onAbrirExtrato, rotuloResponsaveis,
+  estadoCompleto, mes, mesCorrente, resumo, painel, serie, modo, onModo, itens, onAbrirExtrato, rotuloResponsaveis,
 }: {
   estadoCompleto: { extrato: any[]; cartao: any[]; contas: any[] };
   mes: string;
+  /** Mês do calendário (AAAA-MM), para os rótulos de "hoje" x "fim do mês" */
+  mesCorrente: string;
   resumo: Resumo;
   painel: Painel;
+  /** Entrou x saiu dos últimos meses (saiu da tela inicial, que mostra só o mês) */
+  serie: { mes: string; entrou: number; saiu: number }[];
   modo: ModoSaldo;
   onModo: (m: ModoSaldo) => void;
   itens: { extrato: any[]; cartao: any[]; contas: any[] };
@@ -24,26 +24,5 @@ export default function TelaGraficos({
   /** Pessoas do filtro global, só para o rótulo dos relatórios exportados */
   rotuloResponsaveis?: string;
 }) {
-  const [sub, setSub] = useState<"graficos" | "relatorios">("graficos");
-  const chip = (ativo: boolean) => `h-10 flex-1 rounded-full text-sm font-semibold transition sm:flex-none sm:px-6 ${ativo ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`;
-
-  return (
-    <div className="space-y-5">
-      <div className="flex gap-1 rounded-full bg-surface p-1 ring-1 ring-line sm:w-fit" role="tablist" aria-label="Gráficos ou relatórios">
-        <button type="button" role="tab" aria-selected={sub === "graficos"} onClick={() => setSub("graficos")} className={chip(sub === "graficos")}>Gráficos</button>
-        <button type="button" role="tab" aria-selected={sub === "relatorios"} onClick={() => setSub("relatorios")} className={chip(sub === "relatorios")}>Relatórios</button>
-      </div>
-
-      {sub === "graficos" ? (
-        <>
-          <MobileSaldo resumo={resumo} painel={painel} modo={modo} onModo={onModo} onAbrirExtrato={onAbrirExtrato} />
-          <div className="hidden md:block"><SummaryCards resumo={resumo} painel={painel} modo={modo} onModo={onModo} onAbrirExtrato={onAbrirExtrato} /></div>
-          <GraficoEvolucao estado={estadoCompleto} mes={mes} />
-          <ResponsavelPanel resumo={resumo} itens={itens} />
-        </>
-      ) : (
-        <RelatorioFinanceiro estado={estadoCompleto} mes={mes} rotuloResponsaveis={rotuloResponsaveis} />
-      )}
-    </div>
-  );
+  return <PainelRelatorios estado={estadoCompleto} mes={mes} rotuloResponsaveis={rotuloResponsaveis} />;
 }

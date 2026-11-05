@@ -32,7 +32,11 @@ const TUTORIAIS = [
   },
 ];
 
-export default function AjudaEInstalacao({ mostrarConvite = false, onAbrirCentral }: { mostrarConvite?: boolean; onAbrirCentral?: () => void }) {
+/**
+ * "botao": o botão Ajuda do topo (abre o tutorial). "convite": a faixa dispensável "adicione à tela inicial",
+ * que fica no começo da tela inicial (não no topo fixo, onde quebrava a linha de controles).
+ */
+export default function AjudaEInstalacao({ modo = "botao", onAbrirCentral }: { modo?: "botao" | "convite"; onAbrirCentral?: () => void }) {
   const [aberto, setAberto] = useState(false);
   const [secao, setSecao] = useState<"guia" | "instalar">("guia");
   const [passo, setPasso] = useState(0);
@@ -79,12 +83,14 @@ export default function AjudaEInstalacao({ mostrarConvite = false, onAbrirCentra
 
   return (
     <>
-      <button type="button" onClick={abrirGuia} className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-sm transition hover:border-accent/50 hover:bg-background">
-        <Ico icon={CircleHelp} /><span className="hidden sm:inline">Ajuda</span>
-      </button>
+      {modo === "botao" && (
+        <button type="button" onClick={abrirGuia} className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-sm transition hover:border-accent/50 hover:bg-background">
+          <Ico icon={CircleHelp} /><span className="hidden sm:inline">Ajuda</span>
+        </button>
+      )}
 
-      {mostrarConvite && !conviteDispensado && !jaInstalado && (
-        <section className="flex flex-col gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
+      {modo === "convite" && !conviteDispensado && !jaInstalado && (
+        <section className="flex flex-col gap-3 rounded-2xl border border-accent/20 bg-accent/5 p-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
           <div className="flex items-start gap-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><Ico icon={Sparkles} /></span>
             <div>

@@ -148,7 +148,7 @@ export default function Sidebar({ onAbrirGrupo, onNova, abaAtiva, onSelecionarAb
             type="button"
             onClick={onNova}
             title={!expandido ? "Nova transação" : undefined}
-            className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent shadow-lg shadow-accent/25 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:scale-[0.98] ${expandido ? "gap-2" : ""}`}
+            className={`flex h-11 w-full items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-on-accent hc-glow-btn transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] ${expandido ? "gap-2" : ""}`}
           >
             <Ico icon={ICONES.novo} />
             {expandido && <span>Nova transação</span>}

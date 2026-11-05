@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { alterarCorMembro } from "@/lib/perfil";
 import { brl } from "@/lib/finance";
 import { useOpcoes, COR_PADRAO } from "@/lib/useOpcoes";
+import CartaoSecao from "@/components/dashboard/CartaoSecao";
 
 const CORES_PADRAO = ["#10B981", "#6366F1", "#F59E0B", "#EC4899", "#8B5CF6", "#3B82F6", "#14B8A6", "#F97316"];
 
@@ -26,16 +27,52 @@ const VISOES: { id: Visao; rotulo: string; descricao: string }[] = [
 
 type Fatia = { id: string; nome: string; valor: number; cor: string; limite?: number | null; editavel?: boolean; avatar?: string | null };
 
+const MAX_COMPACTO = 5; // fatias nomeadas na tela inicial; o resto vira "Demais"
+
+/** Rosca de proporções: a mesma nas duas versões do painel (completa nos Gráficos, resumida na tela inicial). */
+function Rosca({ fatias, total, tamanho }: { fatias: Fatia[]; total: number; tamanho: string }) {
+  const raio = 40;
+  const circ = 2 * Math.PI * raio;
+  let acumulado = 0;
+  return (
+    <div className="relative flex shrink-0 items-center justify-center">
+      <svg viewBox="0 0 100 100" className={`${tamanho} -rotate-90`} role="img" aria-label={`Divisão de gastos. Total ${brl(total)}`}>
+        <circle cx="50" cy="50" r={raio} fill="transparent" stroke="currentColor" strokeWidth="12" className="text-line/40" />
+        {total > 0 &&
+          fatias.map((f) => {
+            if (f.valor <= 0) return null;
+            const tramo = (f.valor / total) * circ;
+            const offset = -acumulado;
+            acumulado += tramo;
+            return (
+              <circle key={f.id} cx="50" cy="50" r={raio} fill="transparent" stroke={f.cor} strokeWidth="12"
+                strokeDasharray={`${tramo} ${circ - tramo}`} strokeDashoffset={offset} className="transition-all duration-500" />
+            );
+          })}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        <span className="text-xs text-muted">Total</span>
+        <span className="text-sm font-bold text-ink">{brl(total)}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function ResponsavelPanel({
   resumo,
   itens,
+  compacto = false,
+  onAbrir,
 }: {
   resumo: any;
   itens?: { extrato: any[]; cartao: any[]; contas: any[] };
+  /** Versão da tela inicial: começa por categoria, mostra só as principais fatias e leva aos Gráficos */
+  compacto?: boolean;
+  onAbrir?: () => void;
 }) {
   const [membros, setMembros] = useState<Membro[]>([]);
   const [meuId, setMeuId] = useState<string | null>(null);
-  const [visao, setVisao] = useState<Visao>("pessoa");
+  const [visao, setVisao] = useState<Visao>(compacto ? "categoria" : "pessoa");
   const { pagamento, corCategoria, corPagamento } = useOpcoes();
 
   useEffect(() => {
@@ -121,13 +158,58 @@ export default function ResponsavelPanel({
   }, [visao, membros, resumo, itens, pagamento, corCategoria, corPagamento]);
 
   const total = fatias.reduce((s, f) => s + f.valor, 0);
-  const raio = 40;
-  const circ = 2 * Math.PI * raio;
-  let acumulado = 0;
 
   const indice = VISOES.findIndex((v) => v.id === visao);
   const mover = (d: number) => setVisao(VISOES[(indice + d + VISOES.length) % VISOES.length].id);
   const atual = VISOES[indice];
+
+  if (compacto) {
+    const comValor = fatias.filter((f) => f.valor > 0);
+    const resto = comValor.slice(MAX_COMPACTO);
+    const principais: Fatia[] = [
+      ...comValor.slice(0, MAX_COMPACTO),
+      ...(resto.length ? [{ id: "demais", nome: "Demais", valor: resto.reduce((t, f) => t + f.valor, 0), cor: COR_PADRAO }] : []),
+    ];
+    return (
+      <CartaoSecao titulo="Divisão de gastos" descricao={atual.descricao} acao={onAbrir ? { rotulo: "Ver gráficos", onClick: onAbrir } : undefined}>
+        <div role="tablist" aria-label="Tipo de divisão" className="grid grid-cols-3 gap-1 rounded-full bg-background p-1">
+          {VISOES.map((v) => (
+            <button
+              key={v.id}
+              role="tab"
+              type="button"
+              aria-selected={visao === v.id}
+              onClick={() => setVisao(v.id)}
+              className={`min-h-9 rounded-full px-2 text-xs font-medium transition ${visao === v.id ? "bg-surface text-ink shadow-sm ring-1 ring-line" : "text-muted hover:text-ink"}`}
+            >
+              {v.rotulo}
+            </button>
+          ))}
+        </div>
+        {principais.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted">{visao === "cartao" ? "Marque formas de pagamento como cartão de crédito para vê-las aqui." : "Sem gastos neste mês."}</p>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-5">
+            <Rosca fatias={principais} total={total} tamanho="size-36" />
+            <ul className="min-w-[13rem] flex-1 divide-y divide-line">
+              {principais.map((f) => (
+                <li key={f.id} className="flex min-h-11 items-center justify-between gap-3 py-2 text-sm">
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: f.cor }} aria-hidden />
+                    <span className="truncate">{f.nome}</span>
+                  </span>
+                  <span className="flex shrink-0 items-baseline gap-2">
+                    <b className="font-semibold tabular-nums">{brl(f.valor)}</b>
+                    <span className="w-9 text-right text-xs tabular-nums text-muted">{total > 0 ? Math.round((f.valor / total) * 100) : 0}%</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CartaoSecao>
+    );
+  }
 
   return (
     <div id="graficos" className="card-glass space-y-4 p-5 md:p-6">
@@ -157,25 +239,8 @@ export default function ResponsavelPanel({
         ))}
       </div>
 
-      <div className="relative my-2 flex items-center justify-center py-2">
-        <svg viewBox="0 0 100 100" className="h-40 w-40 -rotate-90">
-          <circle cx="50" cy="50" r={raio} fill="transparent" stroke="currentColor" strokeWidth="12" className="text-line/40" />
-          {total > 0 &&
-            fatias.map((f) => {
-              if (f.valor <= 0) return null;
-              const tramo = (f.valor / total) * circ;
-              const offset = -acumulado;
-              acumulado += tramo;
-              return (
-                <circle key={f.id} cx="50" cy="50" r={raio} fill="transparent" stroke={f.cor} strokeWidth="12"
-                  strokeDasharray={`${tramo} ${circ - tramo}`} strokeDashoffset={offset} className="transition-all duration-500" />
-              );
-            })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted">Total</span>
-          <span className="text-sm font-bold text-ink">{brl(total)}</span>
-        </div>
+      <div className="my-2 flex justify-center py-2">
+        <Rosca fatias={fatias} total={total} tamanho="h-40 w-40" />
       </div>
 
       <div className="space-y-3">

@@ -1,10 +1,18 @@
 "use client";
 
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useMemo } from "react";
+import CartaoSecao from "@/components/dashboard/CartaoSecao";
+import { Ico } from "@/components/icons";
 import { montarLinhas } from "@/lib/extrato";
-import ExtratoLista from "@/components/ExtratoLista";
+import { rotuloData } from "@/lib/datas";
+import { brl } from "@/lib/finance";
 
-/** Últimas movimentações lançadas (qualquer tipo), no mesmo formato do Extrato. */
+/**
+ * Últimas movimentações lançadas (qualquer tipo), da mais recente para a mais antiga.
+ * Mesmos dados do Extrato (lib/extrato.ts), em linhas enxutas: descrição, categoria, data e valor.
+ * Entrada em verde, saída em vermelho e conta ainda não paga em âmbar (compromisso, não saída realizada).
+ */
 export default function MovimentacoesRecentes({
   extrato, cartao, contas, mes, onVerTudo, limite = 6,
 }: { extrato: any[]; cartao: any[]; contas: any[]; mes: string; onVerTudo: () => void; limite?: number }) {
@@ -23,12 +31,34 @@ export default function MovimentacoesRecentes({
   }, [extrato, cartao, contas, mes, limite]);
 
   return (
-    <section className="card-glass space-y-3 p-5 md:p-6" aria-label="Movimentações recentes">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg font-bold">Movimentações recentes</h3>
-        <button type="button" onClick={onVerTudo} className="text-sm font-medium text-accent hover:underline">Ver tudo</button>
-      </div>
-      <ExtratoLista linhas={linhas} ordem="maior" vazio="Nenhuma movimentação neste mês. Toque em + para lançar." />
-    </section>
+    <CartaoSecao titulo="Movimentações recentes" acao={{ rotulo: "Ver extrato", onClick: onVerTudo }}>
+      {linhas.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted">Nenhuma movimentação neste mês. Toque em Nova transação para lançar.</div>
+      ) : (
+        <ul className="-my-1 divide-y divide-line">
+          {linhas.map((l) => {
+            const saida = !l.entrada;
+            const data = l.data ? `${l.origem === "contas" ? "Vence " : ""}${rotuloData(l.data)}` : "";
+            return (
+              <li key={l.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-3">
+                <span className={`grid size-9 place-items-center rounded-full ${l.entrada ? "bg-pos-bg text-pos" : l.pendente ? "bg-warn-bg text-warn" : "bg-neg-bg text-neg"}`}>
+                  <Ico icon={l.entrada ? ArrowDownLeft : ArrowUpRight} size={16} />
+                </span>
+                <span className="grid min-w-0">
+                  <b className="truncate text-sm font-semibold">{l.descricao}</b>
+                  <span className="truncate text-xs text-muted">{[l.categoria, data].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span className="grid justify-items-end">
+                  <span className={`text-sm font-semibold tabular-nums ${l.entrada ? "text-pos" : l.pendente ? "text-warn" : "text-neg"}`}>
+                    {l.entrada ? "+ " : saida ? "− " : ""}{brl(l.valor)}
+                  </span>
+                  {l.pendente && <span className="text-xs text-warn">A pagar</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </CartaoSecao>
   );
 }

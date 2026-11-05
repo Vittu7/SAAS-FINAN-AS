@@ -100,6 +100,12 @@ export function lancamentosDoGrupo(e: { extrato?: Item[]; cartao?: Item[]; conta
   return saida.sort((a, b) => b.mes.localeCompare(a.mes) || b.valor - a.valor);
 }
 
+/**
+ * Só os repasses do mês pedido ("AAAA-MM", mês E ano: novembro de 2025 não se mistura com novembro de 2026).
+ * A data de referência é o mês do lançamento. Os meses anteriores continuam guardados e aparecem ao trocar o mês.
+ */
+export const repassesDoMes = (lista: LancGrupo[], mes: string): LancGrupo[] => lista.filter((l) => l.mes === mes);
+
 export type FiltroGrupo = {
   tipo: "todos" | TipoGrupo;
   /** vazio = todos */
@@ -323,7 +329,7 @@ export function resumoPorMembro(
     let aReceberAguardando = 0;
     let aRepassarAguardando = 0;
     for (const l of lista) {
-      if (l.repassePago || !l.vencido) continue;
+      if (l.mes !== mes || l.repassePago || !l.vencido) continue; // só repasses do mês do resumo
       // "Repassado" sai do pendente e passa para "aguardando confirmação"; só some de vez quando concluído
       const aguardando = l.situacaoRepasse === "aguardando";
       if (l.autorId === m.id) { if (aguardando) aReceberAguardando += l.valor; else aReceber += l.valor; }

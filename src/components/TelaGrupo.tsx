@@ -17,7 +17,7 @@ import { Ico, ICONE_ABA, ICONES } from "@/components/icons";
 import { brl, rotuloMes } from "@/lib/finance";
 import { avisarPerfilAtualizado } from "@/lib/perfil";
 import { arred } from "@/lib/calculos";
-import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, resumoPorMembro, type FiltroGrupo, type LancGrupo } from "@/lib/grupo";
+import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, repassesDoMes, resumoPorMembro, type FiltroGrupo, type LancGrupo } from "@/lib/grupo";
 import type { Membro } from "@/hooks/useFinanceStore";
 
 type Sub = "resumo" | "lancamentos" | "repasses";
@@ -153,7 +153,7 @@ function ItemRepasse({ l, lado, acoes }: { l: LancGrupo; lado: "receber" | "paga
   );
 }
 
-function AbaRepasses({ lista, meuId, membros, ocupado, onRepasse, onEstornar, onNova }: { lista: LancGrupo[]; meuId: string; membros: Membro[]; ocupado: boolean; onRepasse: Repasse; onEstornar: (ls: LancGrupo[]) => void; onNova: () => void }) {
+function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, onRepasse, onEstornar, onNova }: { lista: LancGrupo[]; mes: string; outrosMeses: { total: number; abertos: number }; meuId: string; membros: Membro[]; ocupado: boolean; onRepasse: Repasse; onEstornar: (ls: LancGrupo[]) => void; onNova: () => void }) {
   const [verFuturos, setVerFuturos] = useState(false);
   const convidado = (id: string) => membros.find((m) => m.id === id)?.convidado ?? false;
   const abertos = lista.filter((l) => !l.repassePago);
@@ -175,12 +175,21 @@ function AbaRepasses({ lista, meuId, membros, ocupado, onRepasse, onEstornar, on
   const prim = `${btn} bg-accent text-on-accent`;
   const sec = `${btn} border border-line bg-surface`;
 
+  if (lista.length === 0 && outrosMeses.total > 0) {
+    return (
+      <div className="card-glass grid gap-1 p-5" role="status">
+        <h3 className="text-base font-bold">Nenhum repasse em {rotuloMes(mes)}</h3>
+        <p className="text-sm text-muted">{outrosMeses.abertos > 0 ? `Há ${outrosMeses.abertos} ${outrosMeses.abertos === 1 ? "repasse em aberto" : "repasses em aberto"} em outros meses. ` : ""}Troque o mês no topo da tela para consultar os repasses de outros períodos.</p>
+      </div>
+    );
+  }
   if (lista.length === 0) {
     return <EstadoVazio icone={HandCoins} titulo="Nenhum repasse ainda" descricao="Quando você lança uma despesa e escolhe outra pessoa do grupo como responsável, o valor aparece aqui. Quem deve informa o repasse e quem recebeu confirma." passos={["Toque em Nova transação e escolha Saída", "Em Mais opções, marque a pessoa responsável pelo gasto", "Quem deve informa o repasse; quem recebeu confirma"]} acao={{ rotulo: "Nova transação", onClick: onNova }} />;
   }
 
   return (
     <div className="@container grid gap-5">
+      <p className="px-1 text-sm text-muted">Repasses de {rotuloMes(mes)}.{outrosMeses.abertos > 0 ? ` Há ${outrosMeses.abertos} ${outrosMeses.abertos === 1 ? "repasse em aberto" : "repasses em aberto"} em outros meses: troque o mês no topo para ver.` : ""}</p>
       <section className="card-glass grid grid-cols-2 overflow-hidden @2xl:grid-cols-3" aria-label="Situação dos repasses">
         <div className="grid gap-0.5 p-4"><span className="text-xs font-medium text-muted">Tenho que receber</span><span className={`text-xl font-bold tabular-nums ${soma(receber) > 0 ? "text-pos" : ""}`}>{brl(soma(receber))}</span><span className="text-xs text-muted">{porPessoa(receber, "respId").map((p) => p.nome).join(", ") || "nada em aberto"}</span></div>
         <div className="grid gap-0.5 border-l border-line p-4"><span className="text-xs font-medium text-muted">Tenho que pagar</span><span className={`text-xl font-bold tabular-nums ${soma(pagar) > 0 ? "text-warn" : ""}`}>{brl(soma(pagar))}</span><span className="text-xs text-muted">{porPessoa(pagar, "autorId").map((p) => p.nome).join(", ") || "nada em aberto"}</span></div>
@@ -416,11 +425,14 @@ export default function TelaGrupo({
 }: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub; /** ids das pessoas do filtro de responsáveis; null = todo o grupo */ pessoasFiltradas?: Set<string> | null }) {
   const [sub, setSub] = useState<Sub>(abaInicial);
   const meuId = userId || "";
-  // Lançamentos e repasses mostram só o mês selecionado (o mês atual, por padrão), sem misturar períodos
-  const lista = useMemo(() => filtrarGrupoPorPessoas(lancamentosDoGrupo(dados), pessoasFiltradas).filter((l) => l.mes === mes), [dados, pessoasFiltradas, mes]);
+  // Lançamentos e repasses mostram só o mês selecionado (o mês atual, por padrão), sem misturar períodos.
+  // Os meses anteriores continuam guardados: basta trocar o mês no topo para consultar.
+  const doGrupo = useMemo(() => filtrarGrupoPorPessoas(lancamentosDoGrupo(dados), pessoasFiltradas), [dados, pessoasFiltradas]);
+  const lista = useMemo(() => repassesDoMes(doGrupo, mes), [doGrupo, mes]);
   const membrosVisiveis = useMemo(() => (pessoasFiltradas ? membros.filter((m) => pessoasFiltradas.has(m.id)) : membros), [membros, pessoasFiltradas]);
-  // Repasses: todos os meses (uma dívida de outubro não some ao navegar para novembro)
-  const listaRepasses = useMemo(() => filtrarGrupoPorPessoas(lancamentosDoGrupo(dados), pessoasFiltradas), [dados, pessoasFiltradas]);
+  // Repasses: também só do mês selecionado. O que ficou em outros meses é só avisado (contagem), não misturado.
+  const listaRepasses = lista;
+  const repassesOutrosMeses = useMemo(() => ({ total: doGrupo.length - lista.length, abertos: doGrupo.filter((l) => l.mes !== mes && !l.repassePago).length }), [doGrupo, lista, mes]);
   // Ações minhas: informar um repasse que devo (pendente) ou confirmar um recebimento (aguardando)
   const pendentes = useMemo(() => listaRepasses.filter((l) => l.vencido && ((l.respId === meuId && l.situacaoRepasse === "pendente") || (l.autorId === meuId && l.situacaoRepasse === "aguardando"))).length, [listaRepasses, meuId]);
   // Confirmar ("concluir") e informar perguntam antes a conta; estornar ("reabrir") pede confirmação
@@ -460,7 +472,7 @@ export default function TelaGrupo({
 
       {sub === "resumo" && <AbaResumo dados={dados} membros={membrosVisiveis} meuId={meuId} mes={mes} />}
       {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} mes={mes} onRepasse={repasseComConta} />}
-      {sub === "repasses" && <AbaRepasses lista={listaRepasses} meuId={meuId} membros={membros} ocupado={ocupado} onRepasse={repasseComConta} onEstornar={(ls) => setEstornando(ls)} onNova={onNova} />}
+      {sub === "repasses" && <AbaRepasses lista={listaRepasses} mes={mes} outrosMeses={repassesOutrosMeses} meuId={meuId} membros={membros} ocupado={ocupado} onRepasse={repasseComConta} onEstornar={(ls) => setEstornando(ls)} onNova={onNova} />}
       {pedindoConta && (
         <EscolherContaRepasse
           modo={pedindoConta.acao === "concluir" ? "receber" : "repassar"}

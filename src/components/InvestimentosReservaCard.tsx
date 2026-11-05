@@ -234,7 +234,7 @@ function CartaoCaixinha({
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        <div className="h-full rounded-full transition-[width]" style={{ width: `${progresso}%`, backgroundColor: c.cor }} />
+        <div className="hc-glow-pt h-full rounded-full transition-[width]" style={{ width: `${progresso}%`, backgroundColor: c.cor, ["--glow-c" as string]: c.cor }} />
       </div>
       <p className="mt-1.5 text-xs text-muted">
         {c.meta > 0 ? `${Math.round(progresso)}% da meta` : "Defina uma meta para acompanhar"}

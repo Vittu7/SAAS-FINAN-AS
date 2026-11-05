@@ -93,3 +93,28 @@ export async function enviarFotoPerfil(client: Cliente, user: Usuario, arquivo: 
 export const avisarPerfilAtualizado = () => {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("homecash:perfil"));
 };
+
+type ClienteGrupo = {
+  from: (tabela: string) => any;
+  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }>;
+};
+
+/**
+ * Altera a cor de uma pessoa do grupo.
+ * - A própria cor: update direto, confirmando que o banco gravou a linha.
+ * - A cor de outra pessoa: só o gestor, pela função alterar_cor_membro_grupo (o RLS não deixa
+ *   ninguém alterar o perfil de outra pessoa; antes o update voltava sem erro e a tela dizia "Cor atualizada").
+ */
+export async function alterarCorMembro(client: ClienteGrupo, meuId: string, membroId: string, cor: string): Promise<void> {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(cor)) throw new Error("Cor inválida.");
+
+  if (membroId === meuId) {
+    const { data, error } = await client.from("perfis").update({ cor }).eq("id", meuId).select("id").maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("O servidor não confirmou a alteração da cor.");
+    return;
+  }
+
+  const { error } = await client.rpc("alterar_cor_membro_grupo", { p_perfil_id: membroId, p_cor: cor });
+  if (error) throw new Error(error.message);
+}

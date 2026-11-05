@@ -4,6 +4,7 @@ import { avisos, falhou } from "@/lib/avisos";
 import Avatar from "@/components/Avatar";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { alterarCorMembro } from "@/lib/perfil";
 import { brl } from "@/lib/finance";
 import { useOpcoes, COR_PADRAO } from "@/lib/useOpcoes";
 
@@ -33,6 +34,7 @@ export default function ResponsavelPanel({
   itens?: { extrato: any[]; cartao: any[]; contas: any[] };
 }) {
   const [membros, setMembros] = useState<Membro[]>([]);
+  const [meuId, setMeuId] = useState<string | null>(null);
   const [visao, setVisao] = useState<Visao>("pessoa");
   const { pagamento, corCategoria, corPagamento } = useOpcoes();
 
@@ -55,6 +57,7 @@ export default function ResponsavelPanel({
       .select("grupo_id, nome_usuario, cor, id")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (perfil) setMeuId(perfil.id);
 
     if (perfil?.grupo_id) {
       const { data } = await supabase.from("perfis").select("id, nome_usuario, cor, avatar_url").eq("grupo_id", perfil.grupo_id);
@@ -69,11 +72,14 @@ export default function ResponsavelPanel({
   const alterarCor = async (membroId: string, novaCor: string) => {
     const anterior = membros.find((m) => m.id === membroId)?.cor;
     setMembros((prev) => prev.map((m) => (m.id === membroId ? { ...m, cor: novaCor } : m)));
-    const { error } = await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
-    if (error) {
+    try {
+      if (!meuId) throw new Error("Perfil ainda não carregado.");
+      await alterarCorMembro(supabase, meuId, membroId, novaCor);
+      avisos.sucesso("Cor atualizada");
+    } catch (error) {
       if (anterior) setMembros((prev) => prev.map((m) => (m.id === membroId ? { ...m, cor: anterior } : m)));
       falhou("alterar a cor", error);
-    } else avisos.sucesso("Cor atualizada");
+    }
   };
 
   const fatias: Fatia[] = useMemo(() => {

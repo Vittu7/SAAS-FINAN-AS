@@ -24,7 +24,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ## Estrutura
 
 ```
-src/app/          rotas: / (painel), /login, /perfil, /grupo, /privacidade, /termos
+src/app/          rotas: / (painel), /login, /perfil, /privacidade, /termos
 src/components/   telas e componentes (mobile/ = versão celular)
 src/hooks/        estado com Supabase: useFinanceStore (lançamentos e repasses), useCaixinhas,
                   usePagamentosFatura, useMovimentosConta, useDashboardPreferences
@@ -53,6 +53,13 @@ docs/arquivo/     material antigo, só para consulta
   chamadas com `supabase.rpc(...)`.
 - O histórico de scripts está incompleto no repositório: os scripts 01–07 foram rodados manualmente no SQL Editor
   e não estão versionados. `supabase/supabase-08-pagamentos-fatura.sql` é o mais recente.
+- `supabase/supabase-09` a `11` já foram aplicados: permissões de funções, RLS com `(select auth.uid())` e índices.
+- `supabase/supabase-12-perfis-protecao.sql` **ainda não foi aplicado**: rode só depois do deploy do código que entra
+  no grupo por código de convite (ele impede gravar `grupo_id`/`cargo` direto no perfil).
+- `supabase/supabase-13-convidado-so-gestor.sql` já foi aplicado (só o gestor adiciona convidado sem conta).
+- `supabase/supabase-14-trava-repasse-confirmado.sql` **ainda não foi aplicado** (trava edição/exclusão de lançamento
+  com repasse confirmado até o estorno).
+- `docs/propostas-supabase.md` lista remoções e consolidações que dependem de autorização (com o SQL exato).
 - `supabase/diagnostico-limpeza.sql` contém apenas consultas de leitura para auditar o banco antes de qualquer limpeza.
 - Novos scripts devem ser aditivos e reexecutáveis (`if not exists`, `drop policy if exists` + `create policy`).
 

@@ -24,8 +24,8 @@ grant select, insert, update, delete on table public.pagamentos_fatura to authen
 drop policy if exists pagamentos_fatura_dono on public.pagamentos_fatura;
 create policy pagamentos_fatura_dono on public.pagamentos_fatura
   for all to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 
 -- Dia do vencimento da fatura (opcional, 1 a 31), mostrado na tela de faturas.
 alter table public.opcoes_pagamento add column if not exists dia_vencimento smallint

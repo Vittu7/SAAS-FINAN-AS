@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { garantirPerfil, salvarPerfil, nomePadrao } from "../src/lib/perfil";
+import { alterarCorMembro, garantirPerfil, salvarPerfil, nomePadrao } from "../src/lib/perfil";
 
 /** Banco falso mínimo: uma tabela "perfis" com regra opcional que nega UPDATE (simula RLS). */
 function criarBanco({ negarUpdate = false, negarInsert = false } = {}) {
@@ -66,5 +66,55 @@ describe("perfil", () => {
   it("avisa claramente quando o banco não grava (em vez de fingir que salvou)", async () => {
     const { client } = criarBanco({ negarUpdate: true });
     await expect(salvarPerfil(client, user, { nome: "X" })).rejects.toThrow(/não confirmou o salvamento/);
+  });
+});
+
+describe("alterarCorMembro", () => {
+  type Cliente = Parameters<typeof alterarCorMembro>[0];
+  type Consulta = { update: (p: object) => Consulta; eq: (c: string, v: string) => Consulta; select: () => Consulta; maybeSingle: () => Promise<unknown> };
+
+  const criar = ({ linhaGravada = true, erroRpc = null as null | string } = {}) => {
+    const chamadas: unknown[][] = [];
+    const client: Cliente = {
+      from: (t: string) => {
+        const q: Consulta = {
+          update: (p) => (chamadas.push(["update", t, p]), q),
+          eq: (c, v) => (chamadas.push(["eq", c, v]), q),
+          select: () => q,
+          maybeSingle: async () => ({ data: linhaGravada ? { id: "eu" } : null, error: null }),
+        };
+        return q;
+      },
+      rpc: async (fn, args) => (chamadas.push(["rpc", fn, args]), { error: erroRpc ? { message: erroRpc } : null }),
+    };
+    return { client, chamadas };
+  };
+
+  it("a própria cor: update direto no próprio perfil", async () => {
+    const { client, chamadas } = criar();
+    await alterarCorMembro(client, "eu", "eu", "#112233");
+    expect(chamadas).toEqual([["update", "perfis", { cor: "#112233" }], ["eq", "id", "eu"]]);
+  });
+
+  it("a própria cor: falha se o banco não confirmar a linha", async () => {
+    const { client } = criar({ linhaGravada: false });
+    await expect(alterarCorMembro(client, "eu", "eu", "#112233")).rejects.toThrow(/não confirmou/);
+  });
+
+  it("cor de outra pessoa: usa a função do banco (só gestor), nunca update direto", async () => {
+    const { client, chamadas } = criar();
+    await alterarCorMembro(client, "eu", "outro", "#AABBCC");
+    expect(chamadas).toEqual([["rpc", "alterar_cor_membro_grupo", { p_perfil_id: "outro", p_cor: "#AABBCC" }]]);
+  });
+
+  it("repassa o erro do banco (ex.: quem não é gestor)", async () => {
+    const { client } = criar({ erroRpc: "Somente o gestor pode alterar as cores." });
+    await expect(alterarCorMembro(client, "eu", "outro", "#AABBCC")).rejects.toThrow(/gestor/);
+  });
+
+  it("rejeita cor fora do formato #RRGGBB", async () => {
+    const { client, chamadas } = criar();
+    await expect(alterarCorMembro(client, "eu", "eu", "red")).rejects.toThrow(/inválida/);
+    expect(chamadas).toEqual([]);
   });
 });

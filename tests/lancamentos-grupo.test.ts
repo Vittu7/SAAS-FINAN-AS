@@ -10,13 +10,14 @@ function criarBanco() {
   };
   const client: any = {
     from: (t: string) => {
-      const q: any = { _f: [] as [string, any][], _upd: null as any, _head: false };
+      const q: any = { _f: [] as [string, any][], _n: [] as [string, any][], _upd: null as any, _head: false };
       q.select = (_c?: string, opts?: any) => ((q._head = !!opts?.head), q);
       q.update = (p: any) => ((q._upd = p), q);
       q.eq = (c: string, v: any) => (q._f.push([c, v]), q);
       q.is = (c: string, v: any) => (q._f.push([c, v]), q);
+      q.not = (c: string, _op: string, v: any) => (q._n.push([c, v]), q);
       q.then = (res: any) => {
-        const alvo = tabelas[t].filter((l) => q._f.every(([c, v]: any) => l[c] === v));
+        const alvo = tabelas[t].filter((l) => q._f.every(([c, v]: any) => l[c] === v) && q._n.every(([c, v]: any) => (l[c] ?? null) !== v));
         if (q._upd) alvo.forEach((l) => Object.assign(l, q._upd));
         res(q._head ? { count: alvo.length, error: null } : { data: alvo.map(() => ({ id: 1 })), error: null });
       };
@@ -53,5 +54,16 @@ describe("lançamentos sem grupo", () => {
     let perguntou = false;
     expect(await oferecerInclusaoNoGrupo(client, "u3", "g1", () => ((perguntou = true), true))).toBeNull();
     expect(perguntou).toBe(false);
+  });
+});
+
+describe("lançamento com repasse confirmado", () => {
+  it("não é contado nem movido para o grupo (fica travado até o estorno)", async () => {
+    const { client, tabelas } = criarBanco();
+    tabelas.extrato.push({ owner_id: "u1", grupo_id: null, repasse_pago: true });
+    expect(await contarLancamentosSemGrupo(client, "u1")).toBe(3);
+    await oferecerInclusaoNoGrupo(client, "u1", "g1", () => true);
+    expect(tabelas.extrato.find((l) => l.repasse_pago)!.grupo_id).toBeNull();
+    expect(tabelas.extrato.filter((l) => l.owner_id === "u1" && !l.repasse_pago).every((l) => l.grupo_id === "g1")).toBe(true);
   });
 });

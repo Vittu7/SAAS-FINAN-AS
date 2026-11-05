@@ -336,3 +336,12 @@ export function resumoPorMembro(
     };
   });
 }
+/**
+ * Regra 3: lançamento com repasse confirmado não pode ser editado nem excluído até o estorno
+ * (a mesma regra é imposta no banco pelo trigger lancamento_trava_repasse_confirmado).
+ * Recebe os itens da tela e os ids que se quer alterar (vários quando é uma série: parcelas ou meses).
+ */
+export function travadoPorRepasse(itens: { id: string | number; repassePago?: boolean; repasse_pago?: boolean }[], ids: (string | number)[]): boolean {
+  const alvo = new Set(ids.map(String));
+  return itens.some((i) => alvo.has(String(i.id)) && Boolean(i.repassePago ?? i.repasse_pago));
+}

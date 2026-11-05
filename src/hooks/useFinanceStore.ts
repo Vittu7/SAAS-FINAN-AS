@@ -15,6 +15,9 @@ import { supabase } from "@/lib/supabase";
 import { garantirPerfil } from "@/lib/perfil";
 import { avisos, falhou } from "@/lib/avisos";
 import { dataValida, somarMesesData } from "@/lib/datas";
+import { travadoPorRepasse } from "@/lib/grupo";
+
+const AVISO_REPASSE_TRAVADO = "Este lançamento tem repasse confirmado. Estorne o repasse (reabrir) antes de editar ou excluir.";
 
 /** A coluna "data" ainda não existe no banco (script supabase-12 não executado)? */
 const colunaDataAusente = (e: any) =>
@@ -521,6 +524,10 @@ export function useFinanceStore() {
     patch: Record<string, any>,
   ): Promise<boolean> => {
     if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: não existe no banco
+    if (travadoPorRepasse(estado[tabela] as { id: string; repassePago?: boolean }[], [id])) {
+      avisos.erro("Não foi possível salvar as alterações", AVISO_REPASSE_TRAVADO);
+      return false;
+    }
     const { responsavel, ...resto } = patch;
     const patchBanco: Record<string, any> = { ...resto };
 
@@ -573,6 +580,10 @@ export function useFinanceStore() {
   const remover = async (tabela: Tabela, id: string): Promise<boolean> => {
     if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: some quando o repasse é reaberto
     const ids = idsDaSerie(tabela, id).map(String);
+    if (travadoPorRepasse(estado[tabela] as { id: string; repassePago?: boolean }[], ids)) {
+      avisos.erro("Não foi possível remover o lançamento", AVISO_REPASSE_TRAVADO);
+      return false;
+    }
     const apagados = new Set<string>();
     let erroBanco: unknown = null;
 

@@ -15,7 +15,8 @@ export async function contarLancamentosSemGrupo(client: Cliente, userId: string)
       .from(tabela)
       .select("id", { count: "exact", head: true })
       .eq("owner_id", userId)
-      .is("grupo_id", null);
+      .is("grupo_id", null)
+      .not("repasse_pago", "is", true); // repasse confirmado fica travado até o estorno (trigger no banco)
     if (!error) total += count || 0;
   }
   return total;
@@ -30,6 +31,7 @@ export async function incluirLancamentosNoGrupo(client: Cliente, userId: string,
       .update({ grupo_id: grupoId })
       .eq("owner_id", userId)
       .is("grupo_id", null)
+      .not("repasse_pago", "is", true)
       .select("id");
     if (error) return { movidos, erro: `${tabela}: ${error.message}` };
     movidos += (data || []).length;

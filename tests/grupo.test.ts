@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas, entradasDeRepasse, saidasDeRepasse, marcarForaDaVisao } from "../src/lib/grupo";
+import { situacaoDoRepasse, lancamentosDoGrupo, filtrarGrupo, FILTRO_GRUPO_INICIAL, resumoRepasses, resumoPorMembro, idsDaSelecao, filtrarGrupoPorPessoas, entradasDeRepasse, saidasDeRepasse, marcarForaDaVisao, travadoPorRepasse } from "../src/lib/grupo";
 import { calcularMes, repassesRecebidosNoMes, sobraDosMesesAnteriores } from "../src/lib/calculos";
 
 const REF = "2026-10";
@@ -260,5 +260,24 @@ describe("repasse 'Repassado' (aguardando) aparece no resumo", () => {
     const ok = { ...E, cartao: E.cartao.map((c: any) => (c.id === "c1" ? { ...c, repasse_informado: true, repasse_pago: true } : c)) };
     const g = resumoPorMembro(ok, [{ id: "gisa" }], REF, { meuId: "vitu", mesRef: REF })[0];
     expect(g).toMatchObject({ aRepassar: 120, aRepassarAguardando: 0 });
+  });
+});
+
+describe("travadoPorRepasse (regra 3)", () => {
+  const itens = [
+    { id: 1, repassePago: true },
+    { id: "2", repassePago: false },
+    { id: "3", repasse_pago: true },
+    { id: "4" },
+  ];
+  it("trava quando algum dos ids tem repasse confirmado (compara ids como texto)", () => {
+    expect(travadoPorRepasse(itens, ["1"])).toBe(true);
+    expect(travadoPorRepasse(itens, [3])).toBe(true);
+    expect(travadoPorRepasse(itens, ["2", "4", "1"])).toBe(true);
+  });
+  it("não trava sem repasse confirmado", () => {
+    expect(travadoPorRepasse(itens, ["2", "4"])).toBe(false);
+    expect(travadoPorRepasse(itens, ["99"])).toBe(false);
+    expect(travadoPorRepasse([], ["1"])).toBe(false);
   });
 });

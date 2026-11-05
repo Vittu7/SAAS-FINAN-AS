@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Avatar from "./Avatar";
 import { oferecerInclusaoNoGrupo } from "@/lib/lancamentosGrupo";
+import { alterarCorMembro } from "@/lib/perfil";
 
 const PALETA_CORES = [
   "#10B981", // Verde
@@ -30,6 +31,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
   const [carregando, setCarregando] = useState(false);
   const [excluindoGrupo, setExcluindoGrupo] = useState(false);
   const [confirmaNome, setConfirmaNome] = useState("");
+  const [codigoConvite, setCodigoConvite] = useState("");
 
   useEffect(() => {
     carregarPerfilEMembros();
@@ -76,11 +78,26 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const alterarCorMembro = async (membroId: string, novaCor: string) => {
-    const { error } = await supabase.from("perfis").update({ cor: novaCor }).eq("id", membroId);
-    if (error) falhou("alterar a cor", error);
-    else avisos.sucesso("Cor atualizada");
+  const alterarCor = async (membroId: string, novaCor: string) => {
+    try {
+      await alterarCorMembro(supabase, meuPerfil.id, membroId, novaCor);
+      avisos.sucesso("Cor atualizada");
+    } catch (error) {
+      falhou("alterar a cor", error);
+    }
     carregarPerfilEMembros();
+  };
+
+  // Código de convite: gerado pelo gestor, vale 7 dias e uma única entrada (função gerar_convite_grupo_familiar).
+  const gerarConvite = async () => {
+    setCarregando(true);
+    const { data, error } = await supabase.rpc("gerar_convite_grupo_familiar");
+    setCarregando(false);
+    if (error || !data) {
+      falhou("gerar o convite", error || new Error("O servidor não devolveu o código."));
+      return;
+    }
+    setCodigoConvite(String(data));
   };
 
   const gerenciarGrupo = async (e: React.FormEvent) => {
@@ -101,18 +118,12 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
       }
 
       if (modo === "entrar") {
-        const nomePadrao = user?.user_metadata?.full_name || user?.email || "Usuário";
-        const { error: erroPerfil } = await supabase.from("perfis").upsert({
-          id: user?.id,
-          user_id: user?.id,
-          nome_usuario: nomePadrao,
-          grupo_id: inputValor,
-          cargo: "membro",
-          cor: "#6366F1",
-        });
-        if (erroPerfil) throw erroPerfil;
+        // Entrar só com código de convite válido (função entrar_grupo_por_convite): o banco confere validade,
+        // uso único e que você ainda não está em outro grupo. Nunca gravar grupo_id/cargo direto no perfil.
+        const { data: grupoId, error: erroConvite } = await supabase.rpc("entrar_grupo_por_convite", { p_codigo: inputValor.trim() });
+        if (erroConvite || !grupoId) throw erroConvite || new Error("Não foi possível entrar no grupo.");
 
-        const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, inputValor) : null;
+        const aviso = user ? await oferecerInclusaoNoGrupo(supabase as any, user.id, String(grupoId)) : null;
         avisos.sucesso("Você entrou no grupo");
         if (aviso) avisos.aviso(aviso);
         window.dispatchEvent(new Event("homecash:perfil"));
@@ -133,21 +144,12 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     if (!nomeConvidado.trim() || !meuPerfil?.grupo_id) return;
     setCarregando(true);
 
-    // Função do banco (supabase-08-convidado.sql): cria o convidado sem conta com as permissões certas
-    const { error } = await supabase.rpc("adicionar_convidado", { p_nome: nomeConvidado.trim(), p_cor: corConvidado });
-    let erroFinal: unknown = error;
-    if (error && (error.code === "PGRST202" || error.code === "42883" || /adicionar_convidado/.test(error.message))) {
-      // Script ainda não rodou: tenta o jeito antigo (com id próprio) e, se falhar, orienta
-      const direto = await supabase.from("perfis").insert([
-        { id: crypto.randomUUID(), nome_usuario: nomeConvidado.trim(), grupo_id: meuPerfil.grupo_id, cargo: "membro", eh_convidado: true, cor: corConvidado },
-      ]);
-      erroFinal = direto.error
-        ? new Error("Para cadastrar convidados, execute o script supabase-08-convidado.sql no Supabase. (" + direto.error.message + ")")
-        : null;
-    }
+    // Função do banco: cria o convidado sem conta no seu grupo. Só o gestor pode (regra conferida no banco).
+    // Não há alternativa por insert direto: o RLS de perfis só aceita inserir o próprio perfil.
+    const { error } = await supabase.rpc("adicionar_convidado_grupo", { p_nome: nomeConvidado.trim(), p_cor: corConvidado });
 
-    if (erroFinal) {
-      falhou("adicionar o convidado", erroFinal);
+    if (error) {
+      falhou("adicionar o convidado", error);
     } else {
       avisos.sucesso("Convidado adicionado", nomeConvidado.trim());
       setNomeConvidado("");
@@ -214,15 +216,34 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
               <p className="text-lg font-bold text-accent">{meuPerfil.grupos_familiares?.nome}</p>
             </div>
 
-            {/* Código de Convite */}
+            {/* Código de Convite (só o gestor gera; vale 7 dias e uma entrada) */}
             <div className="p-4 bg-slate-900/50 rounded-xl border border-line">
-              <p className="text-sm mb-1 font-medium">Código para novos usuários</p>
-              <code className="block p-2 bg-black/40 rounded text-xs select-all text-center text-emerald-400 font-mono">
-                {meuPerfil.grupo_id}
-              </code>
+              <p className="text-sm mb-1 font-medium">Convidar alguém com conta</p>
+              {souGestor ? (
+                codigoConvite ? (
+                  <>
+                    <code className="block p-2 bg-black/40 rounded text-sm select-all text-center text-emerald-400 font-mono tracking-wider">
+                      {codigoConvite}
+                    </code>
+                    <p className="mt-1 text-xs text-muted">Envie este código. Ele vale por 7 dias e serve para uma única pessoa.</p>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={gerarConvite}
+                    disabled={carregando}
+                    className="w-full py-2 px-3 rounded-xl border border-accent text-accent hover:bg-accent/10 text-sm font-medium transition disabled:opacity-50"
+                  >
+                    {carregando ? "Gerando..." : "Gerar código de convite"}
+                  </button>
+                )
+              ) : (
+                <p className="text-xs text-muted">Peça ao gestor do grupo para gerar um código de convite.</p>
+              )}
             </div>
 
-            {/* Adicionar Convidado sem Conta */}
+            {/* Adicionar Convidado sem Conta (só o gestor) */}
+            {souGestor && (
             <div className="border-t border-line pt-3">
               {!adicionandoConvidado ? (
                 <button
@@ -280,6 +301,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                 </form>
               )}
             </div>
+            )}
 
             {/* Lista de Membros e Seleção de Cor em Círculo */}
             <div>
@@ -296,7 +318,7 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
                         <input
                           type="color"
                           value={m.cor || "#10B981"}
-                          onChange={(e) => alterarCorMembro(m.id, e.target.value)}
+                          onChange={(e) => alterarCor(m.id, e.target.value)}
                           className="absolute -inset-2 h-10 w-10 cursor-pointer border-0 bg-transparent p-0 outline-none"
                           title="Mudar cor desta pessoa"
                         />
@@ -396,14 +418,14 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
         ) : (
           <form onSubmit={gerenciarGrupo} className="space-y-4">
             <label className="text-sm font-medium text-muted">
-              {modo === "criar" ? "Nome do Grupo (ex: Família Silva)" : "Cole o Código do Grupo"}
+              {modo === "criar" ? "Nome do Grupo (ex: Família Silva)" : "Código de convite (peça ao gestor do grupo)"}
             </label>
             <input
               type="text"
               required
               value={inputValor}
               onChange={(e) => setInputValor(e.target.value)}
-              placeholder={modo === "criar" ? "Nome do grupo..." : "Cole o ID aqui..."}
+              placeholder={modo === "criar" ? "Nome do grupo..." : "Cole o código aqui..."}
               className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-sm focus:ring-2 focus:ring-accent outline-none"
             />
             <div className="flex gap-2">

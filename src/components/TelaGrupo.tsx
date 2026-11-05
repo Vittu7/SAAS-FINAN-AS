@@ -17,7 +17,7 @@ import { Ico, ICONE_ABA, ICONES } from "@/components/icons";
 import { brl, rotuloMes } from "@/lib/finance";
 import { avisarPerfilAtualizado } from "@/lib/perfil";
 import { arred } from "@/lib/calculos";
-import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, resumoPorMembro, resumoRepasses, type FiltroGrupo, type LancGrupo, type PendenciaPessoa } from "@/lib/grupo";
+import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, resumoPorMembro, type FiltroGrupo, type LancGrupo } from "@/lib/grupo";
 import type { Membro } from "@/hooks/useFinanceStore";
 
 type Sub = "resumo" | "lancamentos" | "repasses";
@@ -68,29 +68,29 @@ const ICONE_TIPO = { avista: ICONE_ABA.lancamentos, parcelada: ICONE_ABA.cartao,
 const sel = "h-11 w-full rounded-xl border border-line bg-background px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
 
 /* ---------- Uma linha de lançamento do grupo ---------- */
-const ROTULO_SITUACAO = { pendente: "Pendente", aguardando: "Repassado · aguardando confirmação", concluido: "Concluído" } as const;
+const ROTULO_SITUACAO = { pendente: "Pendente", aguardando: "Informado · aguardando confirmação", concluido: "Confirmado" } as const;
 const COR_SITUACAO = {
-  pendente: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  aguardando: "bg-sky-500/15 text-sky-700 dark:text-sky-400",
-  concluido: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  pendente: "bg-warn-bg text-warn-ink",
+  aguardando: "bg-accent/12 text-accent",
+  concluido: "bg-pos-bg text-pos-ink",
 } as const;
 
 /** Botão de ação conforme o papel da pessoa e a etapa do repasse. */
 function AcaoRepasseLinha({ l, meuId, onAcao }: { l: LancGrupo; meuId: string; onAcao: (l: LancGrupo, acao: AcaoRepasse) => void }) {
-  const base = "inline-flex h-9 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition active:scale-95";
+  const base = "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition active:scale-95 md:min-h-9";
   const sec = `${base} text-muted ring-1 ring-line hover:bg-background`;
   const prim = `${base} bg-accent text-on-accent`;
 
   if (l.respId === meuId) {
-    // Quem DEVE: marca que repassou; a conclusão depende de quem recebeu
-    if (l.situacaoRepasse === "pendente") return <button type="button" onClick={() => onAcao(l, "informar")} className={prim}><Ico icon={HandCoins} size={13} />Repassei</button>;
-    if (l.situacaoRepasse === "aguardando") return <><span className="text-[11px] text-muted">Aguardando {l.autorNome}</span><button type="button" onClick={() => onAcao(l, "desinformar")} className={sec}><Ico icon={Undo2} size={13} />Desfazer</button></>;
+    // Quem DEVE: informa o repasse (não muda saldo); a confirmação é de quem recebeu
+    if (l.situacaoRepasse === "pendente") return <button type="button" onClick={() => onAcao(l, "informar")} className={prim}><Ico icon={HandCoins} size={13} />Informar repasse</button>;
+    if (l.situacaoRepasse === "aguardando") return <><span className="text-[11px] text-muted">Aguardando {l.autorNome}</span><button type="button" onClick={() => onAcao(l, "desinformar")} className={sec}><Ico icon={Undo2} size={13} />Cancelar aviso</button></>;
     return null;
   }
   if (l.autorId === meuId) {
-    // Quem RECEBEU: confirma o recebimento (única forma de concluir)
-    if (l.situacaoRepasse === "concluido") return <button type="button" onClick={() => onAcao(l, "reabrir")} className={sec}><Ico icon={Undo2} size={13} />Reabrir</button>;
-    return <button type="button" onClick={() => onAcao(l, "concluir")} className={l.situacaoRepasse === "aguardando" ? prim : sec}><Ico icon={Check} size={13} />Concluir</button>;
+    // Quem RECEBEU: confirma o recebimento (única forma de concluir) e é quem pode estornar
+    if (l.situacaoRepasse === "concluido") return <button type="button" onClick={() => onAcao(l, "reabrir")} className={sec}><Ico icon={Undo2} size={13} />Estornar</button>;
+    return <button type="button" onClick={() => onAcao(l, "concluir")} className={l.situacaoRepasse === "aguardando" ? prim : sec}><Ico icon={Check} size={13} />Confirmar recebimento</button>;
   }
   return null;
 }
@@ -125,73 +125,186 @@ function LinhaGrupo({ l, meuId, onAcao }: { l: LancGrupo; meuId: string; onAcao?
   );
 }
 
-/* ---------- Valores a repassar ---------- */
-function BlocoPessoa({ p, meuId, lado, onAcao, onAcaoVarios }: { p: PendenciaPessoa; meuId: string; lado: "receber" | "repassar"; onAcao: (l: LancGrupo, acao: AcaoRepasse) => void; onAcaoVarios: (ls: LancGrupo[], acao: AcaoRepasse) => void }) {
-  const [verConcluidos, setVerConcluidos] = useState(false);
-  const abertos = p.itens.filter((l) => !l.repassePago);
-  const concluidos = p.itens.filter((l) => l.repassePago);
-  // Em lote: quem recebe conclui o que já venceu; quem deve marca como repassado o que ainda está pendente
-  const lote = lado === "receber" ? abertos.filter((l) => l.vencido) : abertos.filter((l) => l.vencido && l.situacaoRepasse === "pendente");
-  const acaoLote: AcaoRepasse = lado === "receber" ? "concluir" : "informar";
-  const rotuloLote = lado === "receber" ? "Concluir tudo" : "Repassei tudo";
+/* ---------- Repasses ---------- */
+const VALOR_TOM = { receber: "text-pos", pagar: "text-warn" } as const;
+
+function Situacao({ l, lado }: { l: LancGrupo; lado: "receber" | "pagar" }) {
+  const outro = lado === "receber" ? l.respNome : l.autorNome;
+  if (l.situacaoRepasse === "concluido") return <span className="rounded-full bg-pos-bg px-2 py-0.5 text-[11px] font-bold text-pos-ink">Confirmado</span>;
+  if (l.situacaoRepasse === "aguardando") return <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[11px] font-bold text-accent">{lado === "receber" ? `${outro} informou · confirme` : `Aguardando ${outro} confirmar`}</span>;
+  if (!l.vencido) return <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-bold text-muted ring-1 ring-line">A vencer</span>;
+  return <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11px] font-bold text-warn-ink">{lado === "receber" ? `${outro} ainda não repassou` : "Você ainda não repassou"}</span>;
+}
+
+function ItemRepasse({ l, lado, acoes }: { l: LancGrupo; lado: "receber" | "pagar"; acoes?: React.ReactNode }) {
+  const quemPagou = lado === "receber" ? "Você pagou" : `${l.autorNome} pagou`;
   return (
-    <section className="card-glass overflow-hidden">
-      <header className="flex items-center gap-3 p-4">
-        <Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="md" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold">{lado === "receber" ? `${p.nome} deve a você` : `Você deve a ${p.nome}`}</p>
-          <p className="text-xs text-muted">Em aberto <b className="text-ink">{brl(p.agora + p.aVencer)}</b>{p.aguardando > 0 && <> · Aguardando confirmação {brl(p.aguardando)}</>}{p.recebido > 0 && <> · Concluído {brl(p.recebido)}</>}</p>
-        </div>
-        {lote.length > 1 && <button type="button" onClick={() => onAcaoVarios(lote, acaoLote)} className="hidden h-9 shrink-0 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent sm:block">{rotuloLote} ({lote.length})</button>}
-      </header>
-      {lote.length > 1 && <div className="px-4 pb-2 sm:hidden"><button type="button" onClick={() => onAcaoVarios(lote, acaoLote)} className="h-10 w-full rounded-lg bg-accent text-xs font-semibold text-on-accent">{rotuloLote} ({lote.length})</button></div>}
-      <ul className="divide-y divide-line border-t border-line px-4">
-        {abertos.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onAcao={onAcao} />)}
-        {verConcluidos && concluidos.map((l) => <LinhaGrupo key={l.chave} l={l} meuId={meuId} onAcao={onAcao} />)}
-      </ul>
-      {concluidos.length > 0 && (
-        <button type="button" onClick={() => setVerConcluidos((v) => !v)} className="w-full border-t border-line py-2.5 text-xs font-medium text-accent hover:bg-background">{verConcluidos ? "Ocultar concluídos" : `Ver concluídos (${concluidos.length})`}</button>
-      )}
-    </section>
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 last:border-b-0">
+      <div className="grid min-w-0 flex-1 basis-56 gap-1">
+        <b className="text-sm font-semibold">{l.descricao}{l.parcela ? ` · ${l.parcela}` : ""}</b>
+        <span className="text-xs text-muted">{quemPagou} · {l.tipoRotulo}{l.forma ? ` · ${l.forma}` : ""} · {rotuloMes(l.mes)}</span>
+        <span><Situacao l={l} lado={lado} /></span>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <b className={`text-sm tabular-nums ${l.repassePago ? "text-ink" : VALOR_TOM[lado]}`}>{brl(l.valor)}</b>
+      </div>
+      {acoes && <div className="flex w-full flex-wrap gap-2 @md:w-auto">{acoes}</div>}
+    </li>
   );
 }
 
-function AbaRepasses({ lista, meuId, onRepasse, onNova }: { lista: LancGrupo[]; meuId: string; onRepasse: Repasse; onNova: () => void }) {
-  const r = useMemo(() => resumoRepasses(lista, meuId), [lista, meuId]);
-  const acao = (l: LancGrupo, a: AcaoRepasse) => void onRepasse([{ origem: l.origem, id: l.id }], a);
-  const acaoVarios = (ls: LancGrupo[], a: AcaoRepasse) => {
-    const msg = a === "concluir" ? `Confirmar o recebimento de ${ls.length} valores?` : `Marcar ${ls.length} valores como repassados?`;
-    // Concluir e "Repassei" já abrem a escolha da conta (que serve de confirmação)
-    if (a === "concluir" || a === "informar" || window.confirm(msg)) void onRepasse(ls.map((l) => ({ origem: l.origem, id: l.id })), a);
+function AbaRepasses({ lista, meuId, membros, ocupado, onRepasse, onEstornar, onNova }: { lista: LancGrupo[]; meuId: string; membros: Membro[]; ocupado: boolean; onRepasse: Repasse; onEstornar: (ls: LancGrupo[]) => void; onNova: () => void }) {
+  const [verFuturos, setVerFuturos] = useState(false);
+  const convidado = (id: string) => membros.find((m) => m.id === id)?.convidado ?? false;
+  const abertos = lista.filter((l) => !l.repassePago);
+  const vencidos = abertos.filter((l) => l.vencido);
+  const futuros = abertos.filter((l) => !l.vencido);
+  const receber = vencidos.filter((l) => l.autorId === meuId);
+  const pagar = vencidos.filter((l) => l.respId === meuId);
+  const concluidos = lista.filter((l) => l.repassePago && (l.autorId === meuId || l.respId === meuId)).sort((a, b) => String(b.repassePagoEm || "").localeCompare(String(a.repassePagoEm || "")));
+  const soma = (ls: LancGrupo[]) => arred(ls.reduce((t, l) => t + l.valor, 0));
+  const porPessoa = (ls: LancGrupo[], chave: "respId" | "autorId") => {
+    const mapa = new Map<string, LancGrupo[]>();
+    for (const l of ls) mapa.set(l[chave], [...(mapa.get(l[chave]) || []), l]);
+    return [...mapa.entries()].map(([id, itens]) => ({ id, nome: chave === "respId" ? itens[0].respNome : itens[0].autorNome, avatar: chave === "respId" ? itens[0].respAvatar : itens[0].autorAvatar, cor: chave === "respId" ? itens[0].respCor : itens[0].autorCor, itens })).sort((a, b) => soma(b.itens) - soma(a.itens));
   };
-  const nada = r.aReceber.pessoas.length === 0 && r.aRepassar.pessoas.length === 0;
+  const paraConfirmar = porPessoa(receber.filter((l) => l.situacaoRepasse === "aguardando"), "respId");
+  const paraInformar = porPessoa(pagar.filter((l) => l.situacaoRepasse === "pendente"), "autorId");
+  const acao = (ls: LancGrupo[], a: AcaoRepasse) => { if (!ocupado) void onRepasse(ls.map((l) => ({ origem: l.origem, id: l.id })), a); };
+  const btn = "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold transition active:scale-[.98] disabled:opacity-50 @md:flex-none md:min-h-10";
+  const prim = `${btn} bg-accent text-on-accent`;
+  const sec = `${btn} border border-line bg-surface`;
 
-  if (nada) {
-    return <EstadoVazio icone={HandCoins} titulo="Nenhum valor a repassar" descricao="Nenhum repasse neste mês. Quando você lança uma despesa e escolhe outra pessoa do grupo como responsável, o valor aparece aqui. Ela marca como repassado e você confirma o recebimento." passos={["Toque em Nova transação e escolha Saída", "Em Mais opções, marque a pessoa responsável pelo gasto", "Quem deve marca “Repassei”; quem recebeu marca “Concluir”"]} acao={{ rotulo: "Nova transação", onClick: onNova }} />;
+  if (lista.length === 0) {
+    return <EstadoVazio icone={HandCoins} titulo="Nenhum repasse ainda" descricao="Quando você lança uma despesa e escolhe outra pessoa do grupo como responsável, o valor aparece aqui. Quem deve informa o repasse e quem recebeu confirma." passos={["Toque em Nova transação e escolha Saída", "Em Mais opções, marque a pessoa responsável pelo gasto", "Quem deve informa o repasse; quem recebeu confirma"]} acao={{ rotulo: "Nova transação", onClick: onNova }} />;
   }
 
-  const card = (titulo: string, valor: number, sub: string, cor = "") => (
-    <div className="card-glass p-4"><p className="text-xs text-muted">{titulo}</p><p className={`mt-1 text-2xl font-semibold tabular-nums ${cor}`}>{brl(valor)}</p><p className="mt-0.5 text-[11px] text-muted">{sub}</p></div>
-  );
-  // "Repassado" sai de pendente e vai para "aguardando confirmação"; só deixa de ser dívida quando concluído
-  const sub = (l: typeof r.aReceber) => [l.aVencer > 0 && `+ ${brl(l.aVencer)} a vencer`].filter(Boolean).join(" · ") || "Pendente agora";
-  const aguardando = r.aReceber.aguardandoAgora + r.aRepassar.aguardandoAgora;
   return (
-    <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {card("A receber", arred(r.aReceber.agora - r.aReceber.aguardandoAgora), sub(r.aReceber), "text-emerald-700 dark:text-emerald-400")}
-        {card("A repassar", arred(r.aRepassar.agora - r.aRepassar.aguardandoAgora), sub(r.aRepassar), "text-amber-700 dark:text-amber-400")}
-        {card("Aguardando confirmação", aguardando, "Já marcados como repassados", "text-sky-700 dark:text-sky-400")}
-        {card("Concluídos", r.aReceber.recebido + r.aRepassar.recebido, "Repasses confirmados")}
+    <div className="@container grid gap-5">
+      <section className="card-glass grid grid-cols-2 overflow-hidden @2xl:grid-cols-3" aria-label="Situação dos repasses">
+        <div className="grid gap-0.5 p-4"><span className="text-xs font-medium text-muted">Tenho que receber</span><span className={`text-xl font-bold tabular-nums ${soma(receber) > 0 ? "text-pos" : ""}`}>{brl(soma(receber))}</span><span className="text-xs text-muted">{porPessoa(receber, "respId").map((p) => p.nome).join(", ") || "nada em aberto"}</span></div>
+        <div className="grid gap-0.5 border-l border-line p-4"><span className="text-xs font-medium text-muted">Tenho que pagar</span><span className={`text-xl font-bold tabular-nums ${soma(pagar) > 0 ? "text-warn" : ""}`}>{brl(soma(pagar))}</span><span className="text-xs text-muted">{porPessoa(pagar, "autorId").map((p) => p.nome).join(", ") || "nada em aberto"}</span></div>
+        <div className="col-span-2 grid gap-0.5 border-t border-line p-4 @2xl:col-span-1 @2xl:border-l @2xl:border-t-0"><span className="text-xs font-medium text-muted">Aguardando minha ação</span><span className="text-xl font-bold tabular-nums">{paraConfirmar.length + paraInformar.length}</span><span className="text-xs text-muted">{paraConfirmar.length} para confirmar · {paraInformar.length} para informar</span></div>
+      </section>
+
+      {(paraConfirmar.length > 0 || paraInformar.length > 0) && (
+        <section className="card-glass grid gap-3 p-5" aria-label="Aguardando minha ação">
+          <h3 className="text-base font-bold">Aguardando minha ação</h3>
+          {paraConfirmar.map((p) => (
+            <div key={`c${p.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line p-3.5">
+              <div className="flex min-w-0 flex-1 basis-60 items-center gap-3"><Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="md" /><span className="grid min-w-0"><b className="text-sm">{p.nome} informou {brl(soma(p.itens))}</b><span className="text-xs text-muted">{p.itens.map((l) => l.descricao).join(", ")}. Confirme quando o dinheiro entrar.</span></span></div>
+              <button type="button" disabled={ocupado} onClick={() => acao(p.itens, "concluir")} className={prim}><Ico icon={Check} size={15} />Confirmar recebimento</button>
+            </div>
+          ))}
+          {paraInformar.map((p) => (
+            <div key={`i${p.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line p-3.5">
+              <div className="flex min-w-0 flex-1 basis-60 items-center gap-3"><Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="md" /><span className="grid min-w-0"><b className="text-sm">Você deve {brl(soma(p.itens))} a {p.nome}</b><span className="text-xs text-muted">{p.itens.map((l) => l.descricao).join(", ")}. Informar não muda nenhum saldo.</span></span></div>
+              <button type="button" disabled={ocupado} onClick={() => acao(p.itens, "informar")} className={prim}><Ico icon={HandCoins} size={15} />Informar repasse</button>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <div className="grid gap-5 @4xl:grid-cols-2">
+        <section className="card-glass grid content-start gap-2 p-5" aria-label="Tenho que receber">
+          <div className="flex items-baseline justify-between gap-2"><h3 className="text-base font-bold">Tenho que receber</h3><b className={`tabular-nums ${soma(receber) > 0 ? "text-pos" : "text-muted"}`}>{brl(soma(receber))}</b></div>
+          {receber.length === 0 ? <p className="py-2 text-sm text-muted">Ninguém te deve agora.</p> : porPessoa(receber, "respId").map((p) => (
+            <div key={p.id} className="grid">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2">
+                <span className="flex min-w-0 items-center gap-2.5"><Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="sm" /><b className="truncate text-sm">{p.nome}{convidado(p.id) && <span className="ml-1.5 rounded-full bg-background px-1.5 py-0.5 text-[11px] font-semibold text-muted ring-1 ring-line">convidado</span>}</b></span>
+                <span className="text-xs text-muted">falta receber <b className="text-pos">{brl(soma(p.itens))}</b></span>
+              </div>
+              <ul>
+                {p.itens.map((l) => (
+                  <ItemRepasse key={l.chave} l={l} lado="receber" acoes={
+                    <button type="button" disabled={ocupado} onClick={() => acao([l], "concluir")} className={l.situacaoRepasse === "aguardando" ? prim : sec}>
+                      <Ico icon={Check} size={15} />{l.situacaoRepasse === "aguardando" ? "Confirmar recebimento" : convidado(l.respId) ? "Registrar recebimento" : "Já recebi"}
+                    </button>
+                  } />
+                ))}
+              </ul>
+              {convidado(p.id) && <p className="pb-1 text-xs text-muted">Convidados não usam o app: quando receber, registre você mesmo. Nada é descontado de conta do convidado.</p>}
+            </div>
+          ))}
+        </section>
+
+        <section className="card-glass grid content-start gap-2 p-5" aria-label="Tenho que pagar">
+          <div className="flex items-baseline justify-between gap-2"><h3 className="text-base font-bold">Tenho que pagar</h3><b className={`tabular-nums ${soma(pagar) > 0 ? "text-warn" : "text-muted"}`}>{brl(soma(pagar))}</b></div>
+          {pagar.length === 0 ? <p className="py-2 text-sm text-muted">Você não deve nada agora.</p> : porPessoa(pagar, "autorId").map((p) => (
+            <div key={p.id} className="grid">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2">
+                <span className="flex min-w-0 items-center gap-2.5"><Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="sm" /><b className="truncate text-sm">{p.nome}</b></span>
+                <span className="text-xs text-muted">falta pagar <b className="text-warn">{brl(soma(p.itens))}</b></span>
+              </div>
+              <ul>
+                {p.itens.map((l) => (
+                  <ItemRepasse key={l.chave} l={l} lado="pagar" acoes={
+                    l.situacaoRepasse === "pendente"
+                      ? <button type="button" disabled={ocupado} onClick={() => acao([l], "informar")} className={sec}><Ico icon={HandCoins} size={15} />Informar repasse</button>
+                      : <button type="button" disabled={ocupado} onClick={() => acao([l], "desinformar")} className={sec}><Ico icon={Undo2} size={15} />Cancelar aviso</button>
+                  } />
+                ))}
+              </ul>
+            </div>
+          ))}
+          <p className="text-xs text-muted">Informar não muda nenhum saldo. O dinheiro só sai da sua conta quando a outra pessoa confirmar.</p>
+        </section>
       </div>
-      <p className="rounded-xl bg-accent/8 px-3 py-2 text-xs text-muted">Como funciona: quem deve marca <b className="text-ink">Repassei</b> (fica aguardando). O repasse só é <b className="text-ink">concluído</b> quando quem recebeu confirma.</p>
-      {r.aReceber.pessoas.length > 0 && (
-        <div className="space-y-3"><h3 className="px-1 text-sm font-bold">Valores a receber</h3>{r.aReceber.pessoas.map((p) => <BlocoPessoa key={p.pessoaId} p={p} meuId={meuId} lado="receber" onAcao={acao} onAcaoVarios={acaoVarios} />)}</div>
+
+      {futuros.length > 0 && (
+        <section className="card-glass grid gap-2 p-5">
+          <button type="button" onClick={() => setVerFuturos((v) => !v)} className="flex min-h-11 items-center justify-between gap-3 text-left">
+            <span className="grid"><b className="text-sm">Próximos meses</b><span className="text-xs text-muted">{futuros.length} parcelas ou contas a vencer · {brl(soma(futuros))}</span></span>
+            <span className="text-sm font-semibold text-accent">{verFuturos ? "Ocultar" : "Ver"}</span>
+          </button>
+          {verFuturos && <ul>{futuros.map((l) => <ItemRepasse key={l.chave} l={l} lado={l.autorId === meuId ? "receber" : "pagar"} />)}</ul>}
+        </section>
       )}
-      {r.aRepassar.pessoas.length > 0 && (
-        <div className="space-y-3"><h3 className="px-1 text-sm font-bold">Valores que você deve repassar</h3>{r.aRepassar.pessoas.map((p) => <BlocoPessoa key={p.pessoaId} p={p} meuId={meuId} lado="repassar" onAcao={acao} onAcaoVarios={acaoVarios} />)}</div>
-      )}
+
+      <section className="card-glass grid gap-2 p-5" aria-label="Concluídos">
+        <h3 className="text-base font-bold">Concluídos</h3>
+        {concluidos.length === 0 ? <p className="py-2 text-sm text-muted">Nenhum repasse confirmado ainda.</p> : (
+          <ul>
+            {concluidos.slice(0, 20).map((l) => {
+              const recebi = l.autorId === meuId;
+              return (
+                <li key={l.chave} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 last:border-b-0">
+                  <div className="grid min-w-0 flex-1 basis-56 gap-0.5">
+                    <b className="text-sm">{recebi ? `${l.respNome} → você` : `Você → ${l.autorNome}`}</b>
+                    <span className="text-xs text-muted">{l.descricao}{l.parcela ? ` · ${l.parcela}` : ""} · confirmado em {l.repassePagoEm ? new Date(l.repassePagoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}</span>
+                  </div>
+                  <b className="shrink-0 text-sm tabular-nums">{brl(l.valor)}</b>
+                  {recebi && <div className="flex w-full @md:w-auto"><button type="button" disabled={ocupado} onClick={() => onEstornar([l])} className={`${btn} border border-warn-borda text-warn`}><Ico icon={Undo2} size={15} />Estornar</button></div>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="text-xs text-muted">Só quem recebeu confirma e estorna. Despesa com repasse confirmado não pode ser editada nem excluída antes do estorno.</p>
+      </section>
     </div>
+  );
+}
+
+/** Estorno: hoje reabre o repasse; o histórico completo do estorno depende da migração de repasses (Fase B). */
+function ConfirmarEstorno({ itens, onFechar, onConfirmar }: { itens: LancGrupo[]; onFechar: () => void; onConfirmar: () => void }) {
+  const total = itens.reduce((t, l) => t + l.valor, 0);
+  return (
+    <DialogResponsivo titulo="Estornar repasse" onFechar={onFechar}>
+      <div className="grid gap-4">
+        <p className="text-sm">Estornar <b className="tabular-nums">{brl(total)}</b> ({itens.map((l) => l.descricao).join(", ")})?</p>
+        <ul className="grid list-disc gap-1.5 pl-5 text-sm">
+          <li>Os dois saldos voltam ao que eram antes da confirmação.</li>
+          <li>O repasse volta a ficar pendente e a despesa pode ser editada de novo.</li>
+          <li>Não é possível estornar um repasse confirmado em mês fechado.</li>
+        </ul>
+        <p className="rounded-xl bg-warn-bg p-3 text-xs leading-relaxed text-warn-ink">Por enquanto o banco não guarda um registro separado do estorno. O histórico completo (repasse original + estorno) depende da migração de repasses, ainda não aplicada.</p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onFechar} className="min-h-11 rounded-xl border border-line px-4 text-sm font-medium">Cancelar</button>
+          <button type="button" onClick={onConfirmar} className="min-h-11 rounded-xl border border-warn-borda px-5 text-sm font-semibold text-warn">Estornar {brl(total)}</button>
+        </div>
+      </div>
+    </DialogResponsivo>
   );
 }
 
@@ -306,16 +419,27 @@ export default function TelaGrupo({
   // Lançamentos e repasses mostram só o mês selecionado (o mês atual, por padrão), sem misturar períodos
   const lista = useMemo(() => filtrarGrupoPorPessoas(lancamentosDoGrupo(dados), pessoasFiltradas).filter((l) => l.mes === mes), [dados, pessoasFiltradas, mes]);
   const membrosVisiveis = useMemo(() => (pessoasFiltradas ? membros.filter((m) => pessoasFiltradas.has(m.id)) : membros), [membros, pessoasFiltradas]);
-  // Ações minhas: devo marcar "Repassei" (pendente) ou devo confirmar um recebimento (aguardando)
-  const pendentes = useMemo(() => lista.filter((l) => l.vencido && ((l.respId === meuId && l.situacaoRepasse === "pendente") || (l.autorId === meuId && l.situacaoRepasse === "aguardando"))).length, [lista, meuId]);
-  // Confirmar recebimento ("concluir") pergunta antes em qual conta de débito o valor entrou
+  // Repasses: todos os meses (uma dívida de outubro não some ao navegar para novembro)
+  const listaRepasses = useMemo(() => filtrarGrupoPorPessoas(lancamentosDoGrupo(dados), pessoasFiltradas), [dados, pessoasFiltradas]);
+  // Ações minhas: informar um repasse que devo (pendente) ou confirmar um recebimento (aguardando)
+  const pendentes = useMemo(() => listaRepasses.filter((l) => l.vencido && ((l.respId === meuId && l.situacaoRepasse === "pendente") || (l.autorId === meuId && l.situacaoRepasse === "aguardando"))).length, [listaRepasses, meuId]);
+  // Confirmar ("concluir") e informar perguntam antes a conta; estornar ("reabrir") pede confirmação
   const [pedindoConta, setPedindoConta] = useState<{ acao: "concluir" | "informar"; itens: { origem: "extrato" | "cartao" | "contas"; id: string }[] } | null>(null);
+  const [estornando, setEstornando] = useState<LancGrupo[] | null>(null);
+  // Uma ação de repasse por vez: evita confirmação duplicada por clique repetido (o banco é a garantia final)
+  const [ocupado, setOcupado] = useState(false);
+  const executar: Repasse = async (itens, acao, conta) => {
+    if (ocupado) return false;
+    setOcupado(true);
+    try { return await onRepasse(itens, acao, conta); } finally { setOcupado(false); }
+  };
   const repasseComConta: Repasse = async (itens, acao, conta) => {
     if ((acao === "concluir" || acao === "informar") && conta === undefined) { setPedindoConta({ acao, itens }); return true; }
-    return onRepasse(itens, acao, conta);
+    if (acao === "reabrir") { setEstornando(listaRepasses.filter((l) => itens.some((i) => i.origem === l.origem && i.id === l.id))); return true; }
+    return executar(itens, acao, conta);
   };
-  const lancamentosPedidos = pedindoConta ? lista.filter((l) => pedindoConta.itens.some((i) => i.origem === l.origem && i.id === l.id)) : [];
-  const chip = (a: boolean) => `relative h-10 flex-1 rounded-full text-sm font-semibold transition sm:flex-none sm:px-5 ${a ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`;
+  const lancamentosPedidos = pedindoConta ? listaRepasses.filter((l) => pedindoConta.itens.some((i) => i.origem === l.origem && i.id === l.id)) : [];
+  const chip = (a: boolean) => `relative h-11 flex-1 md:h-10 rounded-full text-sm font-semibold transition sm:flex-none sm:px-5 ${a ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`;
 
   if (membros.length === 0) {
     return <EstadoVazio icone={ICONES.grupo} titulo="Você ainda não faz parte de um grupo" descricao="Crie um grupo para a sua família ou entre em um existente. Com o grupo, vocês dividem despesas, veem quem lançou cada gasto e acompanham valores a repassar." acao={{ rotulo: "Criar ou entrar em um grupo", onClick: onGerenciar }} />;
@@ -325,18 +449,18 @@ export default function TelaGrupo({
     <div className="space-y-5">
       <section className="card-glass flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3"><AvatarPilha pessoas={membros.map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))} tamanho="md" /><p className="text-sm text-muted">{membros.length} {membros.length === 1 ? "pessoa" : "pessoas"} no grupo</p></div>
-        <button type="button" onClick={onGerenciar} className="inline-flex h-10 items-center gap-2 rounded-xl border border-line px-4 text-sm font-medium hover:bg-background"><Ico icon={Settings2} size={16} />Gerenciar grupo</button>
+        <button type="button" onClick={onGerenciar} className="inline-flex h-11 items-center gap-2 rounded-xl border border-line px-4 text-sm font-medium hover:bg-background md:h-10"><Ico icon={Settings2} size={16} />Gerenciar grupo</button>
       </section>
 
       <div className="flex gap-1 rounded-full bg-surface p-1 ring-1 ring-line sm:w-fit" role="tablist" aria-label="Seções do grupo">
         <button type="button" role="tab" aria-selected={sub === "resumo"} onClick={() => setSub("resumo")} className={chip(sub === "resumo")}>Resumo</button>
         <button type="button" role="tab" aria-selected={sub === "lancamentos"} onClick={() => setSub("lancamentos")} className={chip(sub === "lancamentos")}>Lançamentos</button>
-        <button type="button" role="tab" aria-selected={sub === "repasses"} onClick={() => setSub("repasses")} className={chip(sub === "repasses")}>Repasses{pendentes > 0 && <span className="ml-1.5 inline-grid min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">{pendentes}</span>}</button>
+        <button type="button" role="tab" aria-selected={sub === "repasses"} onClick={() => setSub("repasses")} className={chip(sub === "repasses")}>Repasses{pendentes > 0 && <span className="ml-1.5 inline-grid min-w-5 place-items-center rounded-full bg-warn px-1.5 text-[11px] font-bold text-surface">{pendentes}</span>}</button>
       </div>
 
       {sub === "resumo" && <AbaResumo dados={dados} membros={membrosVisiveis} meuId={meuId} mes={mes} />}
       {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} mes={mes} onRepasse={repasseComConta} />}
-      {sub === "repasses" && <AbaRepasses lista={lista} meuId={meuId} onRepasse={repasseComConta} onNova={onNova} />}
+      {sub === "repasses" && <AbaRepasses lista={listaRepasses} meuId={meuId} membros={membros} ocupado={ocupado} onRepasse={repasseComConta} onEstornar={(ls) => setEstornando(ls)} onNova={onNova} />}
       {pedindoConta && (
         <EscolherContaRepasse
           modo={pedindoConta.acao === "concluir" ? "receber" : "repassar"}
@@ -345,7 +469,14 @@ export default function TelaGrupo({
           userId={meuId}
           mes={mes}
           onFechar={() => setPedindoConta(null)}
-          onConfirmar={(conta) => { const itens = pedindoConta.itens; setPedindoConta(null); void onRepasse(itens, pedindoConta.acao, conta); }}
+          onConfirmar={(conta) => { const itens = pedindoConta.itens; const a = pedindoConta.acao; setPedindoConta(null); void executar(itens, a, conta); }}
+        />
+      )}
+      {estornando && estornando.length > 0 && (
+        <ConfirmarEstorno
+          itens={estornando}
+          onFechar={() => setEstornando(null)}
+          onConfirmar={() => { const itens = estornando.map((l) => ({ origem: l.origem, id: l.id })); setEstornando(null); void executar(itens, "reabrir"); }}
         />
       )}
     </div>

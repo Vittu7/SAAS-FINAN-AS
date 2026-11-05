@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { agruparPorOrigem, montarLinhas, ordenarPorValor, totalGastos } from '../src/lib/extrato';
+import { agruparPorOrigem, montarLinhas, ordenarPorValor, totalGastos, totalPendentes } from '../src/lib/extrato';
 import { calcularFatura } from '../src/lib/pagamentoFatura';
 import type { Estado } from '../src/lib/types';
 
@@ -39,6 +39,28 @@ describe('Ordenação por valor', () => {
     const grupos = agruparPorOrigem(comSalario);
     expect(grupos.map((g) => [g.origem, g.total])).toEqual([['extrato', 162.5], ['cartao', 300], ['contas', 0]]); // conta pendente não é gasto pago
     expect(totalGastos(comSalario)).toBe(462.5);
+  });
+
+  it('conta fixa pendente continua na lista, mas como compromisso separado', () => {
+    const grupos = agruparPorOrigem(linhas);
+    const fixas = grupos.find((g) => g.origem === 'contas')!;
+    expect(fixas.linhas.map((l) => l.descricao)).toEqual(['Internet']);
+    expect(fixas.linhas[0].pendente).toBe(true);
+    expect(fixas.pendente).toBe(100);
+    expect(totalPendentes(linhas)).toBe(100);
+  });
+
+  it('conta fixa paga entra nos gastos realizados', () => {
+    const pagas = montarLinhas(extrato, cartao, [{ ...contas[0], pago: true }], '2026-10');
+    expect(pagas.find((l) => l.origem === 'contas')!.pendente).toBe(false);
+    expect(agruparPorOrigem(pagas).find((g) => g.origem === 'contas')).toMatchObject({ total: 100, pendente: 0 });
+    expect(totalGastos(pagas)).toBe(562.5);
+    expect(totalPendentes(pagas)).toBe(0);
+  });
+
+  it('pendente fora da minha visão não entra em compromissos', () => {
+    const fora = montarLinhas([], [], [{ ...contas[0], foraDoMeuSaldo: true }], '2026-10');
+    expect(totalPendentes(fora)).toBe(0);
   });
 });
 

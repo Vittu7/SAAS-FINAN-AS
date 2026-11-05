@@ -336,6 +336,22 @@ export function resumoPorMembro(
     };
   });
 }
+export type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir";
+
+/**
+ * Quem pode fazer o quê num repasse (a mesma regra é conferida no banco pela função atualizar_repasse):
+ * - quem DEVE (responsável): informa o repasse e pode cancelar o aviso enquanto aguarda; não confirma;
+ * - quem RECEBE (quem lançou e pagou): confirma o recebimento (também direto, sem aviso: convidado não usa o app)
+ *   e é o único que estorna um repasse confirmado;
+ * - repasse confirmado não tem "confirmar" de novo; terceiros não têm ação.
+ */
+export function acoesDoRepasse(l: Pick<LancGrupo, "autorId" | "respId" | "situacaoRepasse">, meuId: string): AcaoRepasse[] {
+  if (!meuId) return [];
+  if (l.respId === meuId) return l.situacaoRepasse === "pendente" ? ["informar"] : l.situacaoRepasse === "aguardando" ? ["desinformar"] : [];
+  if (l.autorId === meuId) return l.situacaoRepasse === "concluido" ? ["reabrir"] : ["concluir"];
+  return [];
+}
+
 /**
  * Regra 3: lançamento com repasse confirmado não pode ser editado nem excluído até o estorno
  * (a mesma regra é imposta no banco pelo trigger lancamento_trava_repasse_confirmado).

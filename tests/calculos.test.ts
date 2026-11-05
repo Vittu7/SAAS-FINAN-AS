@@ -2,7 +2,7 @@ import { sobraDosMesesAnteriores } from "../src/lib/calculos";
 import { describe, it, expect } from "vitest";
 import { calcularMes, semDuplicados } from "../src/lib/calculos";
 import { resumoDoMes } from "../src/lib/finance";
-import { montarLinhas, totalGastos, agruparPorOrigem } from "../src/lib/extrato";
+import { montarLinhas, totalGastos, totalPendentes, agruparPorOrigem } from "../src/lib/extrato";
 import type { Estado } from "../src/lib/types";
 
 const M = "2026-10";
@@ -49,11 +49,21 @@ describe("resumo e extrato usam a mesma regra", () => {
     expect(r.totalGasto).toBe(680);
     expect(r.sobra).toBe(4320);
   });
-  it("extrato: entrada não entra no total de gastos", () => {
+  it("extrato: entrada não entra no total de gastos; conta pendente fica à parte", () => {
     const linhas = montarLinhas(estado.extrato, estado.cartao, estado.contas, M);
     expect(linhas.filter((l) => l.entrada)).toHaveLength(1);
-    expect(totalGastos(linhas)).toBe(680);
-    expect(agruparPorOrigem(linhas.filter((l) => !l.entrada)).reduce((t, g) => t + g.total, 0)).toBe(680);
+    // Gastos realizados: Internet (80, pendente) fica de fora
+    expect(totalGastos(linhas)).toBe(600);
+    expect(totalPendentes(linhas)).toBe(80);
+    const grupos = agruparPorOrigem(linhas.filter((l) => !l.entrada));
+    expect(grupos.reduce((t, g) => t + g.total, 0)).toBe(600);
+    expect(grupos.reduce((t, g) => t + g.pendente, 0)).toBe(80);
+  });
+  it("realizados + a pagar do extrato = saídas do resumo (cards e saldo disponível não mudam)", () => {
+    const linhas = montarLinhas(estado.extrato, estado.cartao, estado.contas, M);
+    const r = calcularMes(estado, { mes: M });
+    expect(totalGastos(linhas) + totalPendentes(linhas)).toBe(r.saidas);
+    expect(totalPendentes(linhas)).toBe(r.faltaPagar);
   });
 });
 

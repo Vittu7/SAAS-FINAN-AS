@@ -65,7 +65,10 @@ export default function ExtratoLista({
           <section key={g.origem} aria-label={g.rotulo}>
             <header className="flex items-baseline justify-between gap-3 border-y border-line bg-background/60 px-4 py-2 first:border-t-0">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">{g.rotulo}</h3>
-              <span className="text-xs font-semibold tabular-nums text-muted">{brl(g.total)}</span>
+              <span className="text-right text-xs font-semibold tabular-nums text-muted">
+                {brl(g.total)}
+                {g.pendente > 0 && <span className="ml-2 text-amber-600 dark:text-amber-400">+ {brl(g.pendente)} a pagar</span>}
+              </span>
             </header>
             <ul className="anim-stagger divide-y divide-line">
               {g.linhas.map((l) => (

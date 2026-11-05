@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronUp, Pencil, Search } from "lucide-react";
 import { Ico } from "@/components/icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CentralAjustes, { type SecaoAjustes } from "@/components/CentralAjustes";
 import FaturaCartao from "@/components/FaturaCartao";
@@ -14,7 +14,13 @@ import ContasFixasTable from "@/components/ContasFixasTable";
 import ExtratoTable from "@/components/ExtratoTable";
 import ExtratoGeral from "@/components/ExtratoGeral";
 import ResponsavelPanel from "@/components/ResponsavelPanel";
-import SummaryCards from "@/components/SummaryCards";
+import PainelResumo, { type AcaoRepasseResumo } from "@/components/resumo/PainelResumo";
+import { AvisoMesNaoAberto, ConferenciaFechamento, FaixaFechamento, HistoricoFechamento, ListaMeses, ReabrirMes, SeletorMes, type AvisoConferencia } from "@/components/fechamento/Fechamento";
+import { useFechamentos } from "@/hooks/useFechamentos";
+import { hojeEmBrasilia, mesDeTrabalho, mesTerminou, podeFechar, podeReabrir, statusDoMes, ultimoFechado, verificarAlteracao, type Alteracao, type Retrato, type StatusMes } from "@/lib/fechamento";
+import { faturasEmAberto } from "@/lib/pagamentoFatura";
+import { idsDaSerieCartao, idsDaSerieConta } from "@/lib/serie";
+import { avisos } from "@/lib/avisos";
 import TelaGraficos from "@/components/TelaGraficos";
 import TelaInvestimentos from "@/components/TelaInvestimentos";
 import CompletarPerfilModal from "@/components/CompletarPerfilModal";
@@ -24,7 +30,7 @@ import DicaModulo from "@/components/DicaModulo";
 import BoasVindas from "@/components/BoasVindas";
 import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
-import { calcularPainel, type ModoSaldo } from "@/lib/painel";
+import { calcularPainel, serieEntradasSaidas, type ModoSaldo } from "@/lib/painel";
 import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
 import { autorNaVisao, entradasDeRepasse, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, resumoRepasses, saidasDeRepasse } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
@@ -58,8 +64,11 @@ import {
   rotuloMes,
 } from "@/lib/finance";
 import { supabase } from "@/lib/supabase";
-import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes, MobileSaldo } from "@/components/mobile/MobileShell";
+import { MobileBottomNav, MobileHeader, MobileMenu, MobileRecentes } from "@/components/mobile/MobileShell";
 import SaldosContas from "@/components/SaldosContas";
+
+/** Campos de um lançamento usados pelas travas do fechamento e pela conferência */
+type ItemLanc = { id?: unknown; mes?: string | null; owner_id?: string | null; responsavel_id?: string | null; repasse_pago?: boolean | null; repasse_pago_em?: string | null; pago?: boolean; nome?: string; foraDoMeuSaldo?: boolean; categoria?: string; tipo?: string; repasseSintetico?: boolean };
 
 type AbaId = "inicio" | "extrato" | "lancamentos" | "cartao" | "contas" | "fatura" | "graficos" | "investimentos" | "ajuda" | "grupo" | "ajustes";
 
@@ -107,12 +116,6 @@ export default function Home() {
   useEffect(() => {
     setMes(mesAtual());
   }, []);
-
-  useEffect(() => {
-    if (loja.pronto && mes) {
-      void loja.gerarContasFixasDoMes(mes);
-    }
-  }, [loja.pronto, loja.gerarContasFixasDoMes, mes]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -289,6 +292,105 @@ export default function Home() {
     [estadoFiltrado, estado, mes, saldoInicialContas, userId, escopoPessoas, movsCaixinhaVisao, cartoesCredito, pagamentosFaturaVisao]
   );
 
+  // ---- Novo Resumo: gráfico e faturas em aberto (informativo) ----
+  const serieResumo = useMemo(() => (mes ? serieEntradasSaidas(estadoFiltrado, mes) : []), [estadoFiltrado, mes]);
+  const faturasAbertas = useMemo(
+    () => (!mes || !(pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU)) ? [] : faturasEmAberto(estado, cartoesCredito, pagamentosFatura, [addMeses(mes, -1), mes])),
+    [estado, cartoesCredito, pagamentosFatura, mes, pessoasSel],
+  );
+
+  // ---- Fechamento mensal (fica inativo enquanto a migração supabase-18 não existir no banco) ----
+  const fech = useFechamentos(userId);
+  // Data de hoje (Brasília) lida no navegador, depois de montar (não durante a pré-renderização)
+  const [hoje, setHoje] = useState("");
+  useEffect(() => { setHoje(hojeEmBrasilia()); }, []);
+  const mesCorrente = hoje ? hoje.slice(0, 7) : mes;
+  const statusDe = useCallback((m: string): StatusMes | null => (hoje && fech.habilitado && fech.estado.mesInicial ? statusDoMes(m, fech.estado, hoje) : null), [fech.habilitado, fech.estado, hoje]);
+  const mesTrab = fech.habilitado ? mesDeTrabalho(fech.estado) : null;
+  const [conferindo, setConferindo] = useState(false);
+  const [reabrindo, setReabrindo] = useState(false);
+  const [listaMeses, setListaMeses] = useState(false);
+  const [avisoMes, setAvisoMes] = useState<string | null>(null);
+
+  // Ao abrir o app, começa no mês em aberto (se for anterior ao mês do calendário)
+  const posicionouMes = useRef(false);
+  useEffect(() => {
+    if (posicionouMes.current || !fech.pronto || !mes) return;
+    posicionouMes.current = true;
+    if (mesTrab && mesTrab < mes) setMes(mesTrab);
+  }, [fech.pronto, mesTrab, mes]);
+
+  // Contas fixas do mês só são trazidas para meses que aceitam lançamento (nunca para mês fechado ou em espera)
+  useEffect(() => {
+    if (!loja.pronto || !mes || !fech.pronto) return;
+    const s = statusDe(mes);
+    if (s === "fechado" || s === "espera" || s === "previsao") return;
+    void loja.gerarContasFixasDoMes(mes);
+  }, [loja.pronto, loja.gerarContasFixasDoMes, mes, fech.pronto, statusDe]);
+
+  // Aviso antecipado antes de gravar; o banco recusa a mesma operação (migração 18)
+  const ctxTrava = useMemo(
+    () => ({ estado: fech.estado, porPessoa: fech.porPessoa, hoje, meuId: userId || "", nomes: new Map(membros.map((m) => [m.id, m.nome] as [string, string])) }),
+    [fech.estado, fech.porPessoa, hoje, userId, membros],
+  );
+  const barrar = useCallback((a: Alteracao, titulo: string) => {
+    if (!fech.habilitado) return false;
+    const msg = verificarAlteracao(a, ctxTrava);
+    if (msg) avisos.erro(titulo, msg);
+    return Boolean(msg);
+  }, [fech.habilitado, ctxTrava]);
+  const idResp = useCallback((item: { responsavel_id?: string | null; responsavel?: string }): string | null => item?.responsavel_id || membros.find((m) => m.nome === item?.responsavel)?.id || userId, [membros, userId]);
+  const achar = useCallback((tabela: "extrato" | "cartao" | "contas", id: string): ItemLanc | undefined => (estado[tabela] as unknown as ItemLanc[]).find((i) => String(i.id) === String(id)), [estado]);
+  const acao = useMemo(() => ({
+    adicionarExtrato: (...a: Parameters<typeof loja.adicionarExtrato>) => barrar({ tipo: "novo", mes: a[0].mes, responsavelId: idResp(a[0]) }, "Não foi possível lançar") ? Promise.resolve(false) : loja.adicionarExtrato(...a),
+    adicionarCartao: (...a: Parameters<typeof loja.adicionarCartao>) => barrar({ tipo: "novo", mes: a[0].mes, responsavelId: idResp(a[0]) }, "Não foi possível lançar") ? Promise.resolve(false) : loja.adicionarCartao(...a),
+    adicionarConta: (...a: Parameters<typeof loja.adicionarConta>) => barrar({ tipo: "novo", mes: a[0].mes, responsavelId: idResp(a[0]) }, "Não foi possível lançar") ? Promise.resolve(false) : loja.adicionarConta(...a),
+    atualizar: (tabela: "extrato" | "cartao" | "contas", id: string, patch: Record<string, unknown>) => {
+      const item = achar(tabela, id);
+      const mesNovo = typeof patch.mes === "string" ? patch.mes : typeof patch.data === "string" ? patch.data.slice(0, 7) : null;
+      if (item && barrar({ tipo: "editar", item, mesNovo }, "Não foi possível salvar as alterações")) return Promise.resolve(false);
+      return loja.atualizar(tabela, id, patch);
+    },
+    remover: (tabela: "extrato" | "cartao" | "contas", id: string) => {
+      const ids = tabela === "cartao" ? idsDaSerieCartao(estado.cartao as any[], id) : tabela === "contas" ? idsDaSerieConta(estado.contas as any[], id) : [id];
+      const itens = ids.map((x) => achar(tabela, String(x))).filter((x): x is ItemLanc => Boolean(x));
+      if (barrar({ tipo: "remover", itens }, "Não foi possível remover o lançamento")) return Promise.resolve(false);
+      return loja.remover(tabela, id);
+    },
+    alternarPago: (id: string) => {
+      const item = achar("contas", id);
+      if (item && barrar({ tipo: "pagar", item }, "Não foi possível atualizar o pagamento")) return Promise.resolve();
+      return loja.alternarPago(id);
+    },
+    atualizarRepasses: (...a: Parameters<typeof loja.atualizarRepasses>) => {
+      const [itens, acaoRep] = a;
+      if (acaoRep === "reabrir") {
+        const lista = itens.map((i) => achar(i.origem, i.id)).filter((x): x is ItemLanc => Boolean(x));
+        if (barrar({ tipo: "estornar", itens: lista }, "Não foi possível estornar")) return Promise.resolve(false);
+      }
+      return loja.atualizarRepasses(...a);
+    },
+  }), [barrar, idResp, achar, estado, loja]);
+
+  // Avançar para um mês que ainda não abriu pede o fechamento antes (dá para só consultar)
+  const irParaMes = (alvo: string) => {
+    const sAlvo = statusDe(alvo), sAtual = statusDe(mes);
+    if (mesTrab && (sAlvo === "espera" || sAlvo === "previsao") && sAtual !== "espera" && sAtual !== "previsao") { setAvisoMes(alvo); return; }
+    setMes(alvo);
+  };
+  const abrirConferencia = () => {
+    if (!mesTrab) return;
+    const ok = podeFechar(mesTrab, fech.estado, hoje);
+    if (!ok.ok) { avisos.erro("Ainda não dá para fechar", ok.motivo); return; }
+    // O fechamento é pessoal: a conferência usa a visão "Somente eu" do mês em aberto
+    setPessoasSel([TOKEN_EU]);
+    setMes(mesTrab);
+    setAba("inicio");
+    setAvisoMes(null);
+    setListaMeses(false);
+    setConferindo(true);
+  };
+
   if (verificandoAuth || !loja.pronto || !mes || !painel) {
     return (
       <main className="grid min-h-screen place-items-center text-sm text-muted">
@@ -324,10 +426,59 @@ export default function Home() {
   const puladasGuia = onb.estado.puladas ?? [];
   const mostrarGuia = onb.pronto && !onb.estado.guiaOculto && totalLanc <= 15 && passosGuia.some((p) => !p.feito && !puladasGuia.includes(p.id));
   const repasses = resumoRepasses(lancamentosDoGrupo(estado), userId || "");
-  // "Repassado" sai do pendente e passa a "aguardando confirmação" (some de vez só quando concluído)
-  const pendenteReceber = Math.round((repasses.aReceber.agora - repasses.aReceber.aguardandoAgora) * 100) / 100;
-  const pendenteRepassar = Math.round((repasses.aRepassar.agora - repasses.aRepassar.aguardandoAgora) * 100) / 100;
-  const aguardandoTotal = Math.round((repasses.aReceber.aguardandoAgora + repasses.aRepassar.aguardandoAgora) * 100) / 100;
+  // Ações de repasse que dependem de mim (no Resumo, levam ao módulo de Repasses, onde a conta é escolhida)
+  const acoesRepasse: AcaoRepasseResumo[] = [
+    ...repasses.aReceber.pessoas.filter((p) => p.aguardandoAgora > 0).map((p) => ({ id: `r:${p.pessoaId}`, tipo: "confirmar" as const, titulo: `${p.nome} repassou ${brl(p.aguardandoAgora)}`, detalhe: "Confirme quando o dinheiro entrar" })),
+    ...repasses.aRepassar.pessoas.filter((p) => p.agora - p.aguardandoAgora > 0.004).map((p) => ({ id: `p:${p.pessoaId}`, tipo: "informar" as const, titulo: `Você deve ${brl(Math.round((p.agora - p.aguardandoAgora) * 100) / 100)} a ${p.nome}`, detalhe: `Despesas que ${p.nome} pagou para você` })),
+  ];
+
+  // ---- Fechamento: faixa, conferência e reabertura do mês selecionado ----
+  const sMes = statusDe(mes);
+  const eventosMes = fech.eventos.filter((e) => e.mes === mes);
+  const ultimoEventoMes = eventosMes[eventosMes.length - 1];
+  const consultaApenas = sMes === "fechado" || sMes === "espera" || sMes === "previsao";
+  const faixaMes = sMes && sMes !== "historico" ? (
+    <FaixaFechamento
+      mes={mes} status={sMes} mesTrabalho={mesTrab} terminou={mesTerminou(mes, hoje)}
+      fechadoEm={fech.meus.find((x) => x.mes === mes)?.fechadoEm ?? null}
+      reabertura={ultimoEventoMes?.tipo === "reabertura" ? ultimoEventoMes : null}
+      podeReabrir={podeReabrir(mes, fech.estado).ok} ultimoFechado={ultimoFechado(fech.estado)}
+      onConferir={abrirConferencia} onReabrir={() => setReabrindo(true)} onIrTrabalho={() => mesTrab && setMes(mesTrab)}
+    />
+  ) : null;
+  const retratoAtual: Retrato = {
+    entrou: painel.entradasRenda, saiu: painel.saidasRealizadas, resultado: painel.resultadoRealizado, disponivel: painel.totalDisponivel,
+    contasPendentes: painel.contasPendentes, receber: painel.previsao.receber, repassar: painel.previsao.repassar, sobraPrevista: painel.sobraPrevista,
+  };
+  const nomeDoMes = (m: string) => rotuloMes(m).split(" de ")[0];
+  const avisosConferencia: AvisoConferencia[] = [];
+  if (conferindo && mesTrab) {
+    const pendentesMes = (contas as unknown as ItemLanc[]).filter((c) => !c.pago && !c.foraDoMeuSaldo && c.mes === mesTrab);
+    if (pendentesMes.length) avisosConferencia.push({ tipo: "atencao", titulo: `${pendentesMes.length} ${pendentesMes.length === 1 ? "conta fixa sem pagamento" : "contas fixas sem pagamento"}`, texto: `${pendentesMes.map((c) => c.nome).slice(0, 3).join(", ")}${pendentesMes.length > 3 ? " e outras" : ""}. Se já pagou, marque como paga antes de fechar. Depois, só reabrindo o mês.` });
+    if (painel.repasses.aReceberAguardando > 0) avisosConferencia.push({ tipo: "atencao", titulo: `Repasse de ${brl(painel.repasses.aReceberAguardando)} aguardando sua confirmação`, texto: "Confirme se o dinheiro entrou. Pode ser feito depois do fechamento." });
+    const semCategoria = ([...extrato, ...cartao] as unknown as ItemLanc[]).filter((i) => i.tipo !== "entrada" && !i.foraDoMeuSaldo && !i.repasseSintetico && (!i.categoria || i.categoria === "Outros")).length;
+    if (semCategoria) avisosConferencia.push({ tipo: "info", titulo: `${semCategoria} ${semCategoria === 1 ? "lançamento" : "lançamentos"} sem categoria`, texto: "Aparecem como Outros nos gráficos e relatórios." });
+    const naoFecharam = membros.filter((m) => m.id !== userId && !m.convidado && !fech.porPessoa.get(m.id)?.has(mesTrab)).map((m) => m.nome);
+    if (naoFecharam.length) avisosConferencia.push({ tipo: "info", titulo: `${naoFecharam.join(", ")} ainda não ${naoFecharam.length === 1 ? "fechou" : "fecharam"} ${nomeDoMes(mesTrab).toLowerCase()}`, texto: "Os lançamentos em que você participa ficam travados quando você fechar." });
+  }
+  const mesesEmEspera: string[] = [];
+  for (let m = addMeses(mes, 1); m <= mesCorrente && mesesEmEspera.length < 24; m = addMeses(m, 1)) if (statusDe(m) !== "fechado") mesesEmEspera.push(m);
+  const listaDeMeses = (() => {
+    if (!listaMeses) return [];
+    const inicio = [fech.estado.mesInicial, addMeses(mesCorrente, -5)].filter((x): x is string => Boolean(x)).sort()[0];
+    const lista: { mes: string; status: StatusMes; detalhe: string; podeFechar: boolean }[] = [];
+    for (let m = addMeses(mesCorrente, 1); m >= inicio && lista.length < 18; m = addMeses(m, -1)) {
+      const s = statusDe(m) ?? "historico";
+      const fechadoEm = fech.meus.find((x) => x.mes === m)?.fechadoEm;
+      const detalhe = s === "aberto" ? (mesTerminou(m, hoje) ? "Terminou. Pronto para conferir e fechar." : "Mês atual.")
+        : s === "fechado" ? `Fechado${fechadoEm ? ` em ${new Date(fechadoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : ""}.`
+        : s === "espera" ? `Só consulta até você fechar ${mesTrab ? nomeDoMes(mesTrab).toLowerCase() : "o mês em aberto"}.`
+        : s === "previsao" ? "Abre quando o mês anterior for fechado."
+        : fech.estado.mesInicial ? "Antes do fechamento mensal. Fica como histórico." : "Fechamento mensal ainda não ativado.";
+      lista.push({ mes: m, status: s, detalhe, podeFechar: podeFechar(m, fech.estado, hoje).ok });
+    }
+    return lista;
+  })();
   const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
   const dica = DICAS_MODULO[aba];
   const nomeUsuario = membros.find((m) => m.id === userId)?.nome?.split(" ")[0];
@@ -380,6 +531,7 @@ export default function Home() {
             filtro={filtroResp}
             mes={mes}
             setMes={setMes}
+            controleMes={<SeletorMes compacto mes={mes} status={sMes} onAnterior={() => irParaMes(addMeses(mes, -1))} onProximo={() => irParaMes(addMeses(mes, 1))} onAbrirMeses={fech.habilitado ? () => setListaMeses(true) : undefined} />}
             onAbrirMenu={() => setMenuMobile(true)}
           />
 
@@ -420,29 +572,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               {filtroResp}
 
-              {mostrarMesNoCabecalho && <div className="flex h-10 items-center rounded-xl border border-line bg-surface">
-                <button
-                  type="button"
-                  onClick={() => setMes(addMeses(mes, -1))}
-                  aria-label="Mês anterior"
-                  className="grid h-full w-10 place-items-center rounded-l-lg text-muted transition hover:bg-background hover:text-ink"
-                >
-                  ‹
-                </button>
-
-                <span className="min-w-32 px-2 text-center text-sm font-medium" aria-live="polite">
-                  {rotuloMes(mes)}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setMes(addMeses(mes, 1))}
-                  aria-label="Próximo mês"
-                  className="grid h-full w-10 place-items-center rounded-r-lg text-muted transition hover:bg-background hover:text-ink"
-                >
-                  ›
-                </button>
-              </div>}
+              {mostrarMesNoCabecalho && <SeletorMes mes={mes} status={sMes} onAnterior={() => irParaMes(addMeses(mes, -1))} onProximo={() => irParaMes(addMeses(mes, 1))} onAbrirMeses={fech.habilitado ? () => setListaMeses(true) : undefined} />}
 
               <div className="hidden md:block"><BotaoOcultarValores /></div>
               <AjudaEInstalacao mostrarConvite={mostrarPainel} onAbrirCentral={() => abrirAjuda()} />
@@ -450,26 +580,26 @@ export default function Home() {
             </div>
           </header>
 
+          {/* Situação do mês (fechamento mensal): aparece em todos os módulos que mostram um mês */}
+          {mostrarMesNoCabecalho && faixaMes}
+
           {mostrarPainel && (
             <div className="anim-stagger space-y-5">
               {mostrarGuia && <GuiaInicial passos={passosGuia} puladas={puladasGuia} onPular={onb.pularEtapa} onRetomar={onb.retomarEtapa} onOcultar={() => onb.atualizar({ guiaOculto: true })} onAjuda={() => abrirAjuda()} />}
-              {userId && (repasses.aReceber.agora > 0 || repasses.aRepassar.agora > 0) && (
-                <button type="button" onClick={() => abrirGrupo("repasses")} className="card-glass flex w-full items-center justify-between gap-3 p-4 text-left transition hover:-translate-y-0.5" aria-label="Ver valores a repassar">
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold">Valores a repassar</span>
-                    <span className="block text-xs text-muted">
-                      {pendenteReceber > 0 && <>Você tem <b className="text-emerald-700 dark:text-emerald-400">{brl(pendenteReceber)}</b> a receber</>}
-                      {pendenteReceber > 0 && pendenteRepassar > 0 && " · "}
-                      {pendenteRepassar > 0 && <>Você deve repassar <b className="text-amber-700 dark:text-amber-400">{brl(pendenteRepassar)}</b></>}
-                      {pendenteReceber === 0 && pendenteRepassar === 0 && "Nada pendente no momento"}
-                      {aguardandoTotal > 0 && <><br /><span className="text-sky-700 dark:text-sky-400">Repassado, aguardando confirmação: <b>{brl(aguardandoTotal)}</b></span></>}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs font-semibold text-accent">Ver</span>
-                </button>
+              {dashboard.preferencias.resumo && (
+                <PainelResumo
+                  painel={painel}
+                  mesCorrente={mesCorrente}
+                  contasDoMes={contas}
+                  faturas={faturasAbertas}
+                  serie={serieResumo}
+                  acoes={acoesRepasse}
+                  onAbrirExtrato={setDetalheExtrato}
+                  onAbrirRepasses={() => abrirGrupo("repasses")}
+                  somenteConsulta={consultaApenas}
+                  extra={<HistoricoFechamento mes={mes} eventos={eventosMes} />}
+                />
               )}
-              {dashboard.preferencias.resumo && <MobileSaldo resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} onAbrirRepasses={() => abrirGrupo("repasses")} />}
-              {dashboard.preferencias.resumo && <div className="hidden md:block"><SummaryCards resumo={resumo} painel={painel} modo={modoSaldo} onModo={setModoSaldo} onAbrirExtrato={setDetalheExtrato} onAbrirRepasses={() => abrirGrupo("repasses")} /></div>}
               <MobileRecentes recentes={recentes} onAba={irPara} />
               {dashboard.preferencias.faturas && <PilhaCartoes estado={estado} mes={mes} onAbrir={() => irPara("fatura")} />}
               {dashboard.preferencias.faturas && <SaldosContas estado={estado} userId={userId} mes={mes} />}
@@ -527,7 +657,7 @@ export default function Home() {
                   membros={membros}
                   userId={userId}
                   mes={mes}
-                  onRepasse={loja.atualizarRepasses}
+                  onRepasse={acao.atualizarRepasses}
                   onGerenciar={() => setModalGrupoAberto(true)}
                   onNova={() => abrirNova()}
                 />
@@ -563,8 +693,8 @@ export default function Home() {
                   contas={contas}
                   ordem={ordem}
                   membros={membros.map((m) => m.nome)}
-                  onEdit={(origem, id, patch) => loja.atualizar(origem, id, patch)}
-                  onRemove={(origem, id) => loja.remover(origem, id)}
+                  onEdit={(origem, id, patch) => acao.atualizar(origem, id, patch)}
+                  onRemove={(origem, id) => acao.remover(origem, id)}
                 />
               )}
 
@@ -572,9 +702,9 @@ export default function Home() {
                 <ExtratoTable
                   mes={mes}
                   itens={extrato}
-                  onAdd={loja.adicionarExtrato}
-                  onRemove={(id) => loja.remover("extrato", id)}
-                  onEdit={(id, patch) => loja.atualizar("extrato", id, patch)}
+                  onAdd={acao.adicionarExtrato}
+                  onRemove={(id) => acao.remover("extrato", id)}
+                  onEdit={(id, patch) => acao.atualizar("extrato", id, patch)}
                 />
               )}
 
@@ -586,9 +716,9 @@ export default function Home() {
                   estado={estado}
                   mes={mes}
                   itens={cartao}
-                  onAdd={loja.adicionarCartao}
-                  onRemove={(id) => loja.remover("cartao", id)}
-                  onEdit={(id, patch) => loja.atualizar("cartao", id, patch)}
+                  onAdd={acao.adicionarCartao}
+                  onRemove={(id) => acao.remover("cartao", id)}
+                  onEdit={(id, patch) => acao.atualizar("cartao", id, patch)}
                 />
               )}
 
@@ -599,10 +729,10 @@ export default function Home() {
                 <ContasFixasTable
                   mes={mes}
                   itens={contas}
-                  onAdd={loja.adicionarConta}
-                  onRemove={(id) => loja.remover("contas", id)}
-                  onEdit={(id, patch) => loja.atualizar("contas", id, patch)}
-                  onTogglePago={loja.alternarPago}
+                  onAdd={acao.adicionarConta}
+                  onRemove={(id) => acao.remover("contas", id)}
+                  onEdit={(id, patch) => acao.atualizar("contas", id, patch)}
+                  onTogglePago={acao.alternarPago}
                 />
               )}
             </section>
@@ -636,12 +766,68 @@ export default function Home() {
           tipoInicial={novaPreset.tipo}
           comoInicial={novaPreset.como}
           onFechar={() => setNovaAberta(false)}
-          onAdicionarExtrato={loja.adicionarExtrato}
-          onAdicionarCartao={loja.adicionarCartao}
-          onAdicionarConta={loja.adicionarConta}
+          onAdicionarExtrato={acao.adicionarExtrato}
+          onAdicionarCartao={acao.adicionarCartao}
+          onAdicionarConta={acao.adicionarConta}
         />
       )}
       {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}
+      {conferindo && mesTrab && mes === mesTrab && pessoasSel.length === 1 && pessoasSel[0] === TOKEN_EU && (
+        <ConferenciaFechamento
+          mes={mesTrab}
+          retrato={retratoAtual}
+          faturasEmAberto={faturasAbertas.reduce((t, f) => t + f.restante, 0)}
+          aguardandoConfirmacao={painel.repasses.aReceberAguardando}
+          avisos={avisosConferencia}
+          onFechar={() => setConferindo(false)}
+          onConfirmar={async () => {
+            const msg = await fech.fechar(mesTrab, retratoAtual);
+            if (!msg) {
+              setConferindo(false);
+              avisos.sucesso(`${nomeDoMes(mesTrab)} fechado`, `${nomeDoMes(addMeses(mesTrab, 1))} é o mês em aberto agora.`);
+              setMes(addMeses(mesTrab, 1));
+            }
+            return msg;
+          }}
+        />
+      )}
+      {reabrindo && sMes === "fechado" && (
+        <ReabrirMes
+          mes={mes}
+          mesesEmEspera={mesesEmEspera}
+          onFechar={() => setReabrindo(false)}
+          onConfirmar={async (motivo) => {
+            const msg = await fech.reabrir(mes, motivo);
+            if (!msg) { setReabrindo(false); avisos.sucesso(`${nomeDoMes(mes)} reaberto`, "Corrija o que precisar e feche o mês de novo."); }
+            return msg;
+          }}
+        />
+      )}
+      {listaMeses && (
+        <ListaMeses
+          meses={listaDeMeses}
+          mesInicial={fech.estado.mesInicial}
+          sugestaoInicio={addMeses(mesCorrente, -1)}
+          onEscolher={(m) => { setListaMeses(false); setMes(m); }}
+          onConferir={abrirConferencia}
+          onAtivar={async (m) => {
+            const msg = await fech.iniciar(m);
+            if (!msg) avisos.sucesso("Fechamento mensal ativado", `A partir de ${rotuloMes(m).toLowerCase()}.`);
+            return msg;
+          }}
+          onFechar={() => setListaMeses(false)}
+        />
+      )}
+      {avisoMes && mesTrab && (
+        <AvisoMesNaoAberto
+          mes={avisoMes}
+          mesTrabalho={mesTrab}
+          podeConferir={podeFechar(mesTrab, fech.estado, hoje).ok}
+          onFechar={() => setAvisoMes(null)}
+          onConferir={abrirConferencia}
+          onVerConsulta={() => { setMes(avisoMes); setAvisoMes(null); }}
+        />
+      )}
       {detalheExtrato && (
         <ExtratoDetalhe
           tipo={detalheExtrato}

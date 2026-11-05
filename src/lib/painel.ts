@@ -119,7 +119,72 @@ export type Painel = {
   totalDisponivel: number;
   /** Repasses do usuário (todas as situações), para o resumo sempre mostrar onde cada valor está */
   repasses: SituacaoRepassesPainel;
+
+  /* ---- Indicadores do Resumo (derivados; não mudam nenhuma regra acima) ---- */
+  /** Entrou: renda lançada no mês, sem repasses e sem saldo anterior */
+  entradasRenda: number;
+  /** Saiu: despesas realizadas no mês (à vista, parcelas, contas fixas pagas). Sem contas fixas pendentes. */
+  saidasRealizadas: number;
+  /** Contas fixas do mês ainda não pagas (já descontadas do total disponível pela regra atual) */
+  contasPendentes: number;
+  /** Entrou − Saiu */
+  resultadoRealizado: number;
+  /** Renda por origem (sem o repasse recebido) */
+  rendaPorOrigem: { rotulo: string; valor: number }[];
+  /** Saiu por tipo: à vista, parcelas e contas fixas pagas */
+  saidasPorOrigem: { avista: number; parcelas: number; contasPagas: number };
+  /**
+   * Sobra prevista: quanto sobra quando as contas, faturas e repasses até este mês forem acertados.
+   * = saldo inicial + Σ(entradas − todas as despesas do período) − aportes + resgates.
+   * Identidade (testada): sobraPrevista = totalDisponivel + previsao.receber − previsao.repassar + previsao.faturasOutros.
+   */
+  sobraPrevista: number;
+  previsao: {
+    /** Repasses em aberto que você vai receber (o que foi adiantado para outras pessoas da visão) */
+    receber: number;
+    /** Repasses em aberto que você ainda vai pagar */
+    repassar: number;
+    /** Compras no crédito feitas para outras pessoas cuja fatura ainda não foi paga (negativo = ainda vai sair) */
+    faturasOutros: number;
+  };
 };
+
+export type LinhaComposicao = { rotulo: string; dica?: string; valor: number };
+
+/**
+ * "Como chegamos ao disponível": cada movimento que levou ao total disponível, na ordem em que acontece.
+ * A soma das linhas é exatamente `totalDisponivel` (testado). Linhas zeradas ficam de fora, exceto o saldo anterior.
+ */
+export function composicaoDoDisponivel(p: Painel, rotuloMesAnterior: string): LinhaComposicao[] {
+  const linhas: LinhaComposicao[] = [
+    { rotulo: `Saldo até ${rotuloMesAnterior}`, dica: "Saldo inicial das contas + meses anteriores", valor: p.saldoAnterior },
+    { rotulo: "Entrou (renda do mês)", valor: p.entradasRenda },
+    { rotulo: "Repasses recebidos e confirmados", valor: p.repassesRecebidos },
+    { rotulo: "Saiu (despesas realizadas)", valor: -p.saidasRealizadas },
+    { rotulo: "Contas fixas pendentes do mês", dica: "Já separadas do disponível até serem pagas", valor: -p.contasPendentes },
+    { rotulo: "Você pagou por outras pessoas", dica: "Volta quando elas repassarem", valor: -p.adiantado },
+    { rotulo: "Compras no crédito para outras pessoas", dica: "Saem quando a fatura for paga", valor: p.faturaEmAberto },
+    { rotulo: "Gastos seus pagos por outra pessoa", dica: "Saem quando você repassar", valor: p.despesasARepassar },
+    { rotulo: "Repasses que você enviou", valor: -p.repassesEnviados },
+    { rotulo: "Aportes em caixinhas", dica: "Saíram do saldo, não são despesa", valor: -p.aportesCaixinha },
+    { rotulo: "Resgates de caixinhas", valor: p.resgatesCaixinha },
+  ];
+  return linhas.filter((l, i) => i === 0 || Math.abs(l.valor) >= 0.005);
+}
+
+/**
+ * Entradas e saídas realizadas dos últimos `n` meses até `mes` (para o gráfico do Resumo).
+ * Usa o mesmo cálculo do mês (calcularMes): sem duplicados, sem repasses, sem contas fixas pendentes.
+ */
+export function serieEntradasSaidas(e: Dados, mes: string, n = 6): { mes: string; entrou: number; saiu: number }[] {
+  const lista: { mes: string; entrou: number; saiu: number }[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const m = addMeses(mes, -i);
+    const r = calcularMes(e, { mes: m });
+    lista.push({ mes: m, entrou: r.entradas, saiu: arred(r.saidas - r.faltaPagar) });
+  }
+  return lista;
+}
 
 export function calcularPainel(
   e: Dados,
@@ -155,12 +220,19 @@ export function calcularPainel(
     .concat(movsCaixinha.map((x) => x.mes), Object.keys(faturas.pago))
     .filter((m) => /^\d{4}-\d{2}$/.test(m) && m < mes);
   let saldoAnterior = arred(num(opts.saldoInicial));
+  // Competência pura (tudo acertado): base da sobra prevista
+  let competencia = arred(num(opts.saldoInicial));
   if (meses.length > 0) {
     let m = meses.reduce((a, b) => (a < b ? a : b));
-    for (let n = 0; m < mes && n < 240; n++, m = addMeses(m, 1)) saldoAnterior = arred(saldoAnterior + movimentoDoMes(m).liquido);
+    for (let n = 0; m < mes && n < 240; n++, m = addMeses(m, 1)) {
+      const mov = movimentoDoMes(m);
+      saldoAnterior = arred(saldoAnterior + mov.liquido);
+      competencia = arred(competencia + mov.r.saldoRestante - mov.aportes + mov.resgates);
+    }
   }
 
   const atual = movimentoDoMes(mes);
+  competencia = arred(competencia + atual.r.saldoRestante - atual.aportes + atual.resgates);
   const extratoMes = semDuplicados((e.extrato || []).filter((i) => i?.mes === mes && !i?.foraDoMeuSaldo && ehEntrada(i)), "extrato");
   const porOrigem = new Map<string, number>();
   for (const i of extratoMes) {
@@ -198,7 +270,21 @@ export function calcularPainel(
     repasses.temMovimento = repasses.aReceber + repasses.aReceberAguardando + repasses.aRepassar + repasses.aRepassarAguardando + repasses.recebidosNoMes + repasses.enviadosNoMes > 0;
   }
 
+  const totalDisponivel = arred(saldoAnterior + atual.liquido);
+  const receber = arred(soma(aReceberAberto));
+  const repassar = arred(soma(aRepassarAberto));
+  const saidasRealizadas = arred(atual.r.saidas - atual.r.faltaPagar);
+
   return {
+    entradasRenda: atual.r.entradas,
+    saidasRealizadas,
+    contasPendentes: atual.r.faltaPagar,
+    resultadoRealizado: arred(atual.r.entradas - saidasRealizadas),
+    rendaPorOrigem: entradasPorOrigem,
+    saidasPorOrigem: { avista: atual.r.porOrigem.extrato, parcelas: atual.r.porOrigem.cartao, contasPagas: arred(atual.r.porOrigem.contas - atual.r.faltaPagar) },
+    sobraPrevista: competencia,
+    // O ajuste de faturas fecha a identidade: é a parte de compras no crédito para outras pessoas ainda não paga
+    previsao: { receber, repassar, faturasOutros: arred(competencia - totalDisponivel - receber + repassar) },
     mes,
     // Repasse concluído = entrada real de quem recebeu (compensa o "adiantado", que já saiu do disponível)
     entradas: arred(atual.r.entradas + atual.recebidos),
@@ -217,7 +303,7 @@ export function calcularPainel(
     aRepassarAguardando: soma(aRepassarAberto.filter((a) => a.informado)),
     aportesCaixinha: atual.aportes,
     resgatesCaixinha: atual.resgates,
-    totalDisponivel: arred(saldoAnterior + atual.liquido),
+    totalDisponivel,
     repasses,
   };
 }

@@ -42,6 +42,8 @@ export type LinhaExtrato = {
   /** Data do lançamento (AAAA-MM-DD). Em conta fixa é o vencimento. */
   data?: string | null;
   status?: { texto: string; tom: "ok" | "alerta" | "neutro" };
+  /** Conta fixa ainda não paga: aparece como compromisso, mas não é gasto realizado. */
+  pendente?: boolean;
   /** Entrada de dinheiro (ex.: salário) — aparece em verde e não entra em totais de gasto. */
   entrada?: boolean;
 };
@@ -140,6 +142,7 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
       valor: num(i.valor),
       data: dataDoItem(i),
       status: i.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
+      pendente: !i.pago,
     })),
   ];
   return linhas
@@ -148,16 +151,29 @@ export function montarLinhas(extrato: any[], cartao: any[], contas: any[], mes?:
     .sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
 }
 
-export type GrupoExtrato = { origem: OrigemLinha; rotulo: string; total: number; linhas: LinhaExtrato[] };
+/** total = gastos realizados do grupo · pendente = contas fixas ainda não pagas (compromissos) */
+export type GrupoExtrato = { origem: OrigemLinha; rotulo: string; total: number; pendente: number; linhas: LinhaExtrato[] };
+
+const somaValor = (linhas: LinhaExtrato[]) => linhas.reduce((s, l) => s + l.valor, 0);
 
 /** Agrupa por origem, na ordem Lançamentos → Parcelas → Contas fixas, omitindo grupos vazios. */
 export function agruparPorOrigem(linhas: LinhaExtrato[]): GrupoExtrato[] {
   return (["extrato", "cartao", "contas"] as OrigemLinha[])
     .map((origem) => {
       const doGrupo = linhas.filter((l) => l.origem === origem && !l.entrada);
-      return { origem, rotulo: ROTULO_ORIGEM[origem], total: doGrupo.reduce((s, l) => s + l.valor, 0), linhas: doGrupo };
+      return {
+        origem,
+        rotulo: ROTULO_ORIGEM[origem],
+        total: somaValor(doGrupo.filter((l) => !l.pendente)),
+        pendente: somaValor(doGrupo.filter((l) => l.pendente)),
+        linhas: doGrupo,
+      };
     })
     .filter((g) => g.linhas.length > 0);
 }
 
-export const totalGastos = (linhas: LinhaExtrato[]) => linhas.filter((l) => !l.entrada && !l.foraDoSaldo).reduce((s, l) => s + l.valor, 0);
+/** Gastos realizados: sem entradas, sem itens fora do meu saldo e sem contas fixas pendentes. */
+export const totalGastos = (linhas: LinhaExtrato[]) => somaValor(linhas.filter((l) => !l.entrada && !l.foraDoSaldo && !l.pendente));
+
+/** Compromissos: contas fixas ainda não pagas (dentro do meu saldo). */
+export const totalPendentes = (linhas: LinhaExtrato[]) => somaValor(linhas.filter((l) => !l.entrada && !l.foraDoSaldo && l.pendente));

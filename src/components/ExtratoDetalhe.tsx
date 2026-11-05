@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import ExtratoLista from "@/components/ExtratoLista";
 import { brl, rotuloMes } from "@/lib/finance";
-import { montarLinhas, ordenarPorValor, totalGastos, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
+import { montarLinhas, ordenarPorValor, totalGastos, totalPendentes, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
 
 import type { ModoSaldo, Painel } from "@/lib/painel";
 
@@ -76,10 +76,13 @@ export default function ExtratoDetalhe({
     [base, origem, responsavel],
   );
 
-  const totalMes = totalGastos(base); // indicador completo do mês, independente dos filtros do detalhe
+  const totalMes = totalGastos(base); // gastos realizados do mês, independente dos filtros do detalhe
+  const pendentesMes = totalPendentes(base); // contas fixas ainda não pagas (compromissos)
   const totalFiltrado = totalGastos(gastosLinhas);
+  const pendentesFiltrado = totalPendentes(gastosLinhas);
   const filtrado = Boolean(origem || responsavel);
-  const resultadoMes = entradasTotal - totalMes;
+  // Mantém o mesmo resultado do card do resumo (calcularMes), que desconta as contas a pagar
+  const resultadoMes = entradasTotal - totalMes - pendentesMes;
   const totalModo = tipo === "disponivel" && modo === "total" && Boolean(painel);
   const sobra = totalModo ? painel!.totalDisponivel : resultadoMes;
 
@@ -124,8 +127,11 @@ export default function ExtratoDetalhe({
               ? `${entradasLinhas.length} ${entradasLinhas.length === 1 ? "entrada" : "entradas"} no mês`
               : totalModo && painel
               ? `Anterior ${brl(painel.saldoAnterior)} + entradas ${brl(painel.entradas)} − saídas ${brl(painel.saidas)}${painel.adiantado > 0 ? ` − adiantado ${brl(painel.adiantado)}` : ""}${painel.faturaEmAberto > 0 ? ` + fatura ainda não paga ${brl(painel.faturaEmAberto)}` : ""}${painel.aportesCaixinha > 0 ? ` − aportes em caixinhas ${brl(painel.aportesCaixinha)}` : ""}${painel.resgatesCaixinha > 0 ? ` + resgates ${brl(painel.resgatesCaixinha)}` : ""}`
-              : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}`}
+              : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}${pendentesMes > 0 ? ` − a pagar ${brl(pendentesMes)}` : ""}`}
           </p>
+          {tipo === "gastos" && pendentesMes > 0 && (
+            <p className="mt-1 text-xs font-medium tabular-nums text-amber-600 dark:text-amber-400">+ {brl(pendentesMes)} em contas a pagar</p>
+          )}
         </div>
 
         {/* Filtros do detalhe */}
@@ -165,6 +171,7 @@ export default function ExtratoDetalhe({
           {filtrado && (
             <p className="text-xs text-muted">
               Mostrando {gastosLinhas.length} de {base.length} · {brl(totalFiltrado)}
+              {pendentesFiltrado > 0 && <span className="text-amber-600 dark:text-amber-400"> + {brl(pendentesFiltrado)} a pagar</span>}
             </p>
           )}
         </div>}

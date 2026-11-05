@@ -117,9 +117,10 @@ describe("caixinhas usando o saldo de uma conta de débito", () => {
     expect(r.saldo).toBe(base - 300 + 100);
   });
   it("a verificação de saldo ao lançar considera os aportes", () => {
-    const sem = verificarDisponibilidade(estado, debito, 100, { userId: "eu", mes: M });
-    const com = verificarDisponibilidade(estado, debito, 100, { userId: "eu", mes: M, caixinhaMovs: [{ tipo: "aporte", valor: 1000, conta: "Conta Nubank", data: "2026-10-01" }] });
-    expect(sem.ok).toBe(true);
-    expect(com.ok).toBe(false);
+    // Saldo 1220; o aporte de 1000 deixa 220. Um gasto de 300 cabe sem o aporte e não cabe com ele.
+    const sem = verificarDisponibilidade(estado, debito, 300, { userId: "eu", mes: M });
+    const com = verificarDisponibilidade(estado, debito, 300, { userId: "eu", mes: M, caixinhaMovs: [{ tipo: "aporte", valor: 1000, conta: "Conta Nubank", data: "2026-10-01" }] });
+    expect(sem).toMatchObject({ ok: true, disponivel: 1220, faltante: 0 });
+    expect(com).toMatchObject({ ok: false, disponivel: 220, faltante: 80 });
   });
 });

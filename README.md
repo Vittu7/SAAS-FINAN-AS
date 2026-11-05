@@ -52,13 +52,17 @@ docs/arquivo/     material antigo, só para consulta
 - Toda tabela tem RLS; operações sensíveis (grupo, repasses, excluir conta) passam por funções `security definer`
   chamadas com `supabase.rpc(...)`.
 - O histórico de scripts está incompleto no repositório: os scripts 01–07 foram rodados manualmente no SQL Editor
-  e não estão versionados. `supabase/supabase-08-pagamentos-fatura.sql` é o mais recente.
+  e não estão versionados. Os versionados vão de `supabase-08` a `supabase-17`.
 - `supabase/supabase-09` a `11` já foram aplicados: permissões de funções, RLS com `(select auth.uid())` e índices.
 - `supabase/supabase-12-perfis-protecao.sql` **ainda não foi aplicado**: rode só depois do deploy do código que entra
   no grupo por código de convite (ele impede gravar `grupo_id`/`cargo` direto no perfil).
 - `supabase/supabase-13-convidado-so-gestor.sql` já foi aplicado (só o gestor adiciona convidado sem conta).
-- `supabase/supabase-14-trava-repasse-confirmado.sql` **ainda não foi aplicado** (trava edição/exclusão de lançamento
+- `supabase/supabase-14-trava-repasse-confirmado.sql` já foi aplicado (trava edição/exclusão de lançamento
   com repasse confirmado até o estorno).
+- `supabase/supabase-15` a `17` (remoção de estruturas antigas, P1–P3) **ainda não foram aplicados**.
+- `supabase/supabase-18-fechamento-mensal.sql` **ainda não foi aplicado**: tabelas e funções do fechamento mensal e
+  travas que recusam alterar mês fechado. Sem ele, o app funciona como antes (o fechamento fica oculto).
+  Conferir os pontos listados em `docs/propostas-supabase.md` antes de aplicar.
 - `docs/propostas-supabase.md` lista remoções e consolidações que dependem de autorização (com o SQL exato).
 - `supabase/diagnostico-limpeza.sql` contém apenas consultas de leitura para auditar o banco antes de qualquer limpeza.
 - Novos scripts devem ser aditivos e reexecutáveis (`if not exists`, `drop policy if exists` + `create policy`).

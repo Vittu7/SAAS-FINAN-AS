@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import EditarLancamentoModal from "@/components/EditarLancamentoModal";
 import ExtratoLista from "@/components/ExtratoLista";
 import { brl } from "@/lib/finance";
-import { montarLinhas, ordenarPorValor, totalGastos, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
+import { montarLinhas, ordenarPorValor, totalGastos, totalPendentes, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
 
 type Props = {
   mes: string;
@@ -35,6 +35,7 @@ export default function ExtratoGeral({ mes, extrato, cartao, contas, ordem = "",
     [extrato, cartao, contas, mes, ordem],
   );
   const total = totalGastos(linhas);
+  const aPagar = totalPendentes(linhas);
 
   return (
     <section className="space-y-4 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6 md:shadow-lg">
@@ -48,6 +49,7 @@ export default function ExtratoGeral({ mes, extrato, cartao, contas, ordem = "",
             {linhas.length} {linhas.length === 1 ? "movimentação" : "movimentações"}
           </span>
           <span className="text-xl font-semibold tabular-nums">{brl(total)}</span>
+          {aPagar > 0 && <span className="block text-xs font-medium tabular-nums text-amber-600 dark:text-amber-400">+ {brl(aPagar)} em contas a pagar</span>}
         </p>
       </header>
 

@@ -75,6 +75,29 @@ export function vencimentoDaFatura(mes: string, dia: number | null | undefined):
   return `${mes}-${String(Math.min(d, ultimo)).padStart(2, "0")}`;
 }
 
+export type FaturaAberta = { cartao: string; mes: string; total: number; pago: number; restante: number };
+
+/**
+ * Faturas com valor a pagar (informativo, para o bloco "Ainda vai sair" do Resumo).
+ * A conta fixa pendente lançada no cartão fica de fora: ela já aparece como conta pendente e só entra na fatura
+ * quando é marcada como paga. Assim o mesmo valor nunca aparece duas vezes.
+ */
+export function faturasEmAberto(estado: Estado, cartoes: string[], pagamentos: PagamentoFatura[], meses: string[]): FaturaAberta[] {
+  const lista: FaturaAberta[] = [];
+  for (const cartao of cartoes) {
+    for (const mes of meses) {
+      const pendentes = estado.contas
+        .filter((c) => (c.formaPagamento || (c as typeof c & { forma_pagamento?: string }).forma_pagamento) === cartao && c.mes === mes && !c.pago)
+        .reduce((s, c) => s + num(c.valor), 0);
+      const total = arred(calcularFatura(estado, cartao, mes, 0).total - pendentes);
+      if (total <= 0) continue;
+      const r = resumoFatura(total, pagamentosDaFatura(pagamentos, cartao, mes));
+      if (r.restante > 0) lista.push({ cartao, mes, total: r.total, pago: r.pago, restante: r.restante });
+    }
+  }
+  return lista;
+}
+
 const nomeDoCartao = (origem: "extrato" | "cartao" | "contas", i: Item): string =>
   String((origem === "cartao" ? i.cartao : origem === "extrato" ? i.pagamento : i.formaPagamento ?? i.forma_pagamento) ?? "");
 

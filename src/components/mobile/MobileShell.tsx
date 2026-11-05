@@ -26,8 +26,11 @@ export function MobileHeader({
   onAbrirMenu,
   mostrarMes = true,
   filtro,
+  controleMes,
 }: {
   mostrarMes?: boolean;
+  /** Seletor de mês com a situação do fechamento (substitui o seletor simples) */
+  controleMes?: React.ReactNode;
   /** Filtro de responsáveis (pílula) que fica ao lado do seletor de mês */
   filtro?: React.ReactNode;
   titulo: string;
@@ -57,7 +60,8 @@ export function MobileHeader({
 
       {(mostrarMes || filtro) && (
         <div className="mt-3 flex items-center gap-2">
-          {mostrarMes && (
+          {mostrarMes && controleMes}
+          {mostrarMes && !controleMes && (
             <div className="flex h-10 min-w-0 flex-1 items-center justify-between rounded-full bg-surface px-1 shadow-sm ring-1 ring-line">
               <button type="button" aria-label="Mês anterior" onClick={() => setMes(addMeses(mes, -1))} className="grid size-8 place-items-center rounded-full text-muted active:bg-background">
                 <Ico icon={ChevronLeft} size={18} />
@@ -106,7 +110,7 @@ export function MobileSaldo({
       <button
         type="button"
         onClick={() => onAbrirExtrato?.("disponivel")}
-        className={`relative block w-full overflow-hidden rounded-3xl p-5 text-left shadow-lg ${negativo ? "bg-rose-700 text-white" : "bg-gradient-to-br from-accent to-[color-mix(in_srgb,var(--accent),black_28%)] text-on-accent"}`}
+        className={`relative block w-full overflow-hidden rounded-3xl p-5 text-left shadow-lg ${negativo ? "bg-rose-700 text-white" : "bg-gradient-to-br from-accent to-[var(--accent-fim)] text-on-accent"}`}
       >
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between">

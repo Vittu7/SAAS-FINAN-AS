@@ -1,6 +1,7 @@
 # Propostas para o Supabase que dependem de autorização
 
-Nada deste arquivo foi executado. Cada bloco apaga algo e só deve rodar com autorização explícita.
+Nenhum dos blocos P1–P5 foi executado (situação abaixo). Cada bloco apaga algo e só deve rodar com autorização explícita.
+As decisões D1 e D2 (fim do arquivo) já foram aplicadas pelas migrações 13 e 14.
 Levantamento feito em 2026-11-04 no projeto `iitgqormevgznxikwyvu`.
 
 Como as dependências foram verificadas (para todos os itens):
@@ -12,8 +13,8 @@ Como as dependências foram verificadas (para todos os itens):
 
 | Item | Situação |
 |---|---|
-| P1, P2, P3 | Autorizados. Migrações `supabase-15`, `16` e `17` escritas e dependências reconferidas no banco. A aplicação da 15 foi **recusada no prompt de permissão**: nada removido, aguardando nova tentativa. Definições salvas em `supabase/arquivo/definicoes-anteriores.sql`. |
-| P4 | **Exportado** para `backups/supabase-2026-11-05/` (fora do Git), md5 conferido (ver `MANIFESTO.md` na pasta). Tabelas **não** excluídas: aguardando autorização específica. |
+| P1, P2, P3 | **Não autorizados** (decisão de 2026-11-05). Migrações `supabase-15`, `16` e `17` ficam só preparadas localmente; nada removido. Definições salvas em `supabase/arquivo/definicoes-anteriores.sql`. |
+| P4 | **Exportado** para `backups/supabase-2026-11-05/` (fora do Git), md5 conferido (ver `MANIFESTO.md` na pasta). Tabelas **preservadas** no banco: não excluir (decisão de 2026-11-05). |
 | P5 | Não executar (decisão do responsável). |
 
 ---
@@ -41,7 +42,7 @@ commit;
 ```
 
 Riscos: nenhum dado (tabelas vazias). Uma versão muito antiga do app que ainda chame essas funções receberia erro.
-Recuperação: as definições completas estão no histórico desta conversa e podem ser salvas em `supabase/arquivo/` antes.
+Recuperação: as definições completas estão salvas em `supabase/arquivo/definicoes-anteriores.sql`.
 
 `membro_pertence`, `meus_grupos` e `meus_membros` **ficam**: são usadas pelas políticas de `extrato`, `cartao`,
 `contas_fixas`, `perfis` e `grupos_familiares`.
@@ -154,9 +155,29 @@ mais testes de INSERT/UPDATE com e sem grupo.
 - **D1. Quem adiciona convidado sem conta — RESOLVIDO (2026-11-05).** Só o gestor. Migração 13 aplicada:
   `adicionar_convidado` passou a chamar `adicionar_convidado_grupo`; o app usa `adicionar_convidado_grupo`
   e só mostra o botão ao gestor. Definição antiga em `supabase/arquivo/definicoes-anteriores.sql`.
-- **D2. Regra 3 no banco — aprovada, migração 14 escrita e testada (com rollback), aguardando aplicação.**
+- **D2. Regra 3 no banco — RESOLVIDO (2026-11-05).** Migração 14 aplicada e verificada (md5 dos dados igual antes/depois).
   `supabase/supabase-14-trava-repasse-confirmado.sql`: trigger em `extrato`, `cartao` e `contas_fixas` que recusa
   editar/excluir linha com `repasse_pago = true` pela API. O app já avisa antes de tentar e não move lançamentos
   com repasse confirmado para outro grupo.
 - **D3. Proteção contra senhas vazadas.** Ativar no painel: Authentication → Providers → Email → "Prevent use of
   leaked passwords" (não dá para ligar por SQL).
+
+---
+
+## Migração 18 — fechamento mensal (preparada em 2026-11-05, NÃO aplicada)
+
+`supabase/supabase-18-fechamento-mensal.sql`. Aditiva: cria `fechamento_controle`, `fechamento_meses`,
+`fechamento_eventos`, as funções `iniciar_fechamento_mensal`, `fechar_mes`, `reabrir_mes` e as travas de mês fechado.
+Não altera nem apaga dados; nenhum mês é fechado automaticamente.
+
+Conferir no banco antes de aplicar (somente leitura):
+1. `caixinha_movimentos.data` e `pagamentos_fatura.data`: tipo `date` (a trava usa `left(data::text, 7)`).
+2. `public.meus_membros()` devolve os ids dos membros do grupo (usada na política de leitura de `fechamento_meses`).
+3. `aportes_investimento` (tabela antiga, ainda usada por `AportesInvestimento.tsx`) **não** ganhou trava: confirmar
+   colunas (`user_id`, data) e decidir se entra.
+4. Definição atual de `atualizar_repasse` (não versionada): a trava de repasse vale para todos os papéis, então
+   confirmar/estornar em mês fechado passa a ser recusado também dentro dessa função.
+
+Testar com rollback: fechar um mês com um usuário de teste; tentar editar, excluir, lançar retroativo, mudar a data
+para o mês fechado, marcar conta como paga, estornar repasse confirmado no mês fechado, registrar pagamento de fatura e
+aporte com data no mês; tudo deve ser recusado. Reabrir com motivo curto deve falhar; com motivo válido, liberar.

@@ -17,6 +17,18 @@
 
   --accent: #0f766e;
   --on-accent: #ffffff;
+  /* Fim do degradê do cartão principal: escurece no claro (texto claro), clareia no escuro (texto escuro) */
+  --accent-fim: color-mix(in srgb, var(--accent), black 30%);
+
+  /* Cores financeiras: verde = entrou/positivo/a receber · vermelho = saiu/negativo/estorno ·
+     âmbar = pendente/alerta · cinza (muted) = zero/neutro · verde-água (accent) = identidade e ações */
+  --pos: #15803d; --pos-ink: #166534; --pos-bg: #eef8f1; --pos-borda: #cde8d6;
+  --neg: #b91c1c; --neg-ink: #991b1b; --neg-bg: #fdf1f1; --neg-borda: #f2d2d2;
+  --warn: #b45309; --warn-ink: #92400e; --warn-bg: #fdf6e7; --warn-borda: #f0dfb5;
+  /* Barras do gráfico entrou x saiu (par validado para daltonismo) */
+  --serie-in: #2bb866; --serie-out: #a8202c;
+  /* Cartão principal (Total disponível): degradê pelo sinal, texto claro */
+  --hero-pos-a: #15803d; --hero-pos-b: #0a4a24; --hero-neg-a: #b91c1c; --hero-neg-b: #7a1414; --hero-neu-a: #475569; --hero-neu-b: #1e293b; --on-hero: #ffffff;
 
   --selo-escurecer: 25%;
 
@@ -43,6 +55,13 @@
 
   --accent: #2dd4bf;
   --on-accent: #06201c;
+  --accent-fim: color-mix(in srgb, var(--accent), white 22%);
+
+  --pos: #4ade80; --pos-ink: #86efac; --pos-bg: #0f2419; --pos-borda: #1d3f2b;
+  --neg: #fb7185; --neg-ink: #fca5a5; --neg-bg: #2a1417; --neg-borda: #4a2229;
+  --warn: #fbbf24; --warn-ink: #fcd34d; --warn-bg: #2a2110; --warn-borda: #4a3a17;
+  --serie-in: #2aac5f; --serie-out: #c0343f;
+  --hero-pos-a: #166534; --hero-pos-b: #0a2716; --hero-neg-a: #7f1d1d; --hero-neg-b: #3d0b0b; --hero-neu-a: #334155; --hero-neu-b: #0f172a; --on-hero: #f0fdf4;
 
   --selo-escurecer: 0%;
 
@@ -73,6 +92,13 @@
 
     --accent: #2dd4bf;
     --on-accent: #06201c;
+    --accent-fim: color-mix(in srgb, var(--accent), white 22%);
+
+    --pos: #4ade80; --pos-ink: #86efac; --pos-bg: #0f2419; --pos-borda: #1d3f2b;
+    --neg: #fb7185; --neg-ink: #fca5a5; --neg-bg: #2a1417; --neg-borda: #4a2229;
+    --warn: #fbbf24; --warn-ink: #fcd34d; --warn-bg: #2a2110; --warn-borda: #4a3a17;
+    --serie-in: #2aac5f; --serie-out: #c0343f;
+  --hero-pos-a: #166534; --hero-pos-b: #0a2716; --hero-neg-a: #7f1d1d; --hero-neg-b: #3d0b0b; --hero-neu-a: #334155; --hero-neu-b: #0f172a; --on-hero: #f0fdf4;
 
     --selo-escurecer: 0%;
 
@@ -214,6 +240,20 @@ textarea {
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
+  --color-pos: var(--pos);
+  --color-pos-ink: var(--pos-ink);
+  --color-pos-bg: var(--pos-bg);
+  --color-pos-borda: var(--pos-borda);
+  --color-neg: var(--neg);
+  --color-neg-ink: var(--neg-ink);
+  --color-neg-bg: var(--neg-bg);
+  --color-neg-borda: var(--neg-borda);
+  --color-warn: var(--warn);
+  --color-warn-ink: var(--warn-ink);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-borda: var(--warn-borda);
+  --color-serie-in: var(--serie-in);
+  --color-serie-out: var(--serie-out);
 
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
 }

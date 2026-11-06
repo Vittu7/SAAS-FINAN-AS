@@ -67,6 +67,9 @@ alter table public.fechamento_controle enable row level security;
 alter table public.fechamento_meses enable row level security;
 alter table public.fechamento_eventos enable row level security;
 
+-- Permissão de leitura (a RLS abaixo filtra as linhas). Sem este GRANT o app recebe "permission denied" e esconde o módulo.
+grant select on public.fechamento_controle, public.fechamento_meses, public.fechamento_eventos to authenticated;
+
 -- Leitura: a própria pessoa; a situação dos meses também para os membros do grupo (o app avisa quando um
 -- lançamento compartilhado está travado pelo fechamento da outra pessoa). Escrita só pelas funções abaixo.
 drop policy if exists fechamento_controle_select on public.fechamento_controle;

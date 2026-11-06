@@ -80,6 +80,8 @@ export async function enviarFotoPerfil(client: Cliente, user: Usuario, arquivo: 
   if (arquivo.size > 15 * 1024 * 1024) throw new Error("A imagem deve ter no máximo 15 MB.");
 
   const blob = await reduzirImagem(arquivo);
+  // Mesmo limite do bucket avatars (supabase-21): só estoura se o navegador não conseguiu reduzir a foto.
+  if (blob.size > 5 * 1024 * 1024) throw new Error("Não foi possível reduzir esta imagem. Use um JPG ou PNG menor que 5 MB.");
   const ext = blob.type === "image/jpeg" ? "jpg" : (arquivo.name.split(".").pop() || "jpg").toLowerCase();
   const caminho = `${user.id}/avatar-${Date.now()}.${ext}`;
 

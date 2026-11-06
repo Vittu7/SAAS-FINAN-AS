@@ -28,6 +28,13 @@ const CATEGORIAS_ENTRADA = ["Salário", "Extra", "Reembolso", "Rendimento", "Out
 const campo = "h-11 w-full rounded-xl border border-line bg-background px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
 const rotulo = "mb-1 block text-xs font-medium text-muted";
 
+const Chip = ({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <button type="button" onClick={onClick} aria-pressed={ativo} className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium transition ${ativo ? "bg-accent text-on-accent shadow-sm" : "bg-background text-muted ring-1 ring-line"}`}>
+    {children}
+  </button>
+);
+
+
 export default function NovaTransacao({
   estado,
   mes,
@@ -190,12 +197,6 @@ export default function NovaTransacao({
       setSalvando(false);
     }
   };
-
-  const Chip = ({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) => (
-    <button type="button" onClick={onClick} aria-pressed={ativo} className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium transition ${ativo ? "bg-accent text-on-accent shadow-sm" : "bg-background text-muted ring-1 ring-line"}`}>
-      {children}
-    </button>
-  );
 
   return (
     <DialogResponsivo titulo="Nova transação" onFechar={onFechar}>

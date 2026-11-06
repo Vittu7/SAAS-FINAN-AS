@@ -1,6 +1,5 @@
 'use client';
 import { ReceiptText, CreditCard } from "lucide-react";
-import { Ico } from "@/components/icons";
 import { useState } from 'react';
 import { useOpcoes } from '@/lib/useOpcoes';
 import { calcularFatura } from '@/lib/faturas';

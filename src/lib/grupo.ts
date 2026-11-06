@@ -8,7 +8,17 @@
  *   apenas muda a situação do repasse. Por isso entradas, saídas e saldo não mudam.
  * - Entradas nunca geram repasse.
  */
-import { arred, calcularMes, mesEmBrasilia, semDuplicados } from "./calculos";
+import { arred, calcularMes, mesDoRecebimento, semDuplicados } from "./calculos";
+
+/**
+ * Aviso de mês do recebimento: o recebimento pertence ao mês de competência de quem confirma (o mês financeiro em
+ * aberto dele), não ao mês do lançamento nem ao do calendário.
+ * Devolve esse mês e os meses de origem diferentes dele; vazio = sem aviso.
+ */
+export function mesesDoReflexoDoRepasse(lista: { mes: string }[], mesConfirmacao: string): { mesConfirmacao: string; mesesOrigem: string[] } {
+  const mesesOrigem = [...new Set(lista.map((l) => String(l.mes)).filter((m) => m && m !== mesConfirmacao))].sort();
+  return { mesConfirmacao, mesesOrigem };
+}
 import { mesAtual } from "./finance";
 
 type Item = Record<string, any>;
@@ -43,7 +53,12 @@ export type LancGrupo = {
   respCor: string | null;
   /** Concluído: quem recebeu confirmou */
   repassePago: boolean;
+  /** Data real da confirmação (só registro/exibição; os cálculos usam mesRecebimento) */
   repassePagoEm: string | null;
+  /** Competência gravada ao confirmar (mês em aberto de quem confirmou); null em registros antigos */
+  repasseMes: string | null;
+  /** Mês de competência do recebimento: repasse_mes, ou (registros antigos) o mês da data da confirmação */
+  mesRecebimento: string;
   /** Quem deve marcou "Repassado" (aguardando a confirmação de quem recebeu) */
   repasseInformado: boolean;
   repasseInformadoEm: string | null;
@@ -85,6 +100,8 @@ export function lancamentosDoGrupo(e: { extrato?: Item[]; cartao?: Item[]; conta
       respCor: i.responsavelCor ?? null,
       repassePago: Boolean(i.repasse_pago ?? i.repassePago),
       repassePagoEm: i.repasse_pago_em ?? null,
+      repasseMes: i.repasse_mes ?? null,
+      mesRecebimento: mesDoRecebimento(i),
       repasseInformado: Boolean(i.repasse_informado ?? i.repasseInformado),
       repasseInformadoEm: i.repasse_informado_em ?? null,
       situacaoRepasse: situacaoDoRepasse(Boolean(i.repasse_pago ?? i.repassePago), Boolean(i.repasse_informado ?? i.repasseInformado)),
@@ -207,7 +224,7 @@ export function entradasDeRepasse(e: { extrato?: Item[]; cartao?: Item[]; contas
       if (!(i.repasse_pago ?? i.repassePago)) continue;
       saida.push({
         id: `${PREFIXO_REPASSE}${o}:${i.id}`,
-        mes: mesEmBrasilia(i.repasse_pago_em, String(i.mes)),
+        mes: mesDoRecebimento(i),
         tipo: "entrada",
         valor: num(i.valor),
         descricao: `Repasse recebido (quita o a receber) · ${(o === "contas" ? i.nome : i.descricao ?? i.nome) || "lançamento"} (${i.responsavel || "Membro"})`,
@@ -246,7 +263,7 @@ export function saidasDeRepasse(
       if (opts.nomesSelecionados.includes(i.autorNome)) continue;
       saida.push({
         id: `${PREFIXO_REPASSE}${o}:${i.id}`,
-        mes: mesEmBrasilia(i.repasse_pago_em, String(i.mes)),
+        mes: mesDoRecebimento(i),
         tipo: "saida",
         valor: num(i.valor),
         descricao: `Repasse enviado · ${(o === "contas" ? i.nome : i.descricao ?? i.nome) || "lançamento"} (para ${i.autorNome || "Membro"})`,

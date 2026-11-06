@@ -165,7 +165,13 @@ describe("confirmar/estornar repasse: o mês ORIGINAL da despesa não pode estar
   });
   it("confirmar o recebimento de despesa de mês fechado do responsável: bloqueado, pedindo para reabrir", () => {
     expect(verificarAlteracao({ tipo: "confirmar", itens: [despesa("2026-10")] }, ctx)).toMatch(/Gisa já fechou outubro.*reabrir/);
-    expect(verificarAlteracao({ tipo: "confirmar", itens: [despesa("2026-11"), despesa("2026-12")] }, ctx)).toBeNull();
+    // A competência do recebimento é o mês em aberto de quem confirma. Com o mês dele em novembro (outubro já fechado), confirmar despesas de novembro/dezembro passa.
+    const vituEmNovembro = { ...ctx, estado: est(["2026-09", "2026-10"]), porPessoa: new Map([["vitu", new Set(["2026-09", "2026-10"])], ["gisa", new Set(["2026-09", "2026-10"])]]) };
+    expect(verificarAlteracao({ tipo: "confirmar", itens: [despesa("2026-11"), despesa("2026-12")] }, { ...vituEmNovembro, porPessoa: new Map([["gisa", new Set(["2026-09"])]]) })).toBeNull();
+  });
+  it("com o mês em aberto de quem confirma fechado para o responsável, a confirmação (competência) fica bloqueada até ele reabrir", () => {
+    // Vitu ainda em outubro, Gisa já fechou outubro: o recebimento cairia em outubro, mês fechado dela
+    expect(verificarAlteracao({ tipo: "confirmar", itens: [despesa("2026-11")] }, ctx)).toMatch(/mês da confirmação está fechado/);
   });
   it("estornar também é bloqueado pelo mês original, mesmo que o mês da confirmação esteja aberto", () => {
     const confirmado = { repasse_pago: true, repasse_pago_em: "2026-12-01T12:00:00Z" };

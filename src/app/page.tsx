@@ -20,7 +20,7 @@ import { financeiroDoGrupo } from "@/lib/financeiroGrupo";
 import Pendencias from "@/components/resumo/Pendencias";
 import { AvisoMesNaoAberto, ConferenciaFechamento, FaixaFechamento, HistoricoFechamento, ListaMeses, ReabrirMes, SeletorMes, type AvisoConferencia } from "@/components/fechamento/Fechamento";
 import { useFechamentos } from "@/hooks/useFechamentos";
-import { hojeEmBrasilia, mesDeTrabalho, mesTerminou, podeFechar, podeReabrir, statusDoMes, ultimoFechado, verificarAlteracao, type Alteracao, type Retrato, type StatusMes } from "@/lib/fechamento";
+import { hojeEmBrasilia, mesDeTrabalho, mesDoRecebimentoAgora, mesTerminou, podeFechar, podeReabrir, statusDoMes, ultimoFechado, verificarAlteracao, type Alteracao, type Retrato, type StatusMes } from "@/lib/fechamento";
 import { faturasEmAberto, MES_CORTE_CAIXA } from "@/lib/pagamentoFatura";
 import { idsDaSerieCartao, idsDaSerieConta } from "@/lib/serie";
 import { avisos } from "@/lib/avisos";
@@ -369,6 +369,14 @@ export default function Home() {
   }, [fech.habilitado, ctxTrava]);
   const idResp = useCallback((item: { responsavel_id?: string | null; responsavel?: string }): string | null => item?.responsavel_id || membros.find((m) => m.nome === item?.responsavel)?.id || userId, [membros, userId]);
   const achar = useCallback((tabela: "extrato" | "cartao" | "contas", id: string): ItemLanc | undefined => (estado[tabela] as unknown as ItemLanc[]).find((i) => String(i.id) === String(id)), [estado]);
+  // Competência de um recebimento confirmado agora: o mês financeiro em aberto de quem confirma (mesmo critério do banco)
+  const mesRecebimentoAgora = mesDoRecebimentoAgora(ctxTrava) || mes;
+  // Estorno em lote: motivo do bloqueio de cada repasse (mês fechado), com as mesmas travas do estorno individual
+  const verificarEstorno = useCallback((l: { origem: "extrato" | "cartao" | "contas"; id: string }): string | null => {
+    if (!fech.habilitado) return null;
+    const item = achar(l.origem, l.id);
+    return item ? verificarAlteracao({ tipo: "estornar", itens: [item] }, ctxTrava) : null;
+  }, [fech.habilitado, ctxTrava, achar]);
   const acao = useMemo(() => ({
     adicionarExtrato: (...a: Parameters<typeof loja.adicionarExtrato>) => barrar({ tipo: "novo", mes: a[0].mes, responsavelId: idResp(a[0]) }, "Não foi possível lançar") ? Promise.resolve(false) : loja.adicionarExtrato(...a),
     adicionarCartao: (...a: Parameters<typeof loja.adicionarCartao>) => barrar({ tipo: "novo", mes: a[0].mes, responsavelId: idResp(a[0]) }, "Não foi possível lançar") ? Promise.resolve(false) : loja.adicionarCartao(...a),
@@ -631,6 +639,7 @@ export default function Home() {
               {dashboard.preferencias.resumo && !consultaApenas && userId && (
                 <Pendencias
                   mes={mes}
+                  mesRecebimento={mesRecebimentoAgora}
                   userId={userId}
                   estado={estado}
                   contas={contas.filter((c: any) => !c.pago && !c.foraDoMeuSaldo && c.mes === mes) as any}
@@ -703,6 +712,8 @@ export default function Home() {
                   membros={membros}
                   userId={userId}
                   mes={mes}
+                  mesRecebimento={mesRecebimentoAgora}
+                  verificarEstorno={verificarEstorno}
                   onRepasse={acao.atualizarRepasses}
                   onGerenciar={() => setModalGrupoAberto(true)}
                   onNova={() => abrirNova()}

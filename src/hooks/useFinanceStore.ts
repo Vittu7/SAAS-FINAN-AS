@@ -782,21 +782,24 @@ export function useFinanceStore() {
         acao === "informar" ? { repasse_informado: true, repasse_informado_em: agora, repasseInformado: true, repasse_conta_origem: conta }
         : acao === "desinformar" ? { repasse_informado: false, repasse_informado_em: null, repasseInformado: false, repasse_conta_origem: null }
         : acao === "concluir" ? { repasse_pago: true, repasse_pago_em: agora, repassePago: true, repasse_conta: conta }
-        : { repasse_conta: null, repasse_conta_origem: null, repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
+        : { repasse_conta: null, repasse_conta_origem: null, repasse_mes: null, repasse_pago: false, repasse_pago_em: null, repassePago: false, repasse_informado: false, repasse_informado_em: null, repasseInformado: false };
       setEstado((atual) => ({
         ...atual,
         [origem]: (atual[origem] as any[]).map((item) => (alvo.has(String(item.id)) ? { ...item, ...patch } : item)),
       }) as Estado);
     }
 
-    // Confirma com o banco: o que o usuário vê é exatamente o que ficou gravado (e o que os outros membros recebem)
-    void sincronizarLancamentos();
+    // Confirma com o banco: o que o usuário vê é exatamente o que ficou gravado (e o que os outros membros recebem).
+    // Ao confirmar/estornar, espera a releitura: a competência (repasse_mes) é definida pelo banco, então os saldos e o
+    // Financeiro do grupo só mostram o valor final depois dela (nunca um mês provisório).
+    if (acao === "concluir" || acao === "reabrir" || acao === "recusar") await sincronizarLancamentos();
+    else void sincronizarLancamentos();
 
     const n = itens.length;
     const varios = n > 1;
     if (acao === "informar") avisos.sucesso(varios ? `${n} repasses informados` : "Repasse informado", "Agora aguarda quem lançou confirmar o recebimento.");
     else if (acao === "desinformar") avisos.sucesso(varios ? `${n} repasses desmarcados` : "Repasse desmarcado", "Voltou para pendente.");
-    else if (acao === "concluir") avisos.sucesso(varios ? `${n} recebimentos confirmados` : "Recebimento confirmado", conta ? `O valor entrou como entrada em ${conta}.` : "O valor foi abatido do que a pessoa devia.");
+    else if (acao === "concluir") avisos.sucesso(varios ? `${n} recebimentos confirmados` : "Recebimento confirmado", conta ? `O valor foi somado ao saldo de ${conta}.` : "O valor foi abatido do que a pessoa devia.");
     else if (acao === "recusar") avisos.sucesso(varios ? `${n} recebimentos recusados` : "Recebimento recusado", "Voltou para pendente: quem deve verá que ainda precisa repassar.");
     else avisos.sucesso(varios ? `${n} repasses reabertos` : "Repasse reaberto", "Voltou para pendente.");
     return true;

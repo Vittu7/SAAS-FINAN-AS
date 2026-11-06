@@ -26,9 +26,11 @@ type ContaPendente = { id: string | number; nome?: string; valor: number | strin
  * de cartões e repasses usam a mesma ação em lote da tela do grupo (com as travas do fechamento aplicadas pelo chamador).
  */
 export default function Pendencias({
-  mes, userId, estado, contas, faturas, repasses, onPagarConta, onRepasse,
+  mes, mesRecebimento, userId, estado, contas, faturas, repasses, onPagarConta, onRepasse,
 }: {
   mes: string;
+  /** mês financeiro em aberto de quem confirma (competência do recebimento) */
+  mesRecebimento?: string;
   userId: string;
   estado: { extrato: any[]; cartao: any[]; contas: any[] };
   contas: ContaPendente[];
@@ -115,6 +117,7 @@ export default function Pendencias({
           dados={estado}
           userId={userId}
           mes={mes}
+          mesRecebimento={mesRecebimento || mes}
           onFechar={() => setPedindoConta(null)}
           onConfirmar={(conta) => {
             const { acao, lista } = pedindoConta;

@@ -26,7 +26,7 @@
  *   mês original da despesa (ver aguardandoRepasseDoResponsavel). Pendente e "repassado" ainda não contam.
  * - O que os integrantes usaram e devolveram aparece no Financeiro do grupo (financeiroGrupo.ts), não aqui.
  */
-import { arred, calcularMes, ehEntrada, mesEmBrasilia, semDuplicados } from "./calculos";
+import { arred, calcularMes, ehEntrada, mesDoRecebimento, semDuplicados } from "./calculos";
 import { addMeses } from "./finance";
 import { aguardandoRepasseDoResponsavel, lancamentosDoGrupo } from "./grupo";
 import type { MovCaixinhaConta } from "./contas";
@@ -39,7 +39,7 @@ export type ModoSaldo = "mes" | "total";
 
 const num = (v: unknown) => Number(v) || 0;
 const ORIGENS = ["extrato", "cartao", "contas"] as const;
-const mesDoRepasse = (i: Item): string => mesEmBrasilia(i.repasse_pago_em, String(i.mes));
+const mesDoRepasse = (i: Item): string => mesDoRecebimento(i);
 
 /** Despesas que EU adiantei para outra pessoa (a despesa está fora do meu resultado). */
 function adiantamentos(e: Dados, naFatura: (o: (typeof ORIGENS)[number], i: Item) => boolean): Rep[] {
@@ -267,7 +267,7 @@ export function calcularPainel(
   };
 
   const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
-    .flatMap((i) => [String(i?.mes || ""), mesEmBrasilia(i?.repasse_pago_em)])
+    .flatMap((i) => [String(i?.mes || ""), (i?.repasse_pago ?? i?.repassePago) ? mesDoRecebimento(i) : ""])
     .concat(movsCaixinha.map((x) => x.mes), Object.keys(faturas.pago), Object.keys(faturas.pagoCaixa), Object.keys(faturas.recebido))
     .filter((m) => /^\d{4}-\d{2}$/.test(m) && m < mes);
   let saldoAnterior = arred(num(opts.saldoInicial));
@@ -306,8 +306,7 @@ export function calcularPainel(
       const euDevo = l.respId === meuId;
       if (!euLancei && !euDevo) continue;
       if (l.repassePago) {
-        const mesConfirmado = l.repassePagoEm ? String(l.repassePagoEm).slice(0, 7) : l.mes;
-        if (mesConfirmado !== mes) continue;
+        if (l.mesRecebimento !== mes) continue;
         if (euLancei) repasses.recebidosNoMes = arred(repasses.recebidosNoMes + l.valor);
         else repasses.enviadosNoMes = arred(repasses.enviadosNoMes + l.valor);
         continue;

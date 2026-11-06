@@ -13,7 +13,7 @@
  *   Quando um integrante devolve, o disponível do grupo sobe e o pendente dele cai na mesma quantia (sem duplicar).
  * - Tudo é acumulado até o mês visto, como o Total disponível. Repasse nunca é entrada nem despesa.
  */
-import { arred, mesEmBrasilia } from "./calculos";
+import { arred } from "./calculos";
 import { lancamentosDoGrupo, type LancGrupo } from "./grupo";
 import type { Painel } from "./painel";
 
@@ -55,7 +55,7 @@ export type FinanceiroGrupo = {
 
 export function financeiroDoGrupo(painel: Painel, dados: Dados, meuId: string): FinanceiroGrupo {
   const mes = painel.mes;
-  const mesConfirmado = (l: LancGrupo) => mesEmBrasilia(l.repassePagoEm, l.mes);
+  const mesConfirmado = (l: LancGrupo) => l.mesRecebimento;
   // Só o que eu criei para outro responsável, até o mês visto (parcelas e contas de meses futuros ainda não contam)
   const meus = lancamentosDoGrupo(dados, mes).filter((l) => l.autorId === meuId && l.respId !== meuId && l.mes <= mes);
 

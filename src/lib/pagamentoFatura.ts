@@ -9,7 +9,7 @@
  *   paga: até lá são um compromisso ("fatura em aberto"), e o repasse recebido é entrada real. Como a fatura mistura
  *   compras próprias e de terceiros, cada pagamento é dividido na proporção da fatura (parte de terceiros / total).
  */
-import { arred, ehEntrada, mesEmBrasilia, semDuplicados } from "./calculos";
+import { arred, ehEntrada, mesDoRecebimento, semDuplicados } from "./calculos";
 import type { Estado } from "./types";
 
 /** Fatura de um cartão em um mês: soma tudo o que o grupo lançou nele (que o usuário pode ver). */
@@ -247,7 +247,7 @@ export function ajusteDeFaturas(
       // confirmação (assim um mês já passado, e talvez fechado, nunca muda por uma confirmação posterior).
       for (const x of daFatura) {
         if (!(ehTerceiro(x) && escopo && !escopo.has(String(x.item.responsavel_id)) && Boolean(x.item.repasse_pago ?? x.item.repassePago))) continue;
-        const confirmadoEm = mesEmBrasilia(x.item.repasse_pago_em ?? x.item.repassePagoEm, mesPag);
+        const confirmadoEm = mesDoRecebimento({ ...x.item, mes: mesPag });
         const mesEntrada = confirmadoEm > mesPag ? confirmadoEm : mesPag;
         r.recebido[mesEntrada] = arred((r.recebido[mesEntrada] || 0) + (num(p.valor) * num(x.item.valor)) / total);
       }

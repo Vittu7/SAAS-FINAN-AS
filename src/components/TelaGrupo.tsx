@@ -15,7 +15,8 @@ import PessoaIcone from "@/components/PessoaIcone";
 import { Ico, ICONE_ABA, ICONES } from "@/components/icons";
 import { brl, rotuloMes } from "@/lib/finance";
 import { arred } from "@/lib/calculos";
-import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, repasseValidoParaAcao, repassesDoMes, resumoRepasses, type FiltroGrupo, type LancGrupo } from "@/lib/grupo";
+import { elegivelParaEstorno, planoDeEstorno } from "@/lib/estornoLote";
+import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, mesesDoReflexoDoRepasse, repasseValidoParaAcao, repassesDoMes, resumoRepasses, type FiltroGrupo, type LancGrupo } from "@/lib/grupo";
 import type { Membro } from "@/hooks/useFinanceStore";
 
 type Sub = "resumo" | "lancamentos" | "repasses";
@@ -24,7 +25,7 @@ type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir" | "recusa
 type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], acao: AcaoRepasse, conta?: string | null) => Promise<boolean>;
 
 /* ---------- Escolha da conta que recebe o repasse ---------- */
-export function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfirmar, onFechar }: { modo: "receber" | "repassar"; lista: LancGrupo[]; dados: Dados; userId: string; mes: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
+export function EscolherContaRepasse({ modo, lista, dados, userId, mes, mesRecebimento, onConfirmar, onFechar }: { modo: "receber" | "repassar"; lista: LancGrupo[]; dados: Dados; userId: string; mes: string; /** mês financeiro em aberto de quem confirma = competência do recebimento */ mesRecebimento: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
   const { pagamento } = useOpcoes();
   const caixinhaMovs = useMovimentosConta();
   const { pagamentos: pagamentosFatura } = usePagamentosFatura();
@@ -32,6 +33,7 @@ export function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfir
   const [escolhida, setEscolhida] = useState<string>("");
   const total = lista.reduce((t, l) => t + l.valor, 0);
   const sel = escolhida || contas[0]?.nome || "";
+  const { mesConfirmacao, mesesOrigem } = useMemo(() => mesesDoReflexoDoRepasse(lista, mesRecebimento), [lista, mesRecebimento]);
   return (
     <DialogResponsivo titulo={lista.length > 1 ? (modo === "receber" ? `Marcar ${lista.length} repasses como recebidos` : `Devolver ${lista.length} repasses`) : modo === "receber" ? "Em qual conta o valor entrou?" : "De qual conta saiu o valor?"} onFechar={onFechar}>
       <div className="space-y-4">
@@ -42,7 +44,13 @@ export function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfir
             <p className="mt-2 text-xs text-muted">Repasses já concluídos não entram. Se algum não puder ser atualizado, você é avisado e a tela é recarregada com o que ficou gravado.</p>
           </div>
         )}
-        <p className="text-sm text-muted">{modo === "receber" ? "Confirmar recebimento de" : "Marcar como repassado"} <b className="text-ink">{brl(total)}</b>{lista.length > 1 ? ` (${lista.length} lançamentos)` : ""}. {modo === "receber" ? "O valor soma no saldo da conta escolhida e entra como entrada no seu mês." : "O valor é descontado do saldo da conta escolhida quando quem lançou confirmar o recebimento."}</p>
+        <p className="text-sm text-muted">{modo === "receber" ? "Confirmar recebimento de" : "Marcar como repassado"} <b className="text-ink">{brl(total)}</b>{lista.length > 1 ? ` (${lista.length} lançamentos)` : ""}. {modo === "receber" ? "O valor será somado ao saldo da conta escolhida. Não é criada nenhuma entrada nova." : "O valor é descontado do saldo da conta escolhida quando quem lançou confirmar o recebimento."}</p>
+        {modo === "receber" && mesesOrigem.length > 0 && (
+          <p role="note" className="rounded-xl bg-warn-bg p-3 text-sm text-warn-ink">
+            {mesesOrigem.length > 1 ? "Os lançamentos são de " : "O lançamento é de "}<b>{mesesOrigem.map((m) => rotuloMes(m).toLowerCase()).join(", ")}</b>, mas o recebimento será contabilizado em <b>{rotuloMes(mesConfirmacao).toLowerCase()}</b>, o seu mês financeiro em aberto.
+            {" "}O valor aparece no saldo da conta e no Financeiro do grupo a partir de {rotuloMes(mesConfirmacao).toLowerCase()}; {mesesOrigem.length > 1 ? "os meses dos lançamentos não mudam" : `${rotuloMes(mesesOrigem[0]).toLowerCase()} não muda`}.
+          </p>
+        )}
         {contas.length === 0 ? (
           <p className="rounded-xl bg-background p-3 text-sm text-muted">Você ainda não tem conta de débito cadastrada. Você pode continuar mesmo assim, sem registrar em nenhuma conta.</p>
         ) : (
@@ -162,12 +170,15 @@ function ItemRepasse({ l, lado, acoes, selecao }: { l: LancGrupo; lado: "receber
 type GrupoPessoa = { id: string; nome: string; avatar: any; cor: any; itens: LancGrupo[] };
 
 /** Um lado dos repasses (receber ou pagar): cartões por pessoa, seleção e ações individuais, por pessoa e em lote (a barra fica na aba). */
-function SecaoRepasse({ lado, grupos, total, meuId, convidado, ocupado, selecionadas, onAlternar, onTodos, onAcao }: {
-  lado: "receber" | "pagar"; grupos: GrupoPessoa[]; total: number; meuId: string; convidado: (id: string) => boolean; ocupado: boolean;
+function SecaoRepasse({ lado, grupos, total, meuId, convidado, ocupado, selecionadas, onAlternar, onTodos, onAcao, onEstornar }: {
+  lado: "receber" | "pagar" | "estornar"; grupos: GrupoPessoa[]; total: number; meuId: string; convidado: (id: string) => boolean; ocupado: boolean;
   selecionadas: Set<string>; onAlternar: (chave: string) => void; onTodos: (marcar: boolean) => void;
   onAcao: (ls: LancGrupo[], acao: AcaoRepasse) => void;
+  /** lado "estornar": abre a confirmação do estorno (individual ou em lote) */
+  onEstornar?: (ls: LancGrupo[]) => void;
 }) {
   const receber = lado === "receber";
+  const estornar = lado === "estornar";
   const todos = grupos.flatMap((g) => g.itens);
   const marcados = todos.filter((l) => selecionadas.has(l.chave));
   const todosMarcados = todos.length > 0 && marcados.length === todos.length;
@@ -177,18 +188,19 @@ function SecaoRepasse({ lado, grupos, total, meuId, convidado, ocupado, selecion
   const btnItem = `${btn} border border-line bg-surface`;
   const btnPrim = `${btn} bg-accent text-on-accent`;
   const btnPerigo = `${btn} border border-warn-borda text-warn`;
-  const tom = receber ? "text-pos" : "text-warn";
+  const tom = receber ? "text-pos" : estornar ? "text-ink" : "text-warn";
+  const titulo = receber ? "Tenho que receber" : estornar ? "Repasses concluídos" : "Tenho que pagar";
   return (
-    <section className="card-glass grid content-start gap-3 p-4 @md:p-5" aria-label={receber ? "Tenho que receber" : "Tenho que pagar"}>
+    <section className="card-glass grid content-start gap-3 p-4 @md:p-5" aria-label={titulo}>
       <header className="flex items-start justify-between gap-3">
         <div className="grid gap-0.5">
-          <h3 className="flex items-center gap-2 text-base font-bold"><span className={`grid size-7 place-items-center rounded-full ${receber ? "bg-pos-bg text-pos-ink" : "bg-warn-bg text-warn-ink"}`}><Ico icon={receber ? Check : HandCoins} size={15} /></span>{receber ? "Tenho que receber" : "Tenho que pagar"}</h3>
-          <span className="text-xs text-muted">{todos.length} {todos.length === 1 ? "repasse" : "repasses"} em aberto{aguardando.length > 0 ? ` · ${brl(arred(aguardando.reduce((t, l) => t + l.valor, 0)))} aguardando confirmação` : ""}</span>
+          <h3 className="flex items-center gap-2 text-base font-bold"><span className={`grid size-7 place-items-center rounded-full ${receber ? "bg-pos-bg text-pos-ink" : estornar ? "bg-background text-muted ring-1 ring-line" : "bg-warn-bg text-warn-ink"}`}><Ico icon={receber ? Check : estornar ? Undo2 : HandCoins} size={15} /></span>{titulo}</h3>
+          <span className="text-xs text-muted">{todos.length} {todos.length === 1 ? "repasse" : "repasses"} {estornar ? "para estornar, se precisar" : "em aberto"}{aguardando.length > 0 ? ` · ${brl(arred(aguardando.reduce((t, l) => t + l.valor, 0)))} aguardando confirmação` : ""}</span>
         </div>
         <b className={`text-xl tabular-nums ${total > 0 ? tom : "text-muted"}`}>{brl(total)}</b>
       </header>
 
-      {todos.length === 0 ? <p className="rounded-xl bg-background p-3 text-sm text-muted">{receber ? "Ninguém te deve agora." : "Você não deve nada agora."}</p> : (
+      {todos.length === 0 ? <p className="rounded-xl bg-background p-3 text-sm text-muted">{receber ? "Ninguém te deve agora." : estornar ? "Nenhum repasse concluído para estornar." : "Você não deve nada agora."}</p> : (
         <>
           <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl bg-background px-3 text-sm font-medium ring-1 ring-line">
             <input type="checkbox" checked={todosMarcados} disabled={ocupado} onChange={() => onTodos(!todosMarcados)} className="size-5 accent-[var(--accent)]" />
@@ -208,10 +220,12 @@ function SecaoRepasse({ lado, grupos, total, meuId, convidado, ocupado, selecion
                     <Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="sm" />
                     <b className="truncate text-sm">{p.nome}{receber && convidado(p.id) && <span className="ml-1.5 rounded-full bg-background px-1.5 py-0.5 text-[11px] font-semibold text-muted ring-1 ring-line">convidado</span>}</b>
                   </span>
-                  <span className="text-xs text-muted">{receber ? "falta receber" : "falta pagar"} <b className={`text-sm ${tom}`}>{brl(arred(p.itens.reduce((t, l) => t + l.valor, 0)))}</b>{marcadosP.length > 0 && <span className="ml-1.5 font-semibold text-accent">· {marcadosP.length} selecionado{marcadosP.length > 1 ? "s" : ""}</span>}</span>
+                  <span className="text-xs text-muted">{receber ? "falta receber" : estornar ? "já recebido" : "falta pagar"} <b className={`text-sm ${tom}`}>{brl(arred(p.itens.reduce((t, l) => t + l.valor, 0)))}</b>{marcadosP.length > 0 && <span className="ml-1.5 font-semibold text-accent">· {marcadosP.length} selecionado{marcadosP.length > 1 ? "s" : ""}</span>}</span>
                 </div>
                 <div className="flex flex-wrap gap-2 py-1">
-                  {receber ? (
+                  {estornar ? (
+                    <button type="button" disabled={ocupado} onClick={() => onEstornar?.(p.itens)} className={btnPerigo}><Ico icon={Undo2} size={15} />Estornar tudo de {nome1} ({p.itens.length})</button>
+                  ) : receber ? (
                     <>
                       {nConcluir > 0 && <button type="button" disabled={ocupado} onClick={() => onAcao(p.itens, "concluir")} className={btnPrim}><Ico icon={Check} size={15} />{aguardandoP.length > 0 ? `Confirmar tudo de ${nome1} (${nConcluir})` : `Marcar tudo de ${nome1} como recebido`}</button>}
                       {nRecusar > 0 && <button type="button" disabled={ocupado} onClick={() => onAcao(p.itens, "recusar")} className={btnPerigo}><Ico icon={X} size={15} />Recusar informados ({nRecusar})</button>}
@@ -225,9 +239,11 @@ function SecaoRepasse({ lado, grupos, total, meuId, convidado, ocupado, selecion
                 </div>
                 <ul className="divide-y divide-line">
                   {p.itens.map((l) => (
-                    <ItemRepasse key={l.chave} l={l} lado={lado}
+                    <ItemRepasse key={l.chave} l={l} lado={lado === "estornar" ? "receber" : lado}
                       selecao={{ marcado: selecionadas.has(l.chave), onChange: () => onAlternar(l.chave), desabilitado: ocupado }}
-                      acoes={receber
+                      acoes={estornar
+                        ? <button type="button" disabled={ocupado} onClick={() => onEstornar?.([l])} className={`${btnPerigo} flex-1 @md:flex-none`}><Ico icon={Undo2} size={15} />Estornar</button>
+                        : receber
                         ? <>
                             <button type="button" disabled={ocupado} onClick={() => onAcao([l], "concluir")} className={`${l.situacaoRepasse === "aguardando" ? btnPrim : btnItem} flex-1 @md:flex-none`}><Ico icon={Check} size={15} />{l.situacaoRepasse === "aguardando" ? "Confirmar recebimento" : convidado(l.respId) ? "Registrar recebimento" : "Já recebi"}</button>
                             {l.situacaoRepasse === "aguardando" && <button type="button" disabled={ocupado} onClick={() => onAcao([l], "recusar")} className={`${btnPerigo} flex-1 @md:flex-none`}><Ico icon={X} size={15} />Recusar</button>}
@@ -246,17 +262,18 @@ function SecaoRepasse({ lado, grupos, total, meuId, convidado, ocupado, selecion
           })}
         </>
       )}
-      {!receber && <p className="text-xs text-muted">Informar não muda nenhum saldo. O dinheiro só sai da sua conta quando a outra pessoa confirmar.</p>}
+      {estornar && <p className="text-xs text-muted">Só quem recebeu confirma e estorna. O estorno desfaz a confirmação: o valor sai do saldo da conta e do Financeiro do grupo e o repasse volta a ficar pendente.</p>}
+      {lado === "pagar" && <p className="text-xs text-muted">Informar não muda nenhum saldo. O dinheiro só sai da sua conta quando a outra pessoa confirmar.</p>}
     </section>
   );
 }
 
 /** Barra fixa com a seleção atual: aparece quando há itens marcados. */
-function BarraLote({ lado, itens, meuId, ocupado, onAcao, onLimpar }: { lado: "receber" | "pagar"; itens: LancGrupo[]; meuId: string; ocupado: boolean; onAcao: (ls: LancGrupo[], a: AcaoRepasse) => void; onLimpar: () => void }) {
+function BarraLote({ lado, itens, meuId, ocupado, onAcao, onEstornar, onLimpar }: { lado: "receber" | "pagar" | "estornar"; itens: LancGrupo[]; meuId: string; ocupado: boolean; onAcao: (ls: LancGrupo[], a: AcaoRepasse) => void; onEstornar: (ls: LancGrupo[]) => void; onLimpar: () => void }) {
   if (itens.length === 0) return null;
   const n = (a: AcaoRepasse) => itens.filter((l) => repasseValidoParaAcao(l, a, meuId)).length;
   const total = arred(itens.reduce((t, l) => t + l.valor, 0));
-  const pessoas = new Set(itens.map((l) => (lado === "receber" ? l.respId : l.autorId))).size;
+  const pessoas = new Set(itens.map((l) => (lado === "pagar" ? l.autorId : l.respId))).size;
   const btn = "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold transition active:scale-[.98] disabled:opacity-50";
   return (
     <div role="region" aria-label="Ações para os repasses selecionados" className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 md:inset-x-auto md:bottom-6 md:left-1/2 md:w-[min(46rem,calc(100vw-3rem))] md:-translate-x-1/2">
@@ -266,7 +283,9 @@ function BarraLote({ lado, itens, meuId, ocupado, onAcao, onLimpar }: { lado: "r
           <span className="text-xs opacity-75">{itens.length} {itens.length === 1 ? "selecionado" : "selecionados"} · {pessoas} {pessoas === 1 ? "pessoa" : "pessoas"}</span>
         </div>
         <button type="button" onClick={onLimpar} className={`${btn} text-[#eaf2f6]/80`}>Limpar</button>
-        {lado === "receber" ? (
+        {lado === "estornar" ? (
+          <button type="button" disabled={ocupado} onClick={() => onEstornar(itens)} className={`${btn} min-w-[12rem] flex-1 border border-[#ffb4ad]/50 text-[#ffb4ad]`}><Ico icon={Undo2} size={15} />Estornar selecionados ({itens.length})</button>
+        ) : lado === "receber" ? (
           <>
             <button type="button" disabled={ocupado || n("recusar") === 0} onClick={() => onAcao(itens, "recusar")} className={`${btn} border border-[#ffb4ad]/50 text-[#ffb4ad]`}><Ico icon={X} size={15} />Recusar{n("recusar") > 0 ? ` (${n("recusar")})` : ""}</button>
             <button type="button" disabled={ocupado || n("concluir") === 0} onClick={() => onAcao(itens, "concluir")} className={`${btn} min-w-[12rem] flex-1 bg-accent text-on-accent`}><Ico icon={Check} size={15} />{itens.some((l) => l.situacaoRepasse === "aguardando") ? "Confirmar recebimento" : "Marcar como recebido"} ({n("concluir")})</button>
@@ -282,15 +301,24 @@ function BarraLote({ lado, itens, meuId, ocupado, onAcao, onLimpar }: { lado: "r
   );
 }
 
-function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, onRepasse, onEstornar, onNova }: { lista: LancGrupo[]; mes: string; outrosMeses: { total: number; abertos: number }; meuId: string; membros: Membro[]; ocupado: boolean; onRepasse: Repasse; onEstornar: (ls: LancGrupo[]) => void; onNova: () => void }) {
+function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, sinalLimparEstorno, onRepasse, onEstornar, onNova }: { /** muda a cada estorno confirmado: limpa a seleção de estornos (inclusive itens bloqueados que ficaram marcados) */ sinalLimparEstorno: number; lista: LancGrupo[]; mes: string; outrosMeses: { total: number; abertos: number }; meuId: string; membros: Membro[]; ocupado: boolean; onRepasse: Repasse; onEstornar: (ls: LancGrupo[]) => void; onNova: () => void }) {
   const [verFuturos, setVerFuturos] = useState(false);
   // A seleção guarda "chave|situação": quando um repasse muda de situação (informado, confirmado, recusado) ele sai sozinho da seleção.
   const [selR, setSelR] = useState<Set<string>>(new Set());
   const [selP, setSelP] = useState<Set<string>>(new Set());
+  // Seleção de estornos presa ao "sinal": quando um estorno é confirmado o sinal muda e a seleção antiga deixa de valer (sem efeito colateral)
+  const [selEReg, setSelEReg] = useState<{ sinal: number; chaves: Set<string> }>({ sinal: sinalLimparEstorno, chaves: new Set() });
+  const selE = selEReg.sinal === sinalLimparEstorno ? selEReg.chaves : new Set<string>();
+  const setSelE: React.Dispatch<React.SetStateAction<Set<string>>> = (v) =>
+    setSelEReg((r) => {
+      const atual = r.sinal === sinalLimparEstorno ? r.chaves : new Set<string>();
+      return { sinal: sinalLimparEstorno, chaves: typeof v === "function" ? v(atual) : v };
+    });
   const marca = (l: LancGrupo) => `${l.chave}|${l.situacaoRepasse}`;
   const marcaDe = (chave: string) => { const l = lista.find((x) => x.chave === chave); return l ? marca(l) : chave; };
-  const alternar = (set: React.Dispatch<React.SetStateAction<Set<string>>>, outro: React.Dispatch<React.SetStateAction<Set<string>>>, chave: string) => {
-    outro(new Set()); // seleção de um lado de cada vez: a barra de ações vale para um só
+  type SetSel = React.Dispatch<React.SetStateAction<Set<string>>>;
+  const alternar = (set: SetSel, outros: SetSel[], chave: string) => {
+    outros.forEach((o) => o(new Set())); // seleção de um lado de cada vez: a barra de ações vale para um só
     set((x) => { const n = new Set(x); const m = marcaDe(chave); if (n.has(m)) n.delete(m); else n.add(m); return n; });
   };
   const convidado = (id: string) => membros.find((m) => m.id === id)?.convidado ?? false;
@@ -300,6 +328,8 @@ function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, onRepas
   const receber = vencidos.filter((l) => l.autorId === meuId);
   const pagar = vencidos.filter((l) => l.respId === meuId);
   const concluidos = lista.filter((l) => l.repassePago && (l.autorId === meuId || l.respId === meuId)).sort((a, b) => String(b.repassePagoEm || "").localeCompare(String(a.repassePagoEm || "")));
+  const estornaveis = concluidos.filter((l) => elegivelParaEstorno(l, meuId));
+  const concluidosPagos = concluidos.filter((l) => !elegivelParaEstorno(l, meuId));
   const soma = (ls: LancGrupo[]) => arred(ls.reduce((t, l) => t + l.valor, 0));
   const porPessoa = (ls: LancGrupo[], chave: "respId" | "autorId") => {
     const mapa = new Map<string, LancGrupo[]>();
@@ -316,10 +346,9 @@ function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, onRepas
     void onRepasse(validos.map((l) => ({ origem: l.origem, id: l.id })), a);
   };
   const chavesSel = (ls: LancGrupo[], sel: Set<string>) => new Set(ls.filter((l) => sel.has(marca(l))).map((l) => l.chave));
-  const selRChaves = chavesSel(receber, selR), selPChaves = chavesSel(pagar, selP);
-  const ladoBarra: "receber" | "pagar" = selRChaves.size > 0 ? "receber" : "pagar";
-  const itensBarra = ladoBarra === "receber" ? receber.filter((l) => selRChaves.has(l.chave)) : pagar.filter((l) => selPChaves.has(l.chave));
-  const btn = "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold transition active:scale-[.98] disabled:opacity-50 @md:flex-none md:min-h-10";
+  const selRChaves = chavesSel(receber, selR), selPChaves = chavesSel(pagar, selP), selEChaves = chavesSel(estornaveis, selE);
+  const ladoBarra: "receber" | "pagar" | "estornar" = selEChaves.size > 0 ? "estornar" : selRChaves.size > 0 ? "receber" : "pagar";
+  const itensBarra = ladoBarra === "estornar" ? estornaveis.filter((l) => selEChaves.has(l.chave)) : ladoBarra === "receber" ? receber.filter((l) => selRChaves.has(l.chave)) : pagar.filter((l) => selPChaves.has(l.chave));
 
   if (lista.length === 0 && outrosMeses.total > 0) {
     return (
@@ -344,12 +373,17 @@ function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, onRepas
 
       <div className="grid gap-5 @4xl:grid-cols-2">
         <SecaoRepasse lado="receber" grupos={porPessoa(receber, "respId")} total={soma(receber)} meuId={meuId} convidado={convidado} ocupado={ocupado}
-          selecionadas={selRChaves} onAlternar={(c) => alternar(setSelR, setSelP, c)} onTodos={(m) => { setSelP(new Set()); setSelR(m ? new Set(receber.map(marca)) : new Set()); }} onAcao={acao} />
+          selecionadas={selRChaves} onAlternar={(c) => alternar(setSelR, [setSelP, setSelE], c)} onTodos={(m) => { setSelP(new Set()); setSelE(new Set()); setSelR(m ? new Set(receber.map(marca)) : new Set()); }} onAcao={acao} />
         <SecaoRepasse lado="pagar" grupos={porPessoa(pagar, "autorId")} total={soma(pagar)} meuId={meuId} convidado={convidado} ocupado={ocupado}
-          selecionadas={selPChaves} onAlternar={(c) => alternar(setSelP, setSelR, c)} onTodos={(m) => { setSelR(new Set()); setSelP(m ? new Set(pagar.map(marca)) : new Set()); }} onAcao={acao} />
+          selecionadas={selPChaves} onAlternar={(c) => alternar(setSelP, [setSelR, setSelE], c)} onTodos={(m) => { setSelR(new Set()); setSelE(new Set()); setSelP(m ? new Set(pagar.map(marca)) : new Set()); }} onAcao={acao} />
       </div>
 
-      <BarraLote lado={ladoBarra} itens={itensBarra} meuId={meuId} ocupado={ocupado} onAcao={acao} onLimpar={() => { setSelR(new Set()); setSelP(new Set()); }} />
+      {estornaveis.length > 0 && (
+        <SecaoRepasse lado="estornar" grupos={porPessoa(estornaveis, "respId")} total={soma(estornaveis)} meuId={meuId} convidado={convidado} ocupado={ocupado}
+          selecionadas={selEChaves} onAlternar={(c) => alternar(setSelE, [setSelR, setSelP], c)} onTodos={(m) => { setSelR(new Set()); setSelP(new Set()); setSelE(m ? new Set(estornaveis.map(marca)) : new Set()); }} onAcao={acao} onEstornar={onEstornar} />
+      )}
+
+      <BarraLote lado={ladoBarra} itens={itensBarra} meuId={meuId} ocupado={ocupado} onAcao={acao} onEstornar={onEstornar} onLimpar={() => { setSelR(new Set()); setSelP(new Set()); setSelE(new Set()); }} />
 
       {futuros.length > 0 && (
         <section className="card-glass grid gap-2 p-5">
@@ -361,27 +395,24 @@ function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, onRepas
         </section>
       )}
 
-      <section className="card-glass grid gap-2 p-5" aria-label="Concluídos">
-        <h3 className="text-base font-bold">Concluídos</h3>
-        {concluidos.length === 0 ? <p className="py-2 text-sm text-muted">Nenhum repasse confirmado ainda.</p> : (
+      {concluidosPagos.length > 0 && (
+        <section className="card-glass grid gap-2 p-5" aria-label="Concluídos que você pagou">
+          <h3 className="text-base font-bold">Concluídos que você pagou</h3>
           <ul>
-            {concluidos.slice(0, 20).map((l) => {
-              const recebi = l.autorId === meuId;
-              return (
-                <li key={l.chave} data-lanc-id={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 last:border-b-0">
-                  <div className="grid min-w-0 flex-1 basis-56 gap-0.5">
-                    <b className="text-sm">{recebi ? `${l.respNome} → você` : `Você → ${l.autorNome}`}</b>
-                    <span className="text-xs text-muted">{l.descricao}{l.parcela ? ` · ${l.parcela}` : ""} · confirmado em {l.repassePagoEm ? new Date(l.repassePagoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}</span>
-                  </div>
-                  <b className="shrink-0 text-sm tabular-nums">{brl(l.valor)}</b>
-                  {recebi && <div className="flex w-full @md:w-auto"><button type="button" disabled={ocupado} onClick={() => onEstornar([l])} className={`${btn} border border-warn-borda text-warn`}><Ico icon={Undo2} size={15} />Estornar</button></div>}
-                </li>
-              );
-            })}
+            {concluidosPagos.slice(0, 20).map((l) => (
+              <li key={l.chave} data-lanc-id={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 last:border-b-0">
+                <div className="grid min-w-0 flex-1 basis-56 gap-0.5">
+                  <b className="text-sm">{`Você → ${l.autorNome}`}</b>
+                  <span className="text-xs text-muted">{l.descricao}{l.parcela ? ` · ${l.parcela}` : ""} · confirmado em {l.repassePagoEm ? new Date(l.repassePagoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"} · conta em {rotuloMes(l.mesRecebimento).toLowerCase()}</span>
+                </div>
+                <b className="shrink-0 text-sm tabular-nums">{brl(l.valor)}</b>
+              </li>
+            ))}
           </ul>
-        )}
-        <p className="text-xs text-muted">Só quem recebeu confirma e estorna. Despesa com repasse confirmado não pode ser editada nem excluída antes do estorno.</p>
-      </section>
+          <p className="text-xs text-muted">Só quem recebeu confirma e estorna.</p>
+        </section>
+      )}
+
     </div>
   );
 }
@@ -410,22 +441,38 @@ function ConfirmarSimples({ acao, itens, onFechar, onConfirmar }: { acao: "desin
   );
 }
 
-/** Estorno: hoje reabre o repasse; o histórico completo do estorno depende da migração de repasses (Fase B). */
-function ConfirmarEstorno({ itens, onFechar, onConfirmar }: { itens: LancGrupo[]; onFechar: () => void; onConfirmar: () => void }) {
-  const total = itens.reduce((t, l) => t + l.valor, 0);
+/**
+ * Estorno (individual ou em lote): mostra responsável, quantidade e valor do que será estornado e, à parte, o que está
+ * bloqueado (mês fechado) com o motivo. Estorna só os liberados; os bloqueados ficam como estão.
+ */
+function ConfirmarEstorno({ itens, meuId, verificar, onFechar, onConfirmar }: { itens: LancGrupo[]; meuId: string; verificar?: (l: LancGrupo) => string | null; onFechar: () => void; onConfirmar: (liberados: LancGrupo[]) => void }) {
+  const plano = useMemo(() => planoDeEstorno(itens, meuId, verificar), [itens, meuId, verificar]);
+  const n = plano.liberados.length;
+  const nomes = [...new Set(plano.liberados.map((l) => l.respNome))].join(", ");
   return (
-    <DialogResponsivo titulo="Estornar repasse" onFechar={onFechar}>
+    <DialogResponsivo titulo={n > 1 ? `Estornar ${n} repasses` : "Estornar repasse"} onFechar={onFechar}>
       <div className="grid gap-4">
-        <p className="text-sm">Estornar <b className="tabular-nums">{brl(total)}</b> ({itens.map((l) => l.descricao).join(", ")})?</p>
+        {n > 0 ? (
+          <div className="rounded-xl bg-background p-3 text-sm ring-1 ring-line">
+            <p>Responsável: <b>{nomes}</b></p>
+            <p><b>{n} {n === 1 ? "repasse" : "repasses"}</b> · total <b className="tabular-nums">{brl(plano.total)}</b></p>
+            <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-muted">{plano.liberados.map((l) => <li key={l.chave} className="flex justify-between gap-3"><span className="truncate">{l.descricao}{l.parcela ? ` · ${l.parcela}` : ""} · {rotuloMes(l.mes)}</span><span className="tabular-nums">{brl(l.valor)}</span></li>)}</ul>
+          </div>
+        ) : <p className="text-sm">Nenhum dos repasses selecionados pode ser estornado agora.</p>}
+        {plano.bloqueados.length > 0 && (
+          <div role="alert" className="rounded-xl bg-warn-bg p-3 text-sm text-warn-ink">
+            <p className="font-semibold">{plano.bloqueados.length} {plano.bloqueados.length === 1 ? "repasse bloqueado" : "repasses bloqueados"} (não serão estornados):</p>
+            <ul className="mt-1.5 grid gap-1.5 text-xs">{plano.bloqueados.map(({ item, motivo }) => <li key={item.chave}><b>{item.descricao}{item.parcela ? ` · ${item.parcela}` : ""}</b> ({brl(item.valor)}): {motivo}</li>)}</ul>
+          </div>
+        )}
         <ul className="grid list-disc gap-1.5 pl-5 text-sm">
-          <li>Os dois saldos voltam ao que eram antes da confirmação.</li>
+          <li>O valor deixa o saldo da conta e o Financeiro do grupo, na mesma competência em que entrou.</li>
           <li>O repasse volta a ficar pendente e a despesa pode ser editada de novo.</li>
-          <li>Não é possível estornar um repasse confirmado em mês fechado.</li>
+          <li>Não é possível estornar um repasse de mês fechado.</li>
         </ul>
-        <p className="rounded-xl bg-warn-bg p-3 text-xs leading-relaxed text-warn-ink">Por enquanto o banco não guarda um registro separado do estorno. O histórico completo (repasse original + estorno) depende da migração de repasses, ainda não aplicada.</p>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button type="button" onClick={onFechar} className="min-h-11 rounded-xl border border-line px-4 text-sm font-medium">Cancelar</button>
-          <button type="button" onClick={onConfirmar} className="min-h-11 rounded-xl border border-warn-borda px-5 text-sm font-semibold text-warn">Estornar {brl(total)}</button>
+          <button type="button" disabled={n === 0} onClick={() => onConfirmar(plano.liberados)} className="min-h-11 rounded-xl border border-warn-borda px-5 text-sm font-semibold text-warn disabled:opacity-50">Estornar {n > 1 ? `${n} repasses · ` : ""}{brl(plano.total)}</button>
         </div>
       </div>
     </DialogResponsivo>
@@ -522,8 +569,8 @@ function AbaResumo({ dados, meuId, mes }: { dados: Dados; meuId: string; mes: st
 
 /* ---------- Tela ---------- */
 export default function TelaGrupo({
-  dados, membros, userId, mes, onRepasse, onGerenciar, onNova, abaInicial = "resumo", pessoasFiltradas = null,
-}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub; /** isolamento: ids visíveis (só o próprio usuário); repasses entre terceiros não aparecem */ pessoasFiltradas?: Set<string> | null }) {
+  dados, membros, userId, mes, mesRecebimento, verificarEstorno, onRepasse, onGerenciar, onNova, abaInicial = "resumo", pessoasFiltradas = null,
+}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; /** mês financeiro em aberto de quem confirma (competência do recebimento) */ mesRecebimento?: string; /** motivo do bloqueio de um estorno (mês fechado) ou null; vem das travas do fechamento */ verificarEstorno?: (l: LancGrupo) => string | null; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub; /** isolamento: ids visíveis (só o próprio usuário); repasses entre terceiros não aparecem */ pessoasFiltradas?: Set<string> | null }) {
   const [sub, setSub] = useState<Sub>(abaInicial);
   const meuId = userId || "";
   // Lançamentos e repasses mostram só o mês selecionado (o mês atual, por padrão), sem misturar períodos.
@@ -538,6 +585,7 @@ export default function TelaGrupo({
   // Confirmar ("concluir") e informar perguntam antes a conta; estornar ("reabrir") pede confirmação
   const [pedindoConta, setPedindoConta] = useState<{ acao: "concluir" | "informar"; itens: { origem: "extrato" | "cartao" | "contas"; id: string }[] } | null>(null);
   const [estornando, setEstornando] = useState<LancGrupo[] | null>(null);
+  const [sinalLimparEstorno, setSinalLimparEstorno] = useState(0);
   const [simples, setSimples] = useState<{ acao: "desinformar" | "recusar"; itens: LancGrupo[] } | null>(null);
   // Uma ação de repasse por vez: evita confirmação duplicada por clique repetido (o banco é a garantia final)
   const [ocupado, setOcupado] = useState(false);
@@ -574,7 +622,7 @@ export default function TelaGrupo({
 
       {sub === "resumo" && <AbaResumo dados={dados} meuId={meuId} mes={mes} />}
       {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} mes={mes} onRepasse={repasseComConta} />}
-      {sub === "repasses" && <AbaRepasses lista={listaRepasses} mes={mes} outrosMeses={repassesOutrosMeses} meuId={meuId} membros={membros} ocupado={ocupado} onRepasse={repasseComConta} onEstornar={(ls) => setEstornando(ls)} onNova={onNova} />}
+      {sub === "repasses" && <AbaRepasses sinalLimparEstorno={sinalLimparEstorno} lista={listaRepasses} mes={mes} outrosMeses={repassesOutrosMeses} meuId={meuId} membros={membros} ocupado={ocupado} onRepasse={repasseComConta} onEstornar={(ls) => setEstornando(ls)} onNova={onNova} />}
       {pedindoConta && (
         <EscolherContaRepasse
           modo={pedindoConta.acao === "concluir" ? "receber" : "repassar"}
@@ -582,6 +630,7 @@ export default function TelaGrupo({
           dados={dados}
           userId={meuId}
           mes={mes}
+          mesRecebimento={mesRecebimento || mes}
           onFechar={() => setPedindoConta(null)}
           onConfirmar={(conta) => {
             const a = pedindoConta.acao;
@@ -613,8 +662,18 @@ export default function TelaGrupo({
       {estornando && estornando.length > 0 && (
         <ConfirmarEstorno
           itens={estornando}
+          meuId={meuId}
+          verificar={verificarEstorno}
           onFechar={() => setEstornando(null)}
-          onConfirmar={() => { const itens = estornando.map((l) => ({ origem: l.origem, id: l.id })); setEstornando(null); void executar(itens, "reabrir"); }}
+          onConfirmar={(liberados) => {
+            // Reconfere com a lista atual (nunca estorna o que já foi estornado) e só envia os liberados
+            const atuais = new Set(listaRepasses.filter((l) => l.repassePago).map((l) => l.chave));
+            const itens = liberados.filter((l) => atuais.has(l.chave)).map((l) => ({ origem: l.origem, id: l.id }));
+            setEstornando(null);
+            if (itens.length === 0) { avisos.aviso("Nada para estornar", "Esses repasses já foram estornados."); return; }
+            setSinalLimparEstorno((n) => n + 1);
+            void executar(itens, "reabrir");
+          }}
         />
       )}
     </div>

@@ -54,8 +54,19 @@ export function mesEmBrasilia(instante: unknown, padrao = ""): string {
   return `${v("year")}-${v("month")}`;
 }
 
-/** Mês (AAAA-MM) em que o repasse foi confirmado; sem data, vale o mês do lançamento. */
-const mesDoRepasse = (i: Item): string => mesEmBrasilia(i.repasse_pago_em, String(i.mes));
+/**
+ * Mês de COMPETÊNCIA do recebimento de um repasse (AAAA-MM). Fonte única: todo cálculo do app usa esta função.
+ * - `repasse_mes` (gravado pelo banco ao confirmar = mês em aberto de quem confirma) manda quando existe;
+ * - registros antigos, sem competência, caem na data da confirmação (repasse_pago_em, Brasília);
+ * - sem nenhuma das duas, vale o mês do lançamento.
+ * A data real da confirmação (repasse_pago_em) continua guardada à parte e só serve de alternativa e de exibição.
+ */
+export function mesDoRecebimento(i: { repasse_mes?: unknown; repasseMes?: unknown; repasse_pago_em?: unknown; repassePagoEm?: unknown; mes?: unknown }): string {
+  const competencia = String(i.repasse_mes ?? i.repasseMes ?? "");
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) return competencia;
+  return mesEmBrasilia(i.repasse_pago_em ?? i.repassePagoEm, String(i.mes ?? ""));
+}
+const mesDoRepasse = (i: Item): string => mesDoRecebimento(i);
 
 /**
  * Repasses internos CONFIRMADOS no mês: dinheiro que um membro mandou para quem lançou a despesa.

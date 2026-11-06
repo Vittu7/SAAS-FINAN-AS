@@ -11,6 +11,7 @@
  * A garantia definitiva fica no banco (supabase-18-fechamento-mensal.sql); estas regras dão a mensagem antes.
  */
 import { addMeses, rotuloMes } from "./finance";
+import { mesDoRecebimento } from "./calculos";
 
 export type StatusMes = "historico" | "fechado" | "aberto" | "espera" | "previsao";
 export type EstadoFechamento = { mesInicial: string | null; fechados: Set<string> };
@@ -112,11 +113,11 @@ export function travaDoLancamento(
 
 /** Estorno (reabrir repasse confirmado) muda o mês em que o repasse foi confirmado: bloqueado se esse mês está fechado. */
 export function travaDoEstorno(
-  item: { owner_id?: string | null; responsavel_id?: string | null; repasse_pago?: boolean | null; repasse_pago_em?: string | null },
+  item: { owner_id?: string | null; responsavel_id?: string | null; repasse_pago?: boolean | null; repasse_pago_em?: string | null; repasse_mes?: string | null; mes?: string | null },
   porPessoa: FechadosPorPessoa,
 ): { travado: boolean; quem: string[] } {
-  if (!item.repasse_pago || !item.repasse_pago_em) return { travado: false, quem: [] };
-  const mes = hojeEmBrasilia(new Date(item.repasse_pago_em)).slice(0, 7);
+  if (!item.repasse_pago || !(item.repasse_mes || item.repasse_pago_em)) return { travado: false, quem: [] };
+  const mes = mesDoRecebimento(item); // competência gravada; registros antigos: mês da data da confirmação
   return travaDoLancamento({ mes, owner_id: item.owner_id, responsavel_id: item.responsavel_id }, porPessoa);
 }
 
@@ -145,8 +146,17 @@ export function bloqueioParaLancar(mes: string, e: EstadoFechamento, hoje: strin
   return null;
 }
 
-type ItemLanc = { mes?: string | null; owner_id?: string | null; responsavel_id?: string | null; repasse_pago?: boolean | null; repasse_pago_em?: string | null };
+type ItemLanc = { mes?: string | null; owner_id?: string | null; responsavel_id?: string | null; repasse_pago?: boolean | null; repasse_pago_em?: string | null; repasse_mes?: string | null };
 export type ContextoTrava = { estado: EstadoFechamento; porPessoa: FechadosPorPessoa; hoje: string; meuId: string; nomes: Map<string, string> };
+
+/**
+ * Mês de competência de um recebimento confirmado AGORA por quem está logado: o mês financeiro em aberto dele
+ * (primeiro mês não fechado desde o mês inicial). Sem fechamento ativado, vale o mês do calendário.
+ * É o mesmo critério da função mes_em_aberto do banco.
+ */
+export function mesDoRecebimentoAgora(ctx: Pick<ContextoTrava, "estado" | "hoje">): string {
+  return mesDeTrabalho(ctx.estado) ?? ctx.hoje.slice(0, 7);
+}
 export type Alteracao =
   | { tipo: "novo"; mes: string; responsavelId?: string | null }
   | { tipo: "editar"; item: ItemLanc; mesNovo?: string | null }
@@ -190,13 +200,15 @@ export function verificarAlteracao(a: Alteracao, ctx: ContextoTrava): string | n
     const r = travaDoReconhecimento(i, ctx.porPessoa);
     if (r.travado) return `Este repasse reconhece a despesa em ${nomeMes(String(i.mes))}, que está fechado. ${quemFechou(r.quem, String(i.mes), ctx)}`;
     if (a.tipo === "confirmar") {
-      // A confirmação acontece agora: o mês de hoje não pode estar fechado para quem lançou nem para o responsável
-      const t = travaDoLancamento({ mes: ctx.hoje.slice(0, 7), owner_id: i.owner_id, responsavel_id: i.responsavel_id }, ctx.porPessoa);
-      if (t.travado) return `O mês da confirmação está fechado. ${quemFechou(t.quem, ctx.hoje.slice(0, 7), ctx)}`;
+      // O recebimento pertence ao mês financeiro em aberto de quem confirma (não ao do calendário):
+      // esse mês não pode estar fechado para quem lançou nem para o responsável
+      const mesConf = mesDoRecebimentoAgora(ctx);
+      const t = travaDoLancamento({ mes: mesConf, owner_id: i.owner_id, responsavel_id: i.responsavel_id }, ctx.porPessoa);
+      if (t.travado) return `O mês da confirmação está fechado. ${quemFechou(t.quem, mesConf, ctx)}`;
       continue;
     }
     const t = travaDoEstorno(i, ctx.porPessoa);
-    if (t.travado) return `Este repasse foi confirmado em um mês fechado. ${quemFechou(t.quem, hojeEmBrasilia(new Date(i.repasse_pago_em!)).slice(0, 7), ctx)}`;
+    if (t.travado) return `Este repasse foi confirmado em um mês fechado. ${quemFechou(t.quem, mesDoRecebimento(i), ctx)}`;
   }
   return null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Eye, EyeOff, Menu, Moon, Palette, Sun, SunMoon, X, type LucideIcon } from "lucide-react";
@@ -191,20 +191,21 @@ export function MobileRecentes({ recentes, onAba }: { recentes: string[]; onAba:
   );
 }
 
+const Item = ({ ativo, r, s, onClick }: { ativo: boolean; r: string; s: LucideIcon; onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-current={ativo ? "page" : undefined}
+    className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px] font-medium transition ${ativo ? "text-accent" : "text-muted"}`}
+  >
+    <span className={`grid h-7 w-12 place-items-center rounded-full ${ativo ? "bg-accent/15" : ""}`}><Ico icon={s} size={22} /></span>
+    {r}
+  </button>
+);
+
+
 /* ---------- Barra inferior: Início, Extrato, Nova transação, Grupo, Perfil ---------- */
 export function MobileBottomNav({ aba, onAba, onNova, onGrupo, perfil }: { aba: Aba; onAba: (a: Aba) => void; onNova: () => void; onGrupo: () => void; perfil?: { nome: string; avatar: string | null; cor: string | null } }) {
-  const Item = ({ ativo, r, s, onClick }: { ativo: boolean; r: string; s: LucideIcon; onClick: () => void }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={ativo ? "page" : undefined}
-      className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px] font-medium transition ${ativo ? "text-accent" : "text-muted"}`}
-    >
-      <span className={`grid h-7 w-12 place-items-center rounded-full ${ativo ? "bg-accent/15" : ""}`}><Ico icon={s} size={22} /></span>
-      {r}
-    </button>
-  );
-
   return (
     <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-50 w-full border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
       <div className="mx-auto flex max-w-md items-end px-2">

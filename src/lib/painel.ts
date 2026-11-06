@@ -18,7 +18,7 @@
  *   devolvido a uma conta volta). Não é despesa nem receita: entradas, saídas e "sobra do mês" não mudam.
  * - Os saldos por conta (Saldos e limites) são outro controle: dinheiro de cada conta de débito do usuário.
  */
-import { arred, calcularMes, ehEntrada, semDuplicados } from "./calculos";
+import { arred, calcularMes, ehEntrada, mesEmBrasilia, semDuplicados } from "./calculos";
 import { addMeses } from "./finance";
 import { lancamentosDoGrupo } from "./grupo";
 import type { MovCaixinhaConta } from "./contas";
@@ -31,7 +31,7 @@ export type ModoSaldo = "mes" | "total";
 
 const num = (v: unknown) => Number(v) || 0;
 const ORIGENS = ["extrato", "cartao", "contas"] as const;
-const mesDoRepasse = (i: Item): string => (i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes));
+const mesDoRepasse = (i: Item): string => mesEmBrasilia(i.repasse_pago_em, String(i.mes));
 
 /** Despesas que EU adiantei para outra pessoa (a despesa está fora do meu resultado). */
 function adiantamentos(e: Dados, naFatura: (o: (typeof ORIGENS)[number], i: Item) => boolean): Rep[] {
@@ -97,8 +97,10 @@ export type Painel = {
   repassesRecebidos: number;
   /** Despesas de outras pessoas que eu paguei neste mês (saída de caixa, não é despesa minha). No crédito, é a parte das faturas pagas no mês */
   adiantado: number;
-  /** Compras no crédito feitas para pessoas da visão, em faturas ainda não pagas: já estão nas saídas, mas o dinheiro ainda não saiu */
+  /** Compras no crédito (de terceiros e, pela regra de caixa, também as do titular) em faturas ainda não pagas: já estão nas saídas, mas o dinheiro ainda não saiu */
   faturaEmAberto: number;
+  /** Faturas pagas NESTE mês (regra de caixa): o dinheiro saiu da conta agora, mesmo que a compra seja de meses antes */
+  faturasPagas: number;
   /** Adiantado até o mês, sem repasse concluído e ainda não marcado como "Repassado" */
   aReceber: number;
   /** Adiantado até o mês que já foi marcado como "Repassado" e espera a minha confirmação */
@@ -163,7 +165,8 @@ export function composicaoDoDisponivel(p: Painel, rotuloMesAnterior: string): Li
     { rotulo: "Saiu (despesas realizadas)", valor: -p.saidasRealizadas },
     { rotulo: "Contas fixas pendentes do mês", dica: "Já separadas do disponível até serem pagas", valor: -p.contasPendentes },
     { rotulo: "Você pagou por outras pessoas", dica: "Volta quando elas repassarem", valor: -p.adiantado },
-    { rotulo: "Compras no crédito para outras pessoas", dica: "Saem quando a fatura for paga", valor: p.faturaEmAberto },
+    { rotulo: "Compras no crédito ainda não pagas", dica: "Saem do saldo quando a fatura for paga", valor: p.faturaEmAberto },
+    { rotulo: "Faturas pagas no mês", dica: "O dinheiro saiu da conta ao pagar a fatura", valor: -p.faturasPagas },
     { rotulo: "Gastos seus pagos por outra pessoa", dica: "Saem quando você repassar", valor: p.despesasARepassar },
     { rotulo: "Repasses que você enviou", valor: -p.repassesEnviados },
     { rotulo: "Aportes em caixinhas", dica: "Saíram do saldo, não são despesa", valor: -p.aportesCaixinha },
@@ -189,13 +192,14 @@ export function serieEntradasSaidas(e: Dados, mes: string, n = 6): { mes: string
 export function calcularPainel(
   e: Dados,
   /** escopo = ids das pessoas da visão (null = todo o grupo) */
-  opts: { mes: string; saldoInicial?: number; /** id de quem está usando o app (habilita o bloco de repasses) */ meuId?: string | null; /** lançamentos SEM filtro de pessoas, para os repasses (padrão: os mesmos de `e`) */ dadosRepasses?: Dados; escopo?: Set<string> | null; /** aportes/resgates de caixinha ligados a uma conta (só os do usuário) */ caixinhaMovs?: MovCaixinhaConta[]; /** nomes dos cartões de crédito do usuário (para saber o que é fatura) */ cartoesCredito?: string[]; /** pagamentos de fatura do usuário */ pagamentosFatura?: PagamentoFatura[] },
+  opts: { mes: string; saldoInicial?: number; /** id de quem está usando o app (habilita o bloco de repasses) */ meuId?: string | null; /** lançamentos SEM filtro de pessoas, para os repasses (padrão: os mesmos de `e`) */ dadosRepasses?: Dados; escopo?: Set<string> | null; /** aportes/resgates de caixinha ligados a uma conta (só os do usuário) */ caixinhaMovs?: MovCaixinhaConta[]; /** nomes dos cartões de crédito do usuário (para saber o que é fatura) */ cartoesCredito?: string[]; /** pagamentos de fatura do usuário */ pagamentosFatura?: PagamentoFatura[]; /** a partir deste mês (AAAA-MM) vale a regra de caixa do crédito (ver ajusteDeFaturas); sem o campo, regra antiga */ mesCorteCaixa?: string | null },
 ): Painel {
   const { mes } = opts;
   // Sem `meuId` (ou sem cartões) nada é rastreado como fatura: vale a regra antiga (o adiantado sai na compra)
   const credito = new Set(opts.cartoesCredito ?? []);
   const adiant = adiantamentos(e, (o, i) => compraDeTerceirosNoCredito(o, i, opts.meuId, credito));
-  const faturas = ajusteDeFaturas(opts.dadosRepasses ?? e, opts.pagamentosFatura ?? [], { meuId: opts.meuId, escopo: opts.escopo ?? null, cartoesCredito: credito });
+  const faturas = ajusteDeFaturas(opts.dadosRepasses ?? e, opts.pagamentosFatura ?? [], { meuId: opts.meuId, escopo: opts.escopo ?? null, cartoesCredito: credito, mesCorte: opts.mesCorteCaixa ?? null });
+  const corte = opts.mesCorteCaixa ?? null;
   const deve = devidos(e, opts.escopo ?? null);
   const soma = (l: { valor: number }[]) => arred(l.reduce((s, a) => s + a.valor, 0));
   // Só aporte/resgate que usou o saldo de uma conta mexe no disponível (sem conta, o dinheiro não saiu do saldo)
@@ -204,20 +208,22 @@ export function calcularPainel(
     .map((x) => ({ tipo: x.tipo, valor: num(x.valor), mes: String(x.data).slice(0, 7) }));
   const movimentoDoMes = (m: string) => {
     const r = calcularMes(e, { mes: m });
-    const recebidos = soma(adiant.filter((a) => a.concluido && a.mesRepasse === m));
+    // Repasse de compra no crédito (regra de caixa) NÃO entra pelo dia do clique: compensa nos pagamentos da fatura
+    const recebidos = arred(soma(adiant.filter((a) => a.concluido && a.mesRepasse === m && !(a.naFatura && corte !== null && a.mes >= corte))) + (faturas.recebido[m] || 0));
     // Compra no crédito do titular só tira dinheiro quando a fatura é paga (faturas.pago); as demais, na compra
     const adiantadoMes = arred(soma(adiant.filter((a) => a.mes === m && !a.naFatura)) + (faturas.pago[m] || 0));
     const faturaAberta = faturas.emAberto[m] || 0;
+    const faturasPagas = faturas.pagoCaixa[m] || 0;
     const enviados = soma(deve.filter((a) => a.concluido && a.mesRepasse === m));
     const aindaNaoSaiu = soma(deve.filter((a) => a.mes === m)); // despesa contada no resultado, dinheiro ainda não saiu
     const aportes = soma(movsCaixinha.filter((x) => x.tipo === "aporte" && x.mes === m));
     const resgates = soma(movsCaixinha.filter((x) => x.tipo === "resgate" && x.mes === m));
-    return { r, recebidos, adiantadoMes, faturaAberta, enviados, aindaNaoSaiu, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes + faturaAberta + aindaNaoSaiu - enviados - aportes + resgates) };
+    return { r, recebidos, adiantadoMes, faturaAberta, faturasPagas, enviados, aindaNaoSaiu, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes - faturasPagas + faturaAberta + aindaNaoSaiu - enviados - aportes + resgates) };
   };
 
   const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
-    .flatMap((i) => [String(i?.mes || ""), i?.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : ""])
-    .concat(movsCaixinha.map((x) => x.mes), Object.keys(faturas.pago))
+    .flatMap((i) => [String(i?.mes || ""), mesEmBrasilia(i?.repasse_pago_em)])
+    .concat(movsCaixinha.map((x) => x.mes), Object.keys(faturas.pago), Object.keys(faturas.pagoCaixa), Object.keys(faturas.recebido))
     .filter((m) => /^\d{4}-\d{2}$/.test(m) && m < mes);
   let saldoAnterior = arred(num(opts.saldoInicial));
   // Competência pura (tudo acertado): base da sobra prevista
@@ -295,6 +301,7 @@ export function calcularPainel(
     repassesRecebidos: atual.recebidos,
     adiantado: atual.adiantadoMes,
     faturaEmAberto: atual.faturaAberta,
+    faturasPagas: atual.faturasPagas,
     aReceber: soma(aReceberAberto.filter((a) => !a.informado)),
     aReceberAguardando: soma(aReceberAberto.filter((a) => a.informado)),
     repassesEnviados: atual.enviados,

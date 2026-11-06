@@ -38,8 +38,24 @@ export function semDuplicados<T extends Item>(itens: T[], origem: Origem): T[] {
 
 const soma = (itens: Item[]) => arred(itens.reduce((s, i) => s + num(i?.valor), 0));
 
+/**
+ * Mês (AAAA-MM) de um instante, no horário de Brasília — o MESMO critério das travas do banco (mes_em_brasilia),
+ * para o app e o fechamento mensal nunca discordarem sobre em que mês um repasse foi confirmado.
+ * Texto só com data (sem hora) é lido como está. `padrao` vale quando não há instante.
+ */
+export function mesEmBrasilia(instante: unknown, padrao = ""): string {
+  if (!instante) return padrao;
+  const s = String(instante);
+  if (!/\d{2}:\d{2}/.test(s)) return s.slice(0, 7);
+  const d = new Date(s.replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00"));
+  if (Number.isNaN(d.getTime())) return s.slice(0, 7);
+  const partes = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit" }).formatToParts(d);
+  const v = (t: string) => partes.find((x) => x.type === t)?.value ?? "";
+  return `${v("year")}-${v("month")}`;
+}
+
 /** Mês (AAAA-MM) em que o repasse foi confirmado; sem data, vale o mês do lançamento. */
-const mesDoRepasse = (i: Item): string => (i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes));
+const mesDoRepasse = (i: Item): string => mesEmBrasilia(i.repasse_pago_em, String(i.mes));
 
 /**
  * Repasses internos CONFIRMADOS no mês: dinheiro que um membro mandou para quem lançou a despesa.

@@ -9,7 +9,7 @@
  *   paga: até lá são um compromisso ("fatura em aberto"), e o repasse recebido é entrada real. Como a fatura mistura
  *   compras próprias e de terceiros, cada pagamento é dividido na proporção da fatura (parte de terceiros / total).
  */
-import { arred, ehEntrada, semDuplicados } from "./calculos";
+import { arred, ehEntrada, mesEmBrasilia, semDuplicados } from "./calculos";
 import type { Estado } from "./types";
 
 /** Fatura de um cartão em um mês: soma tudo o que o grupo lançou nele (que o usuário pode ver). */
@@ -122,11 +122,24 @@ export function compraDeTerceirosNoCredito(origem: "extrato" | "cartao" | "conta
   return origem === "cartao" ? Boolean(cartao) : cartoesCredito.has(cartao);
 }
 
+/**
+ * Mês de corte da REGRA DE CAIXA do crédito (decisão do responsável). Faturas de meses anteriores ficam como estavam
+ * (histórico preservado: não há pagamentos antigos registrados e nenhum é inventado).
+ */
+export const MES_CORTE_CAIXA = "2026-10";
+
 export type AjusteFaturas = {
-  /** mês → compras de terceiros no crédito, de responsáveis DENTRO da visão, ainda não pagas (já estão nas saídas; somam de volta) */
+  /** mês → compras no crédito (de terceiros; e, a partir do mês de corte, também as do próprio titular) cujo responsável está DENTRO da visão, já nas saídas; somam de volta no mês da compra */
   emAberto: Record<string, number>;
-  /** mês do pagamento → parte dos pagamentos que cobre compras de terceiros (tira do disponível) */
+  /** mês do pagamento → parte de terceiros dos pagamentos de faturas ANTERIORES ao corte (proporcional; regra antiga) */
   pago: Record<string, number>;
+  /** mês do pagamento → valor inteiro pago de faturas a partir do corte (parcial = o que foi pago); tira do disponível */
+  pagoCaixa: Record<string, number>;
+  /**
+   * mês do pagamento → repasses JÁ CONFIRMADOS de compras de terceiros no crédito (responsável fora da visão) que
+   * compensam nesse pagamento, proporcional ao valor pago (só a partir do corte). Sem pagamento da fatura, nada entra.
+   */
+  recebido: Record<string, number>;
 };
 
 /**
@@ -137,26 +150,63 @@ export type AjusteFaturas = {
 export function ajusteDeFaturas(
   dados: Dados,
   pagamentos: PagamentoFatura[],
-  opts: { meuId?: string | null; escopo?: Set<string> | null; cartoesCredito?: Set<string> },
+  opts: {
+    meuId?: string | null;
+    escopo?: Set<string> | null;
+    cartoesCredito?: Set<string>;
+    /**
+     * REGRA DE CAIXA (a partir deste mês, AAAA-MM): compra no crédito do titular só tira dinheiro quando a fatura é paga,
+     * e o repasse de compra de terceiros no crédito só compensa quando a fatura é paga. Sem o campo, vale a regra antiga.
+     */
+    mesCorte?: string | null;
+  },
 ): AjusteFaturas {
-  const r: AjusteFaturas = { emAberto: {}, pago: {} };
+  const r: AjusteFaturas = { emAberto: {}, pago: {}, pagoCaixa: {}, recebido: {} };
   const { meuId, escopo = null } = opts;
   const cartoesCredito = opts.cartoesCredito ?? new Set<string>();
   if (!meuId || (escopo && !escopo.has(meuId))) return r;
+  const corte = opts.mesCorte ?? null;
+  const caixa = (mes: string) => corte !== null && mes >= corte;
   const noCredito = itensNoCredito(dados, cartoesCredito);
   const terceiros = noCredito.filter((x) => compraDeTerceirosNoCredito(x.origem, x.item, meuId, cartoesCredito));
+  const ehTerceiro = (x: (typeof noCredito)[number]) => terceiros.includes(x);
+  // Conta fixa ainda não paga fica reservada (faltaPagar) e não entra na fatura: só conta depois de paga
+  const pendente = (x: (typeof noCredito)[number]) => x.origem === "contas" && !x.item.pago;
+  const responsavelDe = (x: (typeof noCredito)[number]) => String(x.item.responsavel_id ?? x.item.owner_id ?? "");
 
-  for (const x of terceiros) {
-    if (escopo && !escopo.has(String(x.item.responsavel_id))) continue; // fora da visão: nunca esteve nas saídas
+  for (const x of noCredito) {
     const mes = String(x.item.mes);
+    if (ehTerceiro(x)) {
+      if (escopo && !escopo.has(String(x.item.responsavel_id))) continue; // fora da visão: nunca esteve nas saídas
+      if (caixa(mes) && pendente(x)) continue;
+    } else if (!(caixa(mes) && x.item.owner_id === meuId && !pendente(x) && (!escopo || escopo.has(responsavelDe(x))))) {
+      continue; // compra própria no crédito só soma de volta com a regra de caixa (e só as minhas, no meu cartão)
+    }
     r.emAberto[mes] = arred((r.emAberto[mes] || 0) + num(x.item.valor));
   }
   for (const p of pagamentos) {
+    const mesPag = p.data.slice(0, 7);
+    if (caixa(p.mes)) {
+      // Fatura da regra de caixa: o valor pago inteiro sai do disponível, no mês do pagamento
+      r.pagoCaixa[mesPag] = arred((r.pagoCaixa[mesPag] || 0) + num(p.valor));
+      const daFatura = noCredito.filter((x) => x.cartao === p.cartao && String(x.item.mes) === p.mes && x.item.owner_id === meuId && !pendente(x));
+      const total = daFatura.reduce((s, x) => s + num(x.item.valor), 0);
+      if (total <= 0) continue;
+      // Repasse confirmado de compra de terceiros (responsável fora da visão) compensa na proporção do que foi pago.
+      // Nunca antes de a confirmação existir: se o repasse foi confirmado depois do pagamento, entra no mês da
+      // confirmação (assim um mês já passado, e talvez fechado, nunca muda por uma confirmação posterior).
+      for (const x of daFatura) {
+        if (!(ehTerceiro(x) && escopo && !escopo.has(String(x.item.responsavel_id)) && Boolean(x.item.repasse_pago ?? x.item.repassePago))) continue;
+        const confirmadoEm = mesEmBrasilia(x.item.repasse_pago_em ?? x.item.repassePagoEm, mesPag);
+        const mesEntrada = confirmadoEm > mesPag ? confirmadoEm : mesPag;
+        r.recebido[mesEntrada] = arred((r.recebido[mesEntrada] || 0) + (num(p.valor) * num(x.item.valor)) / total);
+      }
+      continue;
+    }
     const daFatura = noCredito.filter((x) => x.cartao === p.cartao && String(x.item.mes) === p.mes);
     const total = daFatura.reduce((s, x) => s + num(x.item.valor), 0);
-    const deTerceiros = daFatura.filter((x) => terceiros.includes(x)).reduce((s, x) => s + num(x.item.valor), 0);
+    const deTerceiros = daFatura.filter(ehTerceiro).reduce((s, x) => s + num(x.item.valor), 0);
     if (total <= 0 || deTerceiros <= 0) continue;
-    const mesPag = p.data.slice(0, 7);
     r.pago[mesPag] = arred((r.pago[mesPag] || 0) + (num(p.valor) * deTerceiros) / total);
   }
   return r;

@@ -18,7 +18,7 @@ import PainelResumo, { type AcaoRepasseResumo } from "@/components/resumo/Painel
 import { AvisoMesNaoAberto, ConferenciaFechamento, FaixaFechamento, HistoricoFechamento, ListaMeses, ReabrirMes, SeletorMes, type AvisoConferencia } from "@/components/fechamento/Fechamento";
 import { useFechamentos } from "@/hooks/useFechamentos";
 import { hojeEmBrasilia, mesDeTrabalho, mesTerminou, podeFechar, podeReabrir, statusDoMes, ultimoFechado, verificarAlteracao, type Alteracao, type Retrato, type StatusMes } from "@/lib/fechamento";
-import { faturasEmAberto } from "@/lib/pagamentoFatura";
+import { faturasEmAberto, MES_CORTE_CAIXA } from "@/lib/pagamentoFatura";
 import { idsDaSerieCartao, idsDaSerieConta } from "@/lib/serie";
 import { avisos } from "@/lib/avisos";
 import TelaGraficos from "@/components/TelaGraficos";
@@ -316,7 +316,7 @@ export default function Home() {
   const pagamentosFaturaVisao = useMemo(() => (pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU) ? pagamentosFatura : []), [pagamentosFatura, pessoasSel]);
   const cartoesCredito = useMemo(() => formasPagamento.filter((o) => tipoDaConta(o) === "credito").map((o) => o.nome), [formasPagamento]);
   const painel = useMemo(
-    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, meuId: userId, dadosRepasses: estado, escopo: escopoPessoas, caixinhaMovs: movsCaixinhaVisao, cartoesCredito, pagamentosFatura: pagamentosFaturaVisao }) : null),
+    () => (mes ? calcularPainel(estadoFiltrado, { mes, saldoInicial: saldoInicialContas, meuId: userId, dadosRepasses: estado, escopo: escopoPessoas, caixinhaMovs: movsCaixinhaVisao, cartoesCredito, pagamentosFatura: pagamentosFaturaVisao, mesCorteCaixa: MES_CORTE_CAIXA }) : null),
     [estadoFiltrado, estado, mes, saldoInicialContas, userId, escopoPessoas, movsCaixinhaVisao, cartoesCredito, pagamentosFaturaVisao]
   );
 

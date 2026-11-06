@@ -1,4 +1,4 @@
--- FECHAMENTO MENSAL (garantia no banco). NÃO APLICADA. Preparada localmente em 2026-11-05.
+-- FECHAMENTO MENSAL (garantia no banco). NÃO APLICADA ainda. Preparada em 2026-11-05; revisada em 2026-11-06.
 --
 -- O que faz:
 --   * Tabelas: fechamento_controle (mês em que a pessoa começou a fechar), fechamento_meses (situação atual de cada
@@ -19,8 +19,15 @@
 --
 -- Mês de cada data: horário de Brasília (America/Sao_Paulo). Um mês só pode ser fechado depois de terminar.
 -- Aditiva e reexecutável. Não altera nem apaga dados existentes. Nenhum mês é fechado automaticamente.
--- PENDENTE de verificação no banco real antes de aplicar: tipos das colunas `data` (date/text) em caixinha_movimentos
--- e o nome/forma de meus_membros(). Ver docs/propostas-supabase.md.
+-- Verificado no banco real em 2026-11-06: `data` é date em caixinha_movimentos e pagamentos_fatura; meus_membros()
+-- existe (setof uuid, SECURITY DEFINER); nenhum trigger de nome igual existe (a migração 14 usa outro nome).
+--
+-- Decisões deliberadas:
+--   * O banco NÃO recusa lançar em mês depois do mês em aberto: parcelas e contas fixas criam linhas em meses
+--     futuros de uma só vez. Quem controla "mês em espera" é o app (bloqueioParaLancar).
+--   * O retrato é informativo (auditoria): nenhum saldo é calculado a partir dele; o app sempre recalcula.
+--   * Lançamento pessoal (quem lançou = responsável) só é travado pelo fechamento da própria pessoa. O fechamento de
+--     outro membro só trava o que muda o resultado dele (lançamento em que ele é o responsável, ou repasse dele).
 
 begin;
 
@@ -129,6 +136,7 @@ begin
   if v_uid is null then raise exception 'Entre na sua conta.' using errcode = '42501'; end if;
   select mes_inicial into v_inicio from public.fechamento_controle where user_id = v_uid for update; -- serializa por pessoa
   if v_inicio is null then raise exception 'Ative o fechamento mensal primeiro.' using errcode = '22023'; end if;
+  if p_retrato is not null and jsonb_typeof(p_retrato) <> 'object' then raise exception 'Retrato inválido.' using errcode = '22023'; end if;
   if public.mes_fechado(v_uid, p_mes) then raise exception 'Este mês já está fechado.' using errcode = '23505'; end if;
   -- mês em aberto = primeiro não fechado desde o inicial
   v_trabalho := v_inicio;
@@ -178,22 +186,29 @@ declare
 begin
   if current_user not in ('anon', 'authenticated') then return coalesce(new, old); end if;
 
-  if tg_op in ('UPDATE', 'DELETE')
-     and (public.mes_fechado(old.owner_id, old.mes) or public.mes_fechado(old.responsavel_id, old.mes)) then
-    if tg_op = 'DELETE' then
-      raise exception 'Este lançamento é de um mês fechado. Reabra o mês para excluir.' using errcode = '42501';
-    end if;
-    v_antes := to_jsonb(old); v_depois := to_jsonb(new);
-    foreach k in array v_livres loop v_antes := v_antes - k; v_depois := v_depois - k; end loop;
-    if v_antes is distinct from v_depois then
-      raise exception 'Este lançamento é de um mês fechado. Reabra o mês para editar.' using errcode = '42501';
+  -- IFs aninhados (nunca lê OLD num INSERT nem NEW num DELETE, sem depender de curto-circuito do AND)
+  if tg_op in ('UPDATE', 'DELETE') then
+    if public.mes_fechado(old.owner_id, old.mes) or public.mes_fechado(old.responsavel_id, old.mes) then
+      if tg_op = 'DELETE' then
+        raise exception 'Este lançamento é de um mês fechado. Reabra o mês para excluir.' using errcode = '42501';
+      end if;
+      v_antes := to_jsonb(old); v_depois := to_jsonb(new);
+      foreach k in array v_livres loop v_antes := v_antes - k; v_depois := v_depois - k; end loop;
+      if v_antes is distinct from v_depois then
+        raise exception 'Este lançamento é de um mês fechado. Reabra o mês para editar.' using errcode = '42501';
+      end if;
     end if;
   end if;
 
-  if tg_op in ('INSERT', 'UPDATE')
-     and (public.mes_fechado(new.owner_id, new.mes) or public.mes_fechado(new.responsavel_id, new.mes))
-     and (tg_op = 'INSERT' or new.mes is distinct from old.mes or new.responsavel_id is distinct from old.responsavel_id) then
-    raise exception 'Não é possível lançar em um mês fechado. Reabra o mês primeiro.' using errcode = '42501';
+  if tg_op = 'INSERT' then
+    if public.mes_fechado(new.owner_id, new.mes) or public.mes_fechado(new.responsavel_id, new.mes) then
+      raise exception 'Não é possível lançar em um mês fechado. Reabra o mês primeiro.' using errcode = '42501';
+    end if;
+  elsif tg_op = 'UPDATE' then
+    if (new.mes is distinct from old.mes or new.responsavel_id is distinct from old.responsavel_id)
+       and (public.mes_fechado(new.owner_id, new.mes) or public.mes_fechado(new.responsavel_id, new.mes)) then
+      raise exception 'Não é possível lançar em um mês fechado. Reabra o mês primeiro.' using errcode = '42501';
+    end if;
   end if;
 
   return coalesce(new, old);
@@ -225,27 +240,43 @@ returns trigger language plpgsql set search_path = ''
 as $$
 begin
   if current_user not in ('anon', 'authenticated') then return coalesce(new, old); end if;
-  if tg_op in ('UPDATE', 'DELETE') and public.mes_fechado(old.user_id, left(old.data::text, 7)) then
-    raise exception 'Este movimento é de um mês fechado. Reabra o mês para alterar.' using errcode = '42501';
+  if tg_op in ('UPDATE', 'DELETE') then
+    if public.mes_fechado(old.user_id, left(old.data::text, 7)) then
+      raise exception 'Este movimento é de um mês fechado. Reabra o mês para alterar.' using errcode = '42501';
+    end if;
   end if;
-  if tg_op in ('INSERT', 'UPDATE') and public.mes_fechado(new.user_id, left(new.data::text, 7)) then
-    raise exception 'Não é possível registrar em um mês fechado. Reabra o mês primeiro.' using errcode = '42501';
+  if tg_op in ('INSERT', 'UPDATE') then
+    if public.mes_fechado(new.user_id, left(new.data::text, 7)) then
+      raise exception 'Não é possível registrar em um mês fechado. Reabra o mês primeiro.' using errcode = '42501';
+    end if;
   end if;
   return coalesce(new, old);
 end;
 $$;
 
 -- Saldo inicial: muda todos os meses passados; trava depois do primeiro fechamento.
+-- Também recusa criar/apagar conta com saldo inicial e trocar o tipo (débito x crédito) de conta com saldo: qualquer
+-- dessas mudanças alteraria o saldo inicial somado nos meses já fechados.
 create or replace function public.opcao_trava_saldo_inicial()
 returns trigger language plpgsql set search_path = ''
 as $$
+declare v_dono uuid; v_mexe boolean := false;
 begin
-  if current_user not in ('anon', 'authenticated') then return new; end if;
-  if new.saldo_inicial is distinct from old.saldo_inicial
-     and exists (select 1 from public.fechamento_meses f where f.user_id = old.user_id and f.status = 'fechado') then
-    raise exception 'O saldo inicial não pode mudar depois que um mês foi fechado.' using errcode = '42501';
+  if current_user not in ('anon', 'authenticated') then return coalesce(new, old); end if;
+  if tg_op = 'INSERT' then
+    v_dono := new.user_id; v_mexe := coalesce(new.saldo_inicial, 0) <> 0;
+  elsif tg_op = 'DELETE' then
+    v_dono := old.user_id; v_mexe := coalesce(old.saldo_inicial, 0) <> 0;
+  else
+    v_dono := old.user_id;
+    v_mexe := new.saldo_inicial is distinct from old.saldo_inicial
+      or (coalesce(old.saldo_inicial, 0) <> 0 and (new.tipo_cartao is distinct from old.tipo_cartao or new.eh_cartao is distinct from old.eh_cartao));
   end if;
-  return new;
+  if v_mexe and v_dono is not null
+     and exists (select 1 from public.fechamento_meses f where f.user_id = v_dono and f.status = 'fechado') then
+    raise exception 'O saldo inicial das contas não pode mudar depois que um mês foi fechado.' using errcode = '42501';
+  end if;
+  return coalesce(new, old);
 end;
 $$;
 
@@ -282,7 +313,7 @@ create or replace trigger movimento_trava_mes_fechado before insert or update or
 create or replace trigger movimento_trava_mes_fechado before insert or update or delete on public.caixinha_movimentos
   for each row execute function public.movimento_trava_mes_fechado();
 
-create or replace trigger opcao_trava_saldo_inicial before update on public.opcoes_pagamento
+create or replace trigger opcao_trava_saldo_inicial before insert or update or delete on public.opcoes_pagamento
   for each row execute function public.opcao_trava_saldo_inicial();
 
 commit;

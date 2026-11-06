@@ -13,7 +13,7 @@
  * - O saldo considera só o que o usuário lançou (owner_id). Compras de outros membros no mesmo cartão
  *   continuam contando na fatura, como antes.
  */
-import { arred, ehEntrada, semDuplicados } from "./calculos";
+import { arred, ehEntrada, mesEmBrasilia, semDuplicados } from "./calculos";
 import { calcularFatura } from "./pagamentoFatura";
 import type { Estado } from "./types";
 import type { PagamentoFatura } from "./pagamentoFatura";
@@ -41,7 +41,7 @@ const doUsuario = (i: any, userId?: string | null) => !userId || !i.owner_id || 
 const ate = (i: any, mes?: string) => !mes || String(i.mes) <= mes;
 
 /** Mês (AAAA-MM) em que o repasse foi confirmado; sem data, vale o mês do lançamento. */
-const mesDoRepasse = (i: any): string => (i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes));
+const mesDoRepasse = (i: any): string => mesEmBrasilia(i.repasse_pago_em, String(i.mes));
 
 /** Saldo de uma conta de débito. Só o que o usuário lançou, até o mês informado. */
 export function calcularSaldoConta(

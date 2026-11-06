@@ -15,7 +15,7 @@ const faltaTabela = (e: { code?: string; message?: string } | null) =>
  * `fechamento_*` e nenhum RPC é feito, e a interface não mostra faixa, seletor de meses nem conferência.
  * Troque para `true` quando a migração supabase-18 estiver aplicada e o recurso estiver pronto.
  */
-export const FECHAMENTO_ATIVO = false;
+export const FECHAMENTO_ATIVO = true;
 
 export type MesFechado = { mes: string; fechadoEm: string | null; retrato: Retrato | null };
 

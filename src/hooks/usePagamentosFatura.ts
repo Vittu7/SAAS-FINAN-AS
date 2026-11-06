@@ -25,6 +25,7 @@ export function usePagamentosFatura() {
       .from("pagamentos_fatura")
       .select("id, cartao, mes, conta, valor, data")
       .eq("user_id", user.id)
+      .is("estornado_em", null) // pagamento estornado deixa de contar na fatura, no saldo e no Disponível
       .order("data", { ascending: true });
     if (error) {
       setPagamentos([]);
@@ -54,5 +55,22 @@ export function usePagamentosFatura() {
     return null;
   }, []);
 
-  return { pagamentos, disponivel, registrar };
+  /** Estorna o pagamento (não apaga: grava a data do estorno). `null` = sucesso; senão, a mensagem de erro. */
+  const estornar = useCallback(async (id: string): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from("pagamentos_fatura")
+      .update({ estornado_em: new Date().toISOString() })
+      .eq("id", id)
+      .is("estornado_em", null)
+      .select("id");
+    if (error) {
+      if (error.code === "42703" || /estornado_em/.test(error.message || "")) return "O estorno ainda não foi habilitado. Rode o script supabase-24-estorno-pagamento-fatura.sql no Supabase.";
+      return error.message;
+    }
+    if (!data || data.length === 0) return "Pagamento não encontrado ou já estornado.";
+    window.dispatchEvent(new Event(EVENTO_PAGAMENTOS_FATURA));
+    return null;
+  }, []);
+
+  return { pagamentos, disponivel, registrar, estornar };
 }

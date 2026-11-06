@@ -20,7 +20,7 @@ import PagarFaturaModal from '@/components/PagarFaturaModal';
 /** Mesmo visual da tela de Contas parceladas: carrossel de cartões + lista em painel. */
 export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId = null }: { estado: Estado; /** Estado já filtrado por responsável: vale para a lista de compras. O limite dos cartões usa sempre o `estado` completo. */ estadoLista?: Estado; mes: string; setMes: (mes: string) => void; userId?: string | null }) {
   const { pagamento, corPagamento, recarregar, atualizarPagamento } = useOpcoes();
-  const { pagamentos, disponivel: pagamentosHabilitados, registrar } = usePagamentosFatura();
+  const { pagamentos, disponivel: pagamentosHabilitados, registrar, estornar } = usePagamentosFatura();
   const caixinhaMovs = useMovimentosConta();
   const [pagando, setPagando] = useState(false);
   // Cartões com a maior fatura do mês aparecem primeiro
@@ -46,6 +46,12 @@ export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId 
   const vencimento = vencimentoDaFatura(mes, escolhido.dia_vencimento);
   const contasDebito = pagamento.filter((o) => tipoDaConta(o) === "debito");
   const saldoDaConta = (c: Opcao) => calcularSaldoConta(estado, c, { userId, ateMes: mes, caixinhaMovs, pagamentosFatura: pagamentos }).saldo;
+  const estornarPagamento = async (p: { id: string; valor: number; data: string; conta: string }) => {
+    if (!window.confirm(`Estornar o pagamento de ${brl(p.valor)} feito em ${p.data.split("-").reverse().join("/")}?\n\nO valor volta para ${p.conta} e a fatura volta a ficar em aberto.`)) return;
+    const erro = await estornar(p.id);
+    if (erro) return avisos.erro("Não foi possível estornar o pagamento", erro);
+    avisos.sucesso("Pagamento estornado", "A fatura foi reaberta e o valor voltou para a conta.");
+  };
   const definirVencimento = async () => {
     const txt = window.prompt("Dia do vencimento da fatura (1 a 31):", escolhido.dia_vencimento ? String(escolhido.dia_vencimento) : "");
     if (txt === null) return;
@@ -145,7 +151,10 @@ export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId 
               {historico.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span className="min-w-0"><span className="block font-medium">{p.data.split("-").reverse().join("/")}</span><span className="block truncate text-xs text-muted">saiu de {p.conta}</span></span>
-                  <span className="shrink-0 font-semibold tabular-nums">− {brl(p.valor)}</span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span className="font-semibold tabular-nums">− {brl(p.valor)}</span>
+                    <button type="button" onClick={() => void estornarPagamento(p)} className="text-xs font-medium text-rose-500 underline-offset-2 hover:underline">Estornar</button>
+                  </span>
                 </li>
               ))}
             </ul>

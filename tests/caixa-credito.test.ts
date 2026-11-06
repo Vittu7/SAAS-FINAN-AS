@@ -168,3 +168,17 @@ describe("ajusteDeFaturas: segurança", () => {
     expect(paga.emAberto[OUT]).toBe(250);
   });
 });
+
+describe("regra de caixa: parcela em forma que não é cartão de crédito cadastrado", () => {
+  const emDebito = { ...propria, id: "c9", cartao: "DEBITO" }; // sem fatura para pagar: o dinheiro saiu na compra
+  it("a partir do corte, a parcela sai do disponível na compra (como despesa comum)", () => {
+    expect(painel(OUT, { cartao: [emDebito] }).totalDisponivel).toBe(800);
+  });
+  it("antes do corte nada muda (histórico preservado)", () => {
+    const antes = { cartao: [{ ...emDebito, mes: "2026-09" }], extrato: [{ ...entrada, mes: "2026-09" }] };
+    expect(painel("2026-09", antes).totalDisponivel).toBe(800);
+  });
+  it("cartão de crédito cadastrado segue a regra de caixa", () => {
+    expect(painel(OUT, { cartao: [propria] }).totalDisponivel).toBe(1000);
+  });
+});

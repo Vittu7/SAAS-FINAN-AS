@@ -9,8 +9,6 @@ import type { FaturaAberta } from "@/lib/pagamentoFatura";
 import type { TipoResumo } from "@/components/mobile/MobileShell";
 import { comSinal, saldo, tomDoValor } from "./valores";
 
-export type AcaoRepasseResumo = { id: string; titulo: string; detalhe: string; tipo: "confirmar" | "informar" };
-
 const nomeMes = (m: string) => rotuloMes(m).split(" de ")[0].toLowerCase();
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
@@ -28,7 +26,6 @@ export default function PainelResumo({
   mesCorrente,
   contasDoMes,
   faturas,
-  acoes,
   repasses: r,
   onAbrirExtrato,
   onAbrirRepasses,
@@ -41,7 +38,6 @@ export default function PainelResumo({
   mesCorrente: string;
   contasDoMes: { id: string | number; nome?: string; valor: number | string; pago?: boolean; foraDoMeuSaldo?: boolean; mes?: string; vencimento?: number | string | null; responsavel?: string }[];
   faturas: FaturaAberta[];
-  acoes: AcaoRepasseResumo[];
   /** Repasses do mês selecionado (não somam meses anteriores): a receber, parte já marcada como repassada, e a repassar */
   repasses: { receber: number; receberAguardando: number; repassar: number };
   onAbrirExtrato?: (tipo: TipoResumo) => void;
@@ -202,17 +198,6 @@ export default function PainelResumo({
           {tile("Vou receber", vouReceber, vouReceber > 0 ? "text-pos" : "text-muted", vouReceber > 0 ? (r.receberAguardando > 0 ? "Inclui repasse aguardando sua confirmação" : "Despesas que você adiantou") : "Nenhum repasse a receber", onAbrirRepasses)}
           {tile("Vou repassar", vouRepassar, vouRepassar > 0 ? "text-warn" : "text-muted", vouRepassar > 0 ? "Despesas que outras pessoas pagaram por você" : "Nenhum repasse a fazer", onAbrirRepasses)}
         </div>
-        {!somenteConsulta && acoes.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-warn-borda bg-warn-bg px-4 py-3">
-            <span className="grid min-w-0 flex-1 basis-56">
-              <b className="text-sm font-semibold text-warn-ink">{acoes[0].titulo}{acoes.length > 1 ? ` e mais ${acoes.length - 1}` : ""}</b>
-              <span className="text-xs text-warn-ink">{acoes[0].detalhe}</span>
-            </span>
-            <button type="button" onClick={onAbrirRepasses} className="min-h-11 w-full rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent @md:w-auto md:min-h-10">
-              {acoes[0].tipo === "confirmar" ? "Confirmar" : "Informar repasse"}
-            </button>
-          </div>
-        )}
       </CartaoSecao>
     </section>
   );

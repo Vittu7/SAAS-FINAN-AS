@@ -14,7 +14,8 @@ import ContasFixasTable from "@/components/ContasFixasTable";
 import ExtratoTable from "@/components/ExtratoTable";
 import ExtratoGeral from "@/components/ExtratoGeral";
 import ResponsavelPanel from "@/components/ResponsavelPanel";
-import PainelResumo, { type AcaoRepasseResumo } from "@/components/resumo/PainelResumo";
+import PainelResumo from "@/components/resumo/PainelResumo";
+import Pendencias from "@/components/resumo/Pendencias";
 import { AvisoMesNaoAberto, ConferenciaFechamento, FaixaFechamento, HistoricoFechamento, ListaMeses, ReabrirMes, SeletorMes, type AvisoConferencia } from "@/components/fechamento/Fechamento";
 import { useFechamentos } from "@/hooks/useFechamentos";
 import { hojeEmBrasilia, mesDeTrabalho, mesTerminou, podeFechar, podeReabrir, statusDoMes, ultimoFechado, verificarAlteracao, type Alteracao, type Retrato, type StatusMes } from "@/lib/fechamento";
@@ -456,11 +457,6 @@ export default function Home() {
   // Repasses da tela inicial: só os do mês selecionado e das pessoas da visão (meses anteriores ficam no módulo Grupo, ao trocar o mês)
   const repasses = resumoRepasses(repassesDoMes(filtrarGrupoPorPessoas(lancamentosDoGrupo(estado), escopoPessoas), mes), userId || "");
   const repassesDoMesResumo = { receber: arred(repasses.aReceber.agora + repasses.aReceber.aVencer), receberAguardando: repasses.aReceber.aguardando, repassar: arred(repasses.aRepassar.agora + repasses.aRepassar.aVencer) };
-  // Ações de repasse que dependem de mim (no Resumo, levam ao módulo de Repasses, onde a conta é escolhida)
-  const acoesRepasse: AcaoRepasseResumo[] = [
-    ...repasses.aReceber.pessoas.filter((p) => p.aguardandoAgora > 0).map((p) => ({ id: `r:${p.pessoaId}`, tipo: "confirmar" as const, titulo: `${p.nome} repassou ${brl(p.aguardandoAgora)}`, detalhe: "Confirme quando o dinheiro entrar" })),
-    ...repasses.aRepassar.pessoas.filter((p) => p.agora - p.aguardandoAgora > 0.004).map((p) => ({ id: `p:${p.pessoaId}`, tipo: "informar" as const, titulo: `Você deve ${brl(Math.round((p.agora - p.aguardandoAgora) * 100) / 100)} a ${p.nome}`, detalhe: `Despesas que ${p.nome} pagou para você` })),
-  ];
 
   // ---- Fechamento: faixa, conferência e reabertura do mês selecionado ----
   const sMes = statusDe(mes);
@@ -628,13 +624,24 @@ export default function Home() {
                   mesCorrente={mesCorrente}
                   contasDoMes={contas}
                   faturas={faturasAbertas}
-                  acoes={acoesRepasse}
                   repasses={repassesDoMesResumo}
                   onAbrirExtrato={setDetalheExtrato}
                   onAbrirRepasses={() => abrirGrupo("repasses")}
                   onAbrirContas={() => irPara("contas")}
                   onAbrirFaturas={() => irPara("fatura")}
                   somenteConsulta={consultaApenas}
+                />
+              )}
+              {dashboard.preferencias.resumo && !consultaApenas && userId && (
+                <Pendencias
+                  mes={mes}
+                  userId={userId}
+                  estado={estado}
+                  contas={contas.filter((c: any) => !c.pago && !c.foraDoMeuSaldo && c.mes === mes) as any}
+                  faturas={faturasAbertas}
+                  repasses={repasses}
+                  onPagarConta={acao.alternarPago}
+                  onRepasse={acao.atualizarRepasses}
                 />
               )}
               {/* Cada bloco some sozinho quando não há dados; se sobrar um só, ele ocupa a linha inteira */}

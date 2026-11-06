@@ -5,11 +5,12 @@ import { avisos } from "@/lib/avisos";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import { brl, parseValor, rotuloMes } from "@/lib/finance";
 import { tipoDaConta } from "@/lib/contas";
+import { hojeEmBrasilia } from "@/lib/fechamento";
 import { validarPagamento, type PagamentoFatura } from "@/lib/pagamentoFatura";
 import type { Opcao } from "@/lib/useOpcoes";
 
 const campo = "h-12 w-full rounded-xl border border-line bg-background px-3 text-base text-ink outline-none focus:ring-2 focus:ring-accent";
-const hoje = () => new Date().toISOString().slice(0, 10);
+const hoje = hojeEmBrasilia; // dia de Brasília (toISOString usa UTC e vira "amanhã" à noite)
 
 /**
  * Pagar a fatura de um cartão (total ou parcial). O pagamento tira dinheiro da conta escolhida e quita a fatura;

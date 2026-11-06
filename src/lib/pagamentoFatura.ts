@@ -101,6 +101,17 @@ export function faturasEmAberto(estado: Estado, cartoes: string[], pagamentos: P
 const nomeDoCartao = (origem: "extrato" | "cartao" | "contas", i: Item): string =>
   String((origem === "cartao" ? i.cartao : origem === "extrato" ? i.pagamento : i.formaPagamento ?? i.forma_pagamento) ?? "");
 
+/**
+ * Parcela é do crédito quando tem cartão; a partir do mês de corte (regra de caixa) só se esse cartão é de crédito cadastrado.
+ * Parcela em "DEBITO" ou em forma sem cartão não tem fatura para pagar: o dinheiro saiu na compra, como qualquer despesa.
+ * Meses antes do corte seguem como sempre (histórico preservado). À vista e conta fixa: só se a forma é cartão de crédito.
+ */
+function ehNoCredito(origem: "extrato" | "cartao" | "contas", i: Item, cartao: string, cartoesCredito: Set<string>): boolean {
+  if (origem !== "cartao") return cartoesCredito.has(cartao);
+  if (!cartao) return false;
+  return String(i.mes) < MES_CORTE_CAIXA || cartoesCredito.has(cartao);
+}
+
 /** Itens lançados no crédito (parcelas sempre; à vista e contas fixas quando a forma é um cartão de crédito). */
 function itensNoCredito(e: Dados, cartoesCredito: Set<string>) {
   const lista: { origem: "extrato" | "cartao" | "contas"; item: Item; cartao: string }[] = [];
@@ -108,7 +119,7 @@ function itensNoCredito(e: Dados, cartoesCredito: Set<string>) {
     for (const item of semDuplicados(e[origem] || [], origem)) {
       if (ehEntrada(item) || item.repasseSintetico) continue;
       const cartao = nomeDoCartao(origem, item);
-      if (origem === "cartao" ? cartao : cartoesCredito.has(cartao)) lista.push({ origem, item, cartao });
+      if (ehNoCredito(origem, item, cartao, cartoesCredito)) lista.push({ origem, item, cartao });
     }
   }
   return lista;
@@ -118,8 +129,7 @@ function itensNoCredito(e: Dados, cartoesCredito: Set<string>) {
 export function compraDeTerceirosNoCredito(origem: "extrato" | "cartao" | "contas", i: Item, meuId: string | null | undefined, cartoesCredito: Set<string>): boolean {
   if (!meuId || ehEntrada(i) || i.repasseSintetico) return false;
   if (i.owner_id !== meuId || !i.responsavel_id || i.responsavel_id === meuId) return false;
-  const cartao = nomeDoCartao(origem, i);
-  return origem === "cartao" ? Boolean(cartao) : cartoesCredito.has(cartao);
+  return ehNoCredito(origem, i, nomeDoCartao(origem, i), cartoesCredito);
 }
 
 /**

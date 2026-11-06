@@ -113,7 +113,6 @@ export function ConferenciaFechamento({
   mes: string; retrato: Retrato; faturasEmAberto: number; aguardandoConfirmacao: number; avisos: AvisoConferencia[];
   onFechar: () => void; onConfirmar: () => Promise<string | null>;
 }) {
-  const [conferi, setConferi] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
   const n = nomeMes(mes);
@@ -126,7 +125,7 @@ export function ConferenciaFechamento({
   ];
   if (aguardandoConfirmacao > 0) continua.push(["Aguardando sua confirmação", aguardandoConfirmacao, "não será confirmado automaticamente", "text-pos"]);
   const fechar = async () => {
-    if (!conferi || enviando) return;
+    if (enviando) return;
     setEnviando(true);
     setErro("");
     const msg = await onConfirmar();
@@ -180,14 +179,10 @@ export function ConferenciaFechamento({
             <li>Os números acima ficam guardados como o retrato do fechamento.</li>
             <li>Se precisar corrigir algo, você pode reabrir {n} informando o motivo.</li>
           </ul>
-          <label htmlFor="conferi-mes" className="flex cursor-pointer items-start gap-3 rounded-2xl bg-background p-3.5 text-sm">
-            <input id="conferi-mes" type="checkbox" checked={conferi} onChange={(e) => setConferi(e.target.checked)} className="mt-0.5 size-5 shrink-0 accent-[var(--accent)]" />
-            <span>Conferi os números de {n} e quero fechar o mês.</span>
-          </label>
           {erro && <p role="alert" className="rounded-xl bg-neg-bg px-3 py-2 text-sm text-neg-ink">{erro}</p>}
           <div className="flex flex-col-reverse gap-2 @md:flex-row @md:justify-end">
             <button type="button" onClick={onFechar} className="min-h-11 rounded-xl border border-line px-4 text-sm font-medium">Voltar</button>
-            <button type="button" onClick={fechar} disabled={!conferi || enviando} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-5 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={fechar} disabled={enviando} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-5 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50">
               <Ico icon={Lock} size={15} />{enviando ? "Fechando…" : `Fechar ${n}`}
             </button>
           </div>

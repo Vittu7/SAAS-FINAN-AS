@@ -26,7 +26,7 @@ type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir" | "recusa
 type Repasse = (itens: { origem: "extrato" | "cartao" | "contas"; id: string }[], acao: AcaoRepasse, conta?: string | null) => Promise<boolean>;
 
 /* ---------- Escolha da conta que recebe o repasse ---------- */
-function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfirmar, onFechar }: { modo: "receber" | "repassar"; lista: LancGrupo[]; dados: Dados; userId: string; mes: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
+export function EscolherContaRepasse({ modo, lista, dados, userId, mes, onConfirmar, onFechar }: { modo: "receber" | "repassar"; lista: LancGrupo[]; dados: Dados; userId: string; mes: string; onConfirmar: (conta: string | null) => void; onFechar: () => void }) {
   const { pagamento } = useOpcoes();
   const caixinhaMovs = useMovimentosConta();
   const { pagamentos: pagamentosFatura } = usePagamentosFatura();

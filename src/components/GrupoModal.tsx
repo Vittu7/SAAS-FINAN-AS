@@ -8,6 +8,8 @@ import { supabase } from "@/lib/supabase";
 import Avatar from "./Avatar";
 import { oferecerInclusaoNoGrupo } from "@/lib/lancamentosGrupo";
 import { alterarCorMembro } from "@/lib/perfil";
+import BloqueioExclusaoModal from "@/components/BloqueioExclusaoModal";
+import { ehBloqueioPorLancamentos, lancamentosDosConvidados, type Convidado, type DadosLancamentos, type GrupoBloqueio, type LancamentoBloqueador } from "@/lib/bloqueioExclusao";
 
 const PALETA_CORES = [
   "#10B981", // Verde
@@ -20,7 +22,18 @@ const PALETA_CORES = [
   "#EF4444", // Vermelho
 ];
 
-export default function GrupoModal({ onClose }: { onClose: () => void }) {
+export default function GrupoModal({
+  onClose,
+  dados,
+  onVerLancamento,
+}: {
+  onClose: () => void;
+  /** Lançamentos que o app já carregou (só o que o usuário pode ver): usados para listar o que bloqueia a exclusão. */
+  dados?: DadosLancamentos;
+  /** Leva até o lançamento (fecha este modal, abre a aba/mês certos e destaca a linha). */
+  onVerLancamento?: (l: LancamentoBloqueador) => void;
+}) {
+  const [bloqueio, setBloqueio] = useState<{ acao: "excluir o grupo" | "remover o convidado"; grupos: GrupoBloqueio[] } | null>(null);
   const [meuPerfil, setMeuPerfil] = useState<any>(null);
   const [membros, setMembros] = useState<any[]>([]);
   const [modo, setModo] = useState<"menu" | "criar" | "entrar">("menu");
@@ -159,6 +172,11 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     setCarregando(false);
   };
 
+  // A exclusão foi recusada porque convidados ainda têm lançamentos: mostra quais (nada é apagado ou alterado aqui).
+  const mostrarBloqueio = (acao: "excluir o grupo" | "remover o convidado", convidados: Convidado[]) => {
+    setBloqueio({ acao, grupos: lancamentosDosConvidados(dados ?? {}, convidados) });
+  };
+
   // Só o gestor remove (a regra também é imposta no banco, pela função remover_membro_grupo):
   // convidado sem conta é apagado; quem tem conta apenas sai do grupo (a conta e os dados dela continuam).
   const removerMembro = async (membro: any) => {
@@ -169,6 +187,10 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
 
     const { error } = await supabase.rpc("remover_membro_grupo", { p_membro: membro.id });
     if (error) {
+      if (ehBloqueioPorLancamentos(error)) {
+        mostrarBloqueio("remover o convidado", [{ id: membro.id, nome: membro.nome_usuario }]);
+        return;
+      }
       falhou("remover o membro", error);
       return;
     }
@@ -184,6 +206,15 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
     const { error } = await supabase.rpc("excluir_grupo_familiar");
     setCarregando(false);
     if (error) {
+      if (ehBloqueioPorLancamentos(error)) {
+        setExcluindoGrupo(false);
+        setConfirmaNome("");
+        mostrarBloqueio(
+          "excluir o grupo",
+          membros.filter((m) => m.eh_convidado).map((m) => ({ id: m.id, nome: m.nome_usuario })),
+        );
+        return;
+      }
       falhou("excluir o grupo", error);
       return;
     }
@@ -439,6 +470,18 @@ export default function GrupoModal({ onClose }: { onClose: () => void }) {
           </form>
         )}
       </div>
+
+      {bloqueio && (
+        <BloqueioExclusaoModal
+          acao={bloqueio.acao}
+          grupos={bloqueio.grupos}
+          onClose={() => setBloqueio(null)}
+          onVer={(l) => {
+            setBloqueio(null);
+            onVerLancamento?.(l);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -277,7 +277,7 @@ function AbaRepasses({ lista, mes, outrosMeses, meuId, membros, ocupado, onRepas
             {concluidos.slice(0, 20).map((l) => {
               const recebi = l.autorId === meuId;
               return (
-                <li key={l.chave} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 last:border-b-0">
+                <li key={l.chave} data-lanc-id={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 last:border-b-0">
                   <div className="grid min-w-0 flex-1 basis-56 gap-0.5">
                     <b className="text-sm">{recebi ? `${l.respNome} → você` : `Você → ${l.autorNome}`}</b>
                     <span className="text-xs text-muted">{l.descricao}{l.parcela ? ` · ${l.parcela}` : ""} · confirmado em {l.repassePagoEm ? new Date(l.repassePagoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}</span>

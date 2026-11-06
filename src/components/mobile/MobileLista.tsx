@@ -65,7 +65,7 @@ export default function MobileLista({
             const exp = aberto === i.id;
             const temAcoes = i.onEditar || i.onRemover || i.onAlternar;
             return (
-              <li key={i.id}>
+              <li key={i.id} data-lanc-id={String(i.id)}>
                 <button
                   type="button"
                   onClick={() => temAcoes && setAberto(exp ? null : i.id)}

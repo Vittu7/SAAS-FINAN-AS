@@ -445,7 +445,7 @@ export default function CartaoTable({
           </thead>
           <tbody>
             {itens.map((item) => (
-              <tr key={item.id} className="border-b border-line/40 last:border-0 hover:bg-background/30">
+              <tr key={item.id} data-lanc-id={String(item.id)} className="border-b border-line/40 last:border-0 hover:bg-background/30">
                 <td className="py-3 font-medium">
                   <Selo nome={item.cartao || "Forma de Pagamento"} cor={corPagamento(item.cartao)} />
                 </td>

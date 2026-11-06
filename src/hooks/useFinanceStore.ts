@@ -16,8 +16,8 @@ import { garantirPerfil } from "@/lib/perfil";
 import { avisos, falhou } from "@/lib/avisos";
 import { dataValida, somarMesesData } from "@/lib/datas";
 import { travadoPorRepasse } from "@/lib/grupo";
+import { ehTravaDeRepasse, montarOrientacaoRepasse, pedirOrientacaoRepasse, type LinhaRepasse } from "@/lib/repasseTravado";
 
-const AVISO_REPASSE_TRAVADO = "Este lançamento tem repasse confirmado. Estorne o repasse (reabrir) antes de editar ou excluir.";
 
 /** A coluna "data" ainda não existe no banco (script supabase-12 não executado)? */
 const colunaDataAusente = (e: any) =>
@@ -525,7 +525,7 @@ export function useFinanceStore() {
   ): Promise<boolean> => {
     if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: não existe no banco
     if (travadoPorRepasse(estado[tabela] as { id: string; repassePago?: boolean }[], [id])) {
-      avisos.erro("Não foi possível salvar as alterações", AVISO_REPASSE_TRAVADO);
+      pedirOrientacaoRepasse(montarOrientacaoRepasse(tabela, estado[tabela] as unknown as LinhaRepasse[], [id], "editar"));
       return false;
     }
     const { responsavel, ...resto } = patch;
@@ -547,6 +547,11 @@ export function useFinanceStore() {
     }
 
     if (error) {
+      // O banco também recusa (trigger): a tela estava desatualizada. Mesma orientação, sem contornar a trava.
+      if (ehTravaDeRepasse(error)) {
+        pedirOrientacaoRepasse(montarOrientacaoRepasse(tabela, estado[tabela] as unknown as LinhaRepasse[], [id], "editar"));
+        return false;
+      }
       falhou("salvar as alterações", error);
       return false;
     }
@@ -581,7 +586,7 @@ export function useFinanceStore() {
     if (String(id).startsWith("repasse:")) return false; // entrada automática de repasse: some quando o repasse é reaberto
     const ids = idsDaSerie(tabela, id).map(String);
     if (travadoPorRepasse(estado[tabela] as { id: string; repassePago?: boolean }[], ids)) {
-      avisos.erro("Não foi possível remover o lançamento", AVISO_REPASSE_TRAVADO);
+      pedirOrientacaoRepasse(montarOrientacaoRepasse(tabela, estado[tabela] as unknown as LinhaRepasse[], [id, ...ids], "excluir"));
       return false;
     }
     const apagados = new Set<string>();
@@ -612,6 +617,10 @@ export function useFinanceStore() {
     }
 
     if (erroBanco) {
+      if (ehTravaDeRepasse(erroBanco)) {
+        pedirOrientacaoRepasse(montarOrientacaoRepasse(tabela, estado[tabela] as unknown as LinhaRepasse[], [id, ...ids], "excluir"));
+        return false;
+      }
       falhou("remover o lançamento", erroBanco);
       return false;
     }

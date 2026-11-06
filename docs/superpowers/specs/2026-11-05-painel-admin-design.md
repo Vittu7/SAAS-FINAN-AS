@@ -1,6 +1,6 @@
 # Painel administrativo do HomeCash — Spec
 
-Data: 2026-11-05 · Status: **v3.2.1, pronta para a validação do banco** (revisões em §16, auditoria técnica em §17, plano de validação no banco em §18; nada implementado, nenhum SQL executado, nenhuma consulta ao Supabase, nenhuma implementação autorizada).
+Data: 2026-11-05 · Status: **v3.3, fase 1 implementada localmente (migração 20 escrita e não aplicada); fases 2 a 5 não iniciadas** (revisões em §16, auditoria técnica em §17, plano de validação no banco em §18; nada implementado, nenhum SQL executado, nenhuma consulta ao Supabase, nenhuma implementação autorizada).
 Base: análise local de `src/`, `supabase/*.sql`, `docs/propostas-supabase.md` e `CONTINUIDADE-HOMECASH.md`.
 
 ## 1. Objetivo
@@ -113,7 +113,7 @@ A migração 08 indica que os privilégios padrão do Supabase podem estar desli
   1. `revoke all` de `public, anon, authenticated` (inclui `update`, `delete`, `truncate`); só `insert` por dentro das funções `SECURITY DEFINER`.
   2. Trigger **por linha** `before update or delete` que sempre levanta exceção.
   3. Trigger **por instrução**, separado, `before truncate ... for each statement`, que sempre levanta exceção. O Postgres não aceita `TRUNCATE` em trigger por linha.
-- **Disponibilidade de SHA-256 (não presumida).** O repositório não registra a versão do PostgreSQL do projeto, e o banco não foi consultado. Fatos conhecidos sem consultar: o `sha256(bytea)` nativo existe a partir do PostgreSQL 11 e a extensão `pgcrypto` oferece `digest(bytea, 'sha256')`. A migração 19 **começa** com um bloco de pré-checagem que, antes de criar qualquer objeto:
+- **Disponibilidade de SHA-256 (não presumida).** O repositório não registra a versão do PostgreSQL do projeto, e o banco não foi consultado. Fatos conhecidos sem consultar: o `sha256(bytea)` nativo existe a partir do PostgreSQL 11 e a extensão `pgcrypto` oferece `digest(bytea, 'sha256')`. A migração 20 **começa** com um bloco de pré-checagem que, antes de criar qualquer objeto:
   1. procura `pg_catalog.sha256(bytea)` (`to_regprocedure`);
   2. se não houver, procura `digest(bytea, text)` em `extensions` ou `public` e confere que a extensão `pgcrypto` está instalada;
   3. se não houver nenhuma, **aborta com mensagem clara** e não cria nada.
@@ -134,7 +134,7 @@ A migração 08 indica que os privilégios padrão do Supabase podem estar desli
 
 ### 5.5 Sem alteração silenciosa
 - RPCs de suporte contêm só `SELECT` em tabelas de domínio e escrevem apenas em `admin_auditoria`, `admin_acessos_negados` (+ contador), `admin_sessoes_suporte` e `admin_suporte_confirmacoes`; `admin_abrir_anexo` grava, além da auditoria, a concessão em `homecash_interno.anexo_leituras`.
-- Teste local (§12.2) varre `supabase-20-*.sql` e falha se encontrar `insert|update|delete|truncate` apontando para tabela fora dessa lista.
+- Teste local (§12.2) varre `supabase-23-*.sql` e falha se encontrar `insert|update|delete|truncate` apontando para tabela fora dessa lista.
 - Teste de banco (quando autorizado): md5 das tabelas de domínio antes e depois de uma sessão de suporte completa deve ser idêntico.
 - Escritas do admin sobre dados que não são do usuário: `admin_atualizar_erro` e `admin_atualizar_solicitacao` (status, nota e resposta), ambas auditadas.
 
@@ -183,6 +183,8 @@ Janela de risco: entre os passos 2 e 3, enquanto não existe fator verificado, a
 5. se a claim `amr` estiver presente, precisa conter uma entrada de método `totp` com `timestamp` de até **8 horas** atrás; sem `totp`, ou mais antiga → `mfa_expirada` (é preciso verificar de novo). Como `amr` é opcional, esta regra é **validada com um token real** antes de ser mantida (#30); se o token de teste não trouxer `amr`, a regra sai do spec e valem só os passos 2 a 4 e o limite de sessão do projeto;
 6. só então devolve `true`.
 
+**R5b. Sessão viva e ligada ao fator (v3.3, por revisão de segurança).** `checar_admin` também confere, em `auth.sessions`, a sessão do claim `session_id`: ela precisa existir, ser do mesmo `user_id`, estar dentro do prazo (`not_after` nulo ou futuro), ter `aal = 'aal2'` **no banco** e `factor_id` igual a um fator TOTP `verified` que esteja em `fatores_aprovados`. Sem sessão viva o código é `sessao_invalida` (a tela volta ao login); sessão não elevada por fator aprovado dá `mfa_requerida`. Efeitos: logout e revogação valem na hora, mesmo com o JWT ainda dentro do prazo, e um `aal2` obtido com outro fator (janela do R3) deixa de valer. A pré-checagem da migração exige as colunas `id`, `user_id`, `aal`, `factor_id` e `not_after` de `auth.sessions` (confirmadas no projeto em 2026-11-05) e aborta se faltarem. Limite aceito: sem `amr` no token não há prazo de frescor além do da própria sessão (#30).
+
 **R6. Cobertura única.** `checar_admin` é o único ponto de decisão. O teste estático exige que toda RPC A o chame antes de qualquer outra coisa; a função auxiliar `admin_pode_ler_anexo` repete as condições 1 a 5 em modo somente leitura (sem registrar), porque política de Storage não deve gravar.
 
 **R7. Registro.** Os quatro códigos de MFA entram em `admin_acessos_negados` (§5.7). `admin_registrar_acesso` grava na auditoria o `aal` e os métodos de `amr` da sessão. A verificação do código em si fica nos logs do Supabase Auth, não na nossa auditoria.
@@ -229,7 +231,7 @@ A tela lista os fatores que o Supabase devolver (id, nome, tipo, situação) e, 
 | `fechamento` | `fechamento_controle`, `fechamento_meses`, `fechamento_eventos` | só se `to_regclass` achar as tabelas (migração 18 pode não estar aplicada) |
 
 - **Campos permitidos, não `to_jsonb` livre.** Cada ramo seleciona as linhas elegíveis e passa cada uma por `homecash_interno.campos_permitidos(p_linha jsonb, p_permitidos text[])`, que devolve **só** as chaves da lista do §6.4. A lista é uma constante no corpo da função (versionada no SQL), não uma tabela editável.
-- **Por que filtrar chaves:** os nomes reais das colunas não estão versionados (incerteza #3). Referenciar uma coluna inexistente derrubaria a função; filtrar chaves faz a coluna inexistente simplesmente não aparecer. O custo é que um erro de digitação na lista passa sem aviso: o roteiro de testes compara as chaves devolvidas com a lista esperada. **A exceção é a regra de elegibilidade (§6.5), que não pode falhar aberta:** a migração 20 aborta se as colunas dela não existirem.
+- **Por que filtrar chaves:** os nomes reais das colunas não estão versionados (incerteza #3). Referenciar uma coluna inexistente derrubaria a função; filtrar chaves faz a coluna inexistente simplesmente não aparecer. O custo é que um erro de digitação na lista passa sem aviso: o roteiro de testes compara as chaves devolvidas com a lista esperada. **A exceção é a regra de elegibilidade (§6.5), que não pode falhar aberta:** a migração 23 aborta se as colunas dela não existirem.
 - `p_limite` máximo 200; resposta traz `total` e `omitidas` para paginar.
 - Mês fora de `AAAA-MM` devolve `parametro_invalido`; recurso fora da lista devolve `recurso_invalido`. Ambos registrados (§5.7).
 
@@ -240,19 +242,19 @@ Quando houver linhas omitidas pela §6.5, cada aba mostra: *"N lançamentos de o
 
 ### 6.4 Campos permitidos por recurso
 
-Listas derivadas **do código do app** (`useFinanceStore`, `useCaixinhas`, `useOpcoes`, migração 08), não do banco. São candidatas: devem ser conferidas contra o schema real antes de aplicar a migração 20 (incerteza #3). O que não está na lista não é devolvido.
+Listas derivadas **do código do app** (`useFinanceStore`, `useCaixinhas`, `useOpcoes`, migração 08), não do banco. São candidatas: devem ser conferidas contra o schema real antes de aplicar a migração 23 (incerteza #3). O que não está na lista não é devolvido.
 
 | Recurso | Campos devolvidos |
 |---|---|
-| `perfil` | `id, user_id, nome_usuario, cargo, cor, grupo_id, eh_convidado, resumo_visivel, created_at` |
+| `perfil` | `id, user_id, nome_usuario, cargo, cor, grupo_id, eh_convidado, resumo_visivel, criado_em` (`perfis` não tem `created_at`; as colunas legadas `salario`, `investido`, `reserva_atual`, `reserva_meta` e `avatar_url` ficam de fora) |
 | `integrantes` | `id, user_id, nome_usuario, cargo, cor, eh_convidado, resumo_visivel` |
-| grupo | `id, nome, created_at` (de `grupos_familiares`) |
+| grupo | `id, nome, criado_em` (de `grupos_familiares`, que não tem `created_at`) |
 | `extrato` | `id, mes, data, tipo, descricao, categoria, pagamento, valor, owner_id, responsavel_id, grupo_id, repasse_informado, repasse_informado_em, repasse_pago, repasse_pago_em, repasse_conta, repasse_conta_origem, created_at` |
 | `cartao` | `id, mes, data, nome, cartao, parcela_atual, parcela_total, categoria, valor, owner_id, responsavel_id, grupo_id, repasse_*` (mesmos de cima), `created_at` |
-| `contas_fixas` | `id, mes, nome, valor, pago, forma_pagamento, categoria, owner_id, responsavel_id, grupo_id, repasse_*`, `created_at` |
+| `contas_fixas` | `id, mes, nome, valor, pago, forma_pagamento, categoria, vencimento, serie_id, owner_id, responsavel_id, grupo_id, repasse_*`, `created_at` (a tabela **não tem** `privado` nem `data`) |
 | `faturas` | `pagamentos_fatura`: `id, cartao, mes, conta, valor, data, created_at`; `opcoes_pagamento` (só cartões): `id, nome, tipo_cartao, limite, dia_vencimento` |
-| `caixinhas` | `caixinhas`: `id, nome, eh_reserva, rendimento, meta, saldo, exibir_na_home, banco, tipo_rendimento, ultimo_mes_rendimento, created_at`; `caixinha_movimentos`: `id, caixinha_id, tipo, valor, data, descricao, origem, conta, created_at` |
-| `aportes` | `aportes_investimento`: `id, valor, created_at` |
+| `caixinhas` | `caixinhas`: `id, nome, eh_reserva_emergencia, rendimento, meta, saldo, aporte_auto_ativo, aporte_auto_valor, aporte_auto_conta, ultimo_mes_auto, exibir_na_home, cor, banco, tipo_rendimento, ultimo_mes_rendimento, created_at`; `caixinha_movimentos`: `id, caixinha_id, tipo, valor, data, descricao, origem, conta, created_at` |
+| `aportes` | `aportes_investimento`: `id, valor, data_aporte, descricao, created_at` |
 | `configuracoes` | `configuracoes`: `investido, reserva_atual, reserva_meta`; `opcoes_pagamento`: `id, nome, tipo_cartao, eh_cartao, limite, saldo_inicial, dia_vencimento`; `opcoes_categoria`: `id, nome` |
 | `fechamento` | `fechamento_controle`: `mes_inicial, criado_em`; `fechamento_meses`: `mes, status, fechado_em, retrato, assinatura`; `fechamento_eventos`: `mes, tipo, em, por, motivo, assinatura` |
 
@@ -273,12 +275,12 @@ Ou seja, **todo lançamento de outro integrante que seja privado ou partilhado �
 - Implementada em `homecash_interno.elegivel_suporte(...)`, usada por todo ramo de lançamento e pelas contagens da ficha. **Como as funções `SECURITY DEFINER` ignoram a RLS, esta regra é o único filtro**: um erro nela vaza dado. Por isso ela tem roteiro de teste próprio com dados de exemplo (linha privada de outro membro, partilhada com o alvo, partilhada com terceiro, `privado` nulo, alvo sem grupo, linha de grupo antigo) e o resultado esperado de cada caso.
 - A regra **não depende de grupo**: a visibilidade do alvo é sempre dono, responsável ou destinatário, e `grupo_id` não entra. Alvo sem grupo funciona igual.
 - **Dados derivados:** `fechamento_meses.retrato` e `fechamento_eventos.retrato` são resumos gravados pelo app do próprio alvo e saem como estão. Se agregarem lançamentos de terceiros, isso vem do app, não do painel (#19). A contagem global do dashboard (`admin_resumo`) soma linhas sem expor conteúdo e não segue a regra.
-- A migração 20 **aborta** se `extrato`, `cartao` ou `contas_fixas` não tiverem `privado`, `compartilhado_com`, `owner_id` e `responsavel_id` (pré-checagem em `information_schema`). Coluna ausente nunca vira "tudo visível".
+- A migração 23 **aborta** se `extrato` ou `cartao` não tiverem `privado`, `compartilhado_com`, `owner_id` e `responsavel_id`, ou se `contas_fixas` não tiver `compartilhado_com`, `owner_id` e `responsavel_id` (pré-checagem em `information_schema`). **`contas_fixas` não tem a coluna `privado`** (confirmado na E4; o app também não a envia): nela só `compartilhado_com` e o dono decidem a omissão, e o teste de regra cobre esse caso. Coluna esperada ausente nunca vira "tudo visível".
 - **A confirmação no banco veio (E5 e E6).** Se você quiser afrouxar a regra, a opção é mostrar também as linhas em que o alvo é responsável ou destinatário, que são exatamente as que ele lê pela API. A decisão é sua; o spec mantém a regra conservadora (omitir) até lá.
 
 ## 7. Dashboard
 
-Funções `admin_resumo()` (migração 19) e `admin_resumo_operacao()` (migração 21).
+Funções `admin_resumo()` (migração 20) e `admin_resumo_operacao()` (migração 24).
 Indicadores: total de usuários (contas reais, sem convidados), grupos, cadastros hoje/7/30 dias, ativos 7/30 dias (`auth.users.last_sign_in_at`), contagem de linhas por tabela (só contagem), erros novos 24 h, solicitações abertas, acessos negados 24 h.
 Gráficos em SVG próprio (como `GraficoEntradasSaidas`): cadastros por dia (30 d), ativos por dia, erros por dia.
 Acesso ao painel gera **uma** linha de auditoria por carregamento, limitada a uma a cada 10 min por admin. Sem dados pessoais no dashboard.
@@ -289,7 +291,7 @@ Acesso ao painel gera **uma** linha de auditoria por carregamento, limitada a um
 `admin_usuario_detalhe(p_user)`: ficha com perfil, grupo, integrantes (inclui convidados sem conta), contagens, últimos erros e solicitações.
 Ambas gravam auditoria (a busca guarda o termo).
 
-**Atenção (incerteza #1):** `perfis.id` e `perfis.user_id` podem diferir para convidados. A junção usa `perfis.user_id = auth.users.id` primeiro e `perfis.id` como alternativa; convidados (`eh_convidado`) aparecem só como integrantes, nunca como usuário.
+**Atenção (incerteza #1 e #36):** `perfis.user_id` **não é único** (a única chave de `perfis` é `id`, E4) e `handle_new_user` cria o perfil da conta com `id = user_id = auth.users.id`. A junção usa **`perfis.id = auth.users.id`** (o perfil da conta); convidados (`eh_convidado`, sem conta) aparecem só como integrantes, nunca como usuário. Duplicatas de `user_id` são contadas na Q9.1.
 
 ## 9. Erros
 
@@ -302,7 +304,7 @@ Tabela `erros_app (id bigint identity, user_id uuid null on delete set null, tel
 
 ## 10. Solicitações
 
-Tabela `solicitacoes (id uuid, user_id null on delete set null, tipo check in ('bug','problema','sugestao'), titulo ≤120, descricao ≤4000, tela, contexto jsonb, status check in ('nova','em_analise','aguardando_usuario','resolvida','recusada'), resposta_admin, criado_em, atualizado_em, atualizado_por)`. As colunas públicas de e-mail (`email_status check in ('pendente','enviando','enviado','falhou')`, `email_enviado_em`, `email_erro`) entram na migração 22 (`add column if not exists`).
+Tabela `solicitacoes (id uuid, user_id null on delete set null, tipo check in ('bug','problema','sugestao'), titulo ≤120, descricao ≤4000, tela, contexto jsonb, status check in ('nova','em_analise','aguardando_usuario','resolvida','recusada'), resposta_admin, criado_em, atualizado_em, atualizado_por)`. As colunas públicas de e-mail (`email_status check in ('pendente','enviando','enviado','falhou')`, `email_enviado_em`, `email_erro`) entram na migração 25 (`add column if not exists`).
 - **Usuário:** cria por `criar_solicitacao(tipo, titulo, descricao, tela)` (categoria B; limite de 5 por hora, checado com `pg_advisory_xact_lock(<classe de limites>, hashtext('sol:' || auth.uid()::text))` antes da contagem; excedente devolve `limite_excedido`); lê as **próprias** (política `select` com `user_id = (select auth.uid())`), vendo status, resposta e `email_status`. **Nenhum `insert`/`update`/`delete` direto**, nem das colunas de e-mail.
 - **Admin:** `admin_listar_solicitacoes(filtros, página)`, `admin_atualizar_solicitacao(id, status, resposta)` auditada.
 - **No app:** botão "Reportar problema ou sugerir" na `TelaAjuda` (única alteração visível do app) e lista "Minhas solicitações" dentro dela, com status, resposta e selo de e-mail.
@@ -385,7 +387,7 @@ Tabela `solicitacoes (id uuid, user_id null on delete set null, tipo check in ('
 - Tabelas com busca, filtros e paginação **no servidor**; no celular viram cartões empilhados. Sem rolagem horizontal da página, alvos de toque ≥ 44 px.
 - Todas as telas tratam: carregando, vazio, erro, "função não instalada" (migração não aplicada) e acesso negado.
 - **Conteúdo de terceiros é texto, nunca HTML.** Mensagem e `stack` de erros, título e descrição de solicitações, nomes de arquivo, `rota`, `user_agent`, nomes de usuários e motivos são escritos por usuários e lidos pelo admin, a conta mais poderosa do sistema. Regras: renderizar só como texto (o React escapa); **proibido** `dangerouslySetInnerHTML`, `innerHTML`, `eval` e `href` montado com dado de terceiro em `src/app/admin` e `src/components/admin` (teste estático); links só `https:` ou `mailto:` e com `rel="noreferrer"`; imagens só por URL assinada em `<img>`, nunca `<iframe>` ou `<object>`.
-- **CSP e cabeçalhos para `/admin`:** `Content-Security-Policy` restritiva (sem `unsafe-inline` em script, com nonce), `X-Content-Type-Options: nosniff` e `frame-ancestors 'none'`, conforme `02-guides/content-security-policy.md`. Um XSS em qualquer parte do app expõe o JWT do admin no `localStorage` (§5.1); a CSP reduz o risco sem eliminá-lo, e o MFA (D1) é a defesa complementar.
+- **CSP e cabeçalhos para `/admin` (v3.3).** *Situação atual, temporária (fases 1 e 2):* `src/proxy.ts` aplica, só em `/admin`, `script-src 'self' 'unsafe-inline'`, `connect-src` limitado ao próprio site e ao Supabase, `object-src 'none'`, `frame-ancestors 'none'`, `base-uri` e `form-action` `'self'`, `nosniff` e `Referrer-Policy: no-referrer`. O nonce previsto na v3 **não funciona** neste projeto: com `cacheComponents: true` as páginas saem pré-renderizadas e os `<script>` não recebem nonce (testado com `next build` + `next start`; o guia do Next afirma que PPR é incompatível com CSP por nonce). *Limite:* um script inline injetado ainda executaria e poderia usar a sessão `aal2` dentro da página; as defesas são o texto escapado (teste estático) e o MFA no banco. ***Obrigatório antes da fase 3*** (que passa a mostrar dados financeiros): **portão G-CSP**, ver o §14. Solução definitiva, nesta ordem de preferência: (1) isolar `/admin` em uma aplicação Next separada (subdomínio ou projeto próprio da Vercel) **sem** `cacheComponents`, com CSP por nonce e sem `'unsafe-inline'` em script; (2) **`experimental.sri` está refutada** (provada em 2026-11-05, cópia descartável do projeto): o SRI só acrescenta `integrity` aos scripts externos; o HTML continua com 11 `<script>` inline (bootstrap e dados do React), e com `script-src 'self'` o navegador bloqueia os 11 ("Executing inline script violates…") e o painel fica preso em "Carregando…"; hash de scripts inline é inviável porque o conteúdo muda a cada requisição; (3) se (1) não for viável, a fase 3 não é publicada e o suporte fica restrito a contagens (sem lançamentos). Portanto o único caminho técnico que cumpre o requisito é o (1). Nada disso é decidido nem implementado nesta versão.
 - Antes de escrever código, ler `node_modules/next/dist/docs/` (AGENTS.md): este Next 16.4.5 tem `cacheComponents: true`, `proxy.ts` no lugar de `middleware` e convenções de erro próprias. Itens relevantes: `01-getting-started/10-error-handling.md`, `03-layouts-and-pages.md`, `15-route-handlers.md`, `16-proxy.md`, `02-guides/authentication.md`.
 
 ## 12. Arquivos, migrações e testes
@@ -394,13 +396,13 @@ Tabela `solicitacoes (id uuid, user_id null on delete set null, tipo check in ('
 
 | Arquivo | Conteúdo |
 |---|---|
-| `supabase/supabase-19-admin-base.sql` | Pré-checagem (SHA-256, `auth.users`, leitura de `auth.mfa_factors` pelo dono das funções); schema `homecash_interno`; `admin_usuarios` (com `fatores_aprovados`), `admin_auditoria`, `admin_acessos_negados` (+ contador); triggers; `hash_texto`; `sou_admin`; `checar_admin`; `registrar_negado`; `registrar_tentativa_admin`; `admin_registrar_acesso`; `admin_resumo`; `admin_listar_usuarios`; `admin_usuario_detalhe`; `admin_listar_auditoria`; `admin_verificar_auditoria` |
-| `supabase/supabase-20-admin-suporte.sql` | Pré-checagem de colunas (§6.5); `admin_sessoes_suporte`, `admin_suporte_confirmacoes`; `campos_permitidos`; `elegivel_suporte`; `admin_suporte_iniciar`, `admin_suporte_confirmar`, `admin_suporte_ler`, `admin_suporte_encerrar` |
-| `supabase/supabase-21-erros-solicitacoes.sql` | `erros_app`, `solicitacoes`; `registrar_erro`, `criar_solicitacao`; RPCs `admin_*` de erros e solicitações; `admin_resumo_operacao` |
-| `supabase/supabase-22-solicitacoes-anexos-email.sql` | Colunas de e-mail; `solicitacoes_anexos`; tabelas internas (`servidor_segredos`, `solicitacoes_envios`, `anexos_validacao`, `anexo_leituras`); funções C, E e `admin_abrir_anexo`, `registrar_anexo`; bucket e políticas de `storage.objects` |
+| `supabase/supabase-20-admin-base.sql` | Pré-checagem (SHA-256, `auth.users`, leitura de `auth.mfa_factors` pelo dono das funções); schema `homecash_interno`; `admin_usuarios` (com `fatores_aprovados`), `admin_auditoria`, `admin_acessos_negados` (+ contador); triggers; `hash_texto`; `sou_admin`; `checar_admin`; `registrar_negado`; `registrar_tentativa_admin`; `admin_registrar_acesso`; `admin_resumo`; `admin_listar_usuarios`; `admin_usuario_detalhe`; `admin_listar_auditoria`; `admin_verificar_auditoria` |
+| `supabase/supabase-23-admin-suporte.sql` | Pré-checagem de colunas (§6.5); `admin_sessoes_suporte`, `admin_suporte_confirmacoes`; `campos_permitidos`; `elegivel_suporte`; `admin_suporte_iniciar`, `admin_suporte_confirmar`, `admin_suporte_ler`, `admin_suporte_encerrar` |
+| `supabase/supabase-24-erros-solicitacoes.sql` | `erros_app`, `solicitacoes`; `registrar_erro`, `criar_solicitacao`; RPCs `admin_*` de erros e solicitações; `admin_resumo_operacao` |
+| `supabase/supabase-25-solicitacoes-anexos-email.sql` | Colunas de e-mail; `solicitacoes_anexos`; tabelas internas (`servidor_segredos`, `solicitacoes_envios`, `anexos_validacao`, `anexo_leituras`); funções C, E e `admin_abrir_anexo`, `registrar_anexo`; bucket e políticas de `storage.objects` |
 | `supabase/testes/admin-*.sql` | Roteiros com `begin ... rollback`, só para rodar com autorização |
 
-A 18 (fechamento) continua reservada e **independente**: a 19, a 21 e a 22 não a referenciam; a 20 só a usa via `to_regclass`. A 22 depende da 21 e do Storage do projeto (incerteza #13).
+A 18 (fechamento) continua reservada e **independente**: a 20, a 24 e a 25 não a referenciam; a 23 só a usa via `to_regclass`. A 25 depende da 24 e do Storage do projeto (incerteza #13). **Numeração (final, v3.3):** os arquivos `supabase-19-excluir-grupo-convidado.sql`, `supabase-21-storage.sql` e `supabase-22-remove-objetos-antigos.sql` já existem no repositório, não são do painel e **não são alterados**; o painel usa **20** (base), **23** (suporte), **24** (erros e solicitações) e **25** (anexos e e-mail) (#35). Os rótulos 19 a 22 usados nos §17 e §18 (histórico da validação) são os antigos: base = 19, suporte = 20, erros = 21, anexos = 22.
 
 **Padrão de reexecução (cada migração roda em uma transação, com `set local lock_timeout`, e não remove nem altera objeto pré-existente):**
 
@@ -414,7 +416,7 @@ A 18 (fechamento) continua reservada e **independente**: a 19, a 21 e a 22 não 
 8. **Segredo de servidor:** a migração só cria a tabela vazia. O valor é inserido à mão, uma vez, fora do Git.
 9. **Desfazer:** cada arquivo termina com um bloco **comentado** que remove somente os objetos que ele criou (padrão das migrações 14 e 18). Nada é executado sozinho.
 10. **Teste estático das migrações** (§12.2): proíbe `drop table|drop schema|drop function|truncate|delete from` e `alter table|function|policy` sobre nome fora da lista de objetos novos; exige a pré-checagem como primeiro bloco, a marcação em cada `create` e os blocos dos itens 11 e 12.
-11. **Validação da estrutura dos objetos que já existem (nossos).** `create table if not exists` e `add column if not exists` não corrigem uma tabela existente que difira do esperado, e a marcação por `comment` só prova o nome, não a forma. Logo depois de criar, cada migração roda um bloco `do $$` que compara o catálogo com a definição esperada e **aborta listando as divergências**, sem corrigir nada sozinho: colunas (nome, tipo, `not null`, default), `check`s e chaves (`pg_constraint`), índices, triggers esperados e **ausência de triggers inesperados**, `relrowsecurity`, políticas presentes (`pg_policies`), proprietário e privilégios (`has_table_privilege`) e, para funções, `prosecdef`, `proconfig` (`search_path`), tipo de retorno e ACL (`proacl`). Se existir objeto marcado com estrutura diferente (versão anterior ou edição manual), a migração aborta e pede decisão; o conserto é uma migração nova e explícita (por exemplo a 23), nunca um `drop`.
+11. **Validação da estrutura dos objetos que já existem (nossos).** `create table if not exists` e `add column if not exists` não corrigem uma tabela existente que difira do esperado, e a marcação por `comment` só prova o nome, não a forma. Logo depois de criar, cada migração roda um bloco `do $$` que compara o catálogo com a definição esperada e **aborta listando as divergências**, sem corrigir nada sozinho: colunas (nome, tipo, `not null`, default), `check`s e chaves (`pg_constraint`), índices, triggers esperados e **ausência de triggers inesperados**, `relrowsecurity`, políticas presentes (`pg_policies`), proprietário e privilégios (`has_table_privilege`) e, para funções, `prosecdef`, `proconfig` (`search_path`), tipo de retorno e ACL (`proacl`). Se existir objeto marcado com estrutura diferente (versão anterior ou edição manual), a migração aborta e pede decisão; o conserto é uma migração nova e explícita (por exemplo uma migração nova depois da 25), nunca um `drop`.
 12. **Verificação final de postura (assert).** O último bloco repete no banco as regras do teste estático: nenhuma função A, B ou C executável por `anon`; nenhuma D ou F executável por `anon` ou `authenticated`; E só por `authenticated`; nenhuma tabela nova com privilégio para `anon`/`authenticated` além do previsto; RLS ligada nas tabelas novas. Qualquer falha desfaz a transação inteira.
 13. **Schema, bucket e políticas alheias.** `homecash_interno` também leva a marcação: se já existir sem ela, a migração aborta. No Storage, a pré-checagem lista `pg_policies` de `storage.objects` e **aborta** ao achar política permissiva para `anon`, `authenticated` ou `public` cuja condição não esteja limitada a outro `bucket_id` (por exemplo `true`, ou sem `bucket_id`), porque políticas permissivas se somam e anulariam a privacidade do bucket. No bucket já existente, confere também `allowed_mime_types` e `file_size_limit`.
 14. **"Idempotente" = estado final idêntico e nenhum dado alterado**, não "nenhum comando executado": `create or replace function` e `comment on` regravam o catálogo a cada execução.
@@ -437,7 +439,7 @@ A 18 (fechamento) continua reservada e **independente**: a 19, a 21 e a 22 não 
 - `tests/admin-lib.test.ts`: montagem de parâmetros, paginação, leitura do envelope `ok/erro`.
 - `tests/admin-mfa.test.ts`: o mapa (`currentLevel`, `nextLevel`) → tela do §5.8 R9, incluindo `aal2`/`aal1` bloqueado; mensagens de erro de MFA em português; o QR e o segredo não são gravados em `localStorage` nem em log.
 - `tests/erros-sanitizacao.test.ts`: remoção de token/e-mail/URL, truncamento, limite de disparo no cliente.
-- `tests/sql-migracoes.test.ts` (padrão do §12.1): lê `supabase-19/20/21/22` e confere pré-checagem como primeiro bloco, marcação `homecash-admin:v1`, ausência de comandos destrutivos, triggers só em tabelas novas, nenhum `create or replace trigger`, uma política `homecash_anexos_*` por comando e todas com `bucket_id`.
+- `tests/sql-migracoes.test.ts` (padrão do §12.1): lê `supabase-20/23/24/25` e confere pré-checagem como primeiro bloco, marcação `homecash-admin:v1`, ausência de comandos destrutivos, triggers só em tabelas novas, nenhum `create or replace trigger`, uma política `homecash_anexos_*` por comando e todas com `bucket_id`.
 - `tests/sql-funcoes-categorias.test.ts` — **cada categoria é testada pela sua finalidade**, a partir de uma tabela que classifica cada função do §5.2:
   - **A (RPC administrativa):** `security definer`, `set search_path = ''`, começa por `checar_admin`, retorna `jsonb` com envelope, `revoke ... from public, anon` e `grant ... to authenticated`, nenhum `raise exception` depois de um `insert` de registro (§5.7).
   - **B (usuário logado):** exige `auth.uid()`, não chama `checar_admin`, só toca dados do próprio `auth.uid()`; `sou_admin` é a única que retorna `boolean`.
@@ -461,18 +463,18 @@ A 18 (fechamento) continua reservada e **independente**: a 19, a 21 e a 22 não 
 |---|---|---|---|
 | 1 | `perfis.id` x `user_id` para contas reais e convidados | **Parcial (E5):** `handle_new_user` cria o perfil com `id = user_id = auth.users.id` para contas reais, e `excluir_minha_conta` apaga por `user_id` ou `id`. Junção do §8 confirmada para contas reais | Contagens em Q9.1 (convidados) |
 | 2 | Privilégios padrão de tabelas novas (migração 08 sugere desligados) | **Confirmado (§18.5):** tabelas criadas por `postgres` no `public` nascem sem grant de API; `revoke`/`grant` explícitos em tudo (§5.3) | Nada a fazer |
-| 3 | Colunas das tabelas base sem DDL versionado | Filtro por chave com lista explícita (§6.4); pré-checagem das colunas críticas na migração 20 | Conferir `extrato/cartao/contas_fixas` e demais listas antes da migração 20 |
+| 3 | Colunas das tabelas base sem DDL versionado | **Resolvido (E4, §18.5):** colunas reais lidas e as listas do §6.4 corrigidas (`criado_em` em `perfis` e `grupos_familiares`; `eh_reserva_emergencia`; `data_aporte`; `contas_fixas` sem `privado`). Filtro por chave e pré-checagem continuam | Nada a fazer |
 | 4 | `meus_membros()`, `meus_grupos()`, `atualizar_repasse` não versionadas | **Resolvido (E5):** definições lidas; `meus_membros()` = perfis do próprio usuário (§6.2, §6.5 corrigidos). Convém versionar essas funções em arquivo, tarefa separada | Nada a fazer no painel |
-| 5 | Estado real das migrações 09–14 | **Confirmado (E5):** 09 (ACLs sem `anon`), 10 (políticas com `(select auth.uid())`), 11 (9 índices) e 14 (3 triggers) aplicadas; 13 só pela ACL (definição não conferida); **12 e 18 não aplicadas**. Admin não depende delas | Existe `supabase_migrations.schema_migrations`; listar as versões é uma consulta opcional |
+| 5 | Estado real das migrações 09–14 | **Confirmado (E5):** 09 (ACLs sem `anon`), 10 (políticas com `(select auth.uid())`), 11 (9 índices) e 14 (3 triggers) aplicadas; 13 só pela ACL (definição não conferida); **12 e 18 não aplicadas**. **Confirmado pelo histórico (Q5.5b):** registradas 09, 10, 11, 13 e 14, mais duas anteriores (`corrige_perfis_user_id_avatar_e_trigger_duplicado`, `revoga_execute_anon_funcoes_security_definer`); **12, 18 e o arquivo local `supabase-19-excluir-grupo-convidado.sql` não constam**. Admin não depende delas | Nada a fazer |
 | 6 | **Migração 12 confirmada não aplicada (E5):** não existe o trigger `perfis_protege_colunas` e as políticas de `perfis` não limitam colunas | Sem efeito no admin; permissão nunca fica em `perfis`. É vulnerabilidade pré-existente (§18.5, E5-1) | Aplicar depois do deploy do código atual da branch; tarefa separada |
-| 7 | Migração 18: tipo de `caixinha_movimentos.data`, tipo de `mes`, `aportes_investimento` sem trava | Admin só lê; não bloqueia | Itens já listados na 18 e em `propostas-supabase.md` |
+| 7 | Migração 18: tipo de `caixinha_movimentos.data`, tipo de `mes`, `aportes_investimento` sem trava | **Em parte resolvido (E4):** `caixinha_movimentos.data` e `pagamentos_fatura.data` são `date`; `mes` é `text` com `check` de formato; `aportes_investimento` usa `data_aporte` (`date`) e segue sem trava. Admin só lê; não bloqueia | O restante é decisão da migração 18 (fora do painel) |
 | 8 | `CONTINUIDADE-HOMECASH.md` desatualizado (HEAD é `cc34726`; 18 e Resumo já commitados; árvore tem 15 arquivos modificados) | Nenhum | Atualizar o documento em tarefa separada |
 | 9 | `anon` e `ip` nos registros de tentativas negadas (§5.7) | `anon` não é registrado; `ip` pode ser `null` | Conferir `request.headers` na primeira consulta autorizada |
 | 10 | `auth.users.last_sign_in_at` e schema `auth` | **Confirmado (§18.5):** a coluna existe | Nada a fazer |
 | 11 | Política de Privacidade não cobre suporte, erros, anexos nem envio por e-mail | **Portão de deploy** (§14), tarefa separada | Revisar `/privacidade` e `/termos` antes de publicar as fases 3 a 5 |
 | 12 | Crescimento de `erros_app`, `admin_auditoria` e anexos órfãos (conta excluída) sem limpeza | Aceito na v1 | Definir retenção depois |
-| 13 | Storage via SQL: `storage.buckets` e suas colunas, e políticas já existentes em `storage.objects` (políticas permissivas se **somam**; uma política alheia ampla sobre o mesmo bucket anularia a privacidade) | Migração 22 depende disso; escopo por `bucket_id` | Antes de aplicar a 22, listar as políticas de `storage.objects` e o bucket `avatars`; plano B: criar o bucket no painel |
-| 14 | **SHA-256 no PostgreSQL do projeto** | **Resolvido (§18.5):** Postgres 17.11, `sha256(bytea)` nativo e `pgcrypto` em `extensions`. A pré-checagem continua na migração 19 | Nada a fazer |
+| 13 | Storage via SQL: `storage.buckets` e suas colunas, e políticas já existentes em `storage.objects` (políticas permissivas se **somam**; uma política alheia ampla sobre o mesmo bucket anularia a privacidade) | Migração 22 depende disso; escopo por `bucket_id` | Antes de aplicar a 25, listar as políticas de `storage.objects` e o bucket `avatars`; plano B: criar o bucket no painel |
+| 14 | **SHA-256 no PostgreSQL do projeto** | **Resolvido (§18.5):** Postgres 17.11, `sha256(bytea)` nativo e `pgcrypto` em `extensions`. A pré-checagem continua na migração 20 | Nada a fazer |
 | 15 | O schema `homecash_interno` não deve estar entre os "Exposed schemas" da API do Supabase | Funções D/E/F sem rota `/rest/v1/rpc` | Conferir a configuração da API no painel; se estiver exposto, não expor |
 | 16 | Dependência `sharp` (binário nativo), tempo e memória na Vercel; scripts de instalação do npm 11 já bloqueiam alguns pacotes (CONTINUIDADE §4) | Validação de imagem depende dela | Verificar no plano: instalação sem scripts, limites da função |
 | 17 | Provedor de e-mail e remetente indefinidos; cópia no Gmail sai do controle do painel | Escolha no plano | Resend (domínio verificado) ou SMTP do Gmail com senha de app |
@@ -490,19 +492,25 @@ A 18 (fechamento) continua reservada e **independente**: a 19, a 21 e a 22 não 
 | 29 | A auditoria guarda o e-mail do alvo depois da exclusão da conta | Necessário para a rastreabilidade; entra no portão da Política de Privacidade (§14) | Definir base legal e prazo de retenção na tarefa de privacidade |
 | 30 | A claim `amr` é **opcional** na documentação do Supabase; a janela de 8 h do MFA (§5.8 R5.5) depende de uma entrada `totp` com `timestamp` | Se um token `aal2` real não trouxer `amr`, a regra de frescor sai do spec e valem só `aal2`, fator aprovado e limite de sessão do projeto | Inspecionar um token `aal2` de conta de teste (§18, E10) |
 | 31 | Cadastrar outro fator com fator já verificado exige `aal2` (código do Supabase Auth, `insufficient_aal`). Não confirmado: se `unenroll` exige `aal2` e se `listFactors()` inclui fatores não verificados | A aprovação de fator (§5.8 R5.3) continua necessária para a janela anterior à primeira verificação | Testar com conta de teste (§18, E10) |
-| 32 | O dono das funções precisa ler `auth.mfa_factors` (colunas `id`, `user_id`, `status`, `factor_type`); a recuperação (R8) pode precisar de `DELETE` | **Resolvido (§18.5):** `postgres` lê e apaga; a coluna `secret` existe e nunca é lida; `status` e `factor_type` são enums. A pré-checagem da migração 19 continua | Nada a fazer |
+| 32 | O dono das funções precisa ler `auth.mfa_factors` (colunas `id`, `user_id`, `status`, `factor_type`); a recuperação (R8) pode precisar de `DELETE` | **Resolvido (§18.5):** `postgres` lê e apaga; a coluna `secret` existe e nunca é lida; `status` e `factor_type` são enums. A pré-checagem da migração 20 continua | Nada a fazer |
 | 33 | TOTP precisa estar habilitado (cadastro e verificação) nas configurações de Auth do projeto; limite de tentativas errôneas e `max_enrolled_factors` (padrão 10 na documentação) | Pré-requisito da ativação (§5.8 R3 e R4) | Conferir no painel (§18, E10) |
 | 34 | JWT antigo continua `aal2` depois de remover o fator (documentação: "stale JWT") | `checar_admin` exige fator verificado e aprovado (§5.8 R5.4) | Roteiro de banco (§5.8 R10) |
+| 35 | **Colisão de numeração:** o repositório já tem `supabase/supabase-19-excluir-grupo-convidado.sql` (corrige `excluir_grupo_familiar`; **não aplicada**, não consta no histórico) | **Resolvida (v3.3).** O painel usa 20 (base), 23 (suporte), 24 (erros e solicitações) e 25 (anexos e e-mail). Preservados sem alteração: `supabase-19-excluir-grupo-convidado.sql`, `supabase-21-storage.sql`, `supabase-22-remove-objetos-antigos.sql` | Nada a fazer |
+| 36 | `perfis.user_id` não é único (só `id` é chave); `perfis` guarda colunas financeiras legadas | **Resolvido (E9):** 12 perfis, 8 contas com `id = user_id`, 4 convidados sem `user_id`, **0** duplicatas, 0 perfis sem conta, 0 contas sem perfil; 2 perfis têm valor nas colunas legadas. Junção do §8 por `perfis.id = auth.users.id` confirmada | Nada a fazer |
+| 37 | Definições das funções de grupo e legadas | **Resolvido (E5b, §18.5):** lidas; avaliação em E5b-1 a E5b-6 | Nada a fazer |
+| 38 | O Supabase Auth tem tabela de códigos de recuperação de MFA (`auth.mfa_recovery_code_sets`); a configuração do projeto não foi conferida | Poderia reforçar o R8; não faz parte do spec | Conferir em V10.1 |
 
 ## 14. Fases e portões
 
 Cada fase termina testada localmente (`vitest`, `tsc`, `build`) e **espera autorização** antes de qualquer SQL no banco.
 
-1. **Base:** migração 19 (admin, auditoria, hash, negados, `sou_admin`, `checar_admin` com MFA), layout `/admin`, **telas de segurança e MFA (§5.8)**, guarda, menu, dashboard parcial, auditoria. Nenhuma RPC administrativa funciona sem MFA desde o primeiro dia.
+1. **Base:** migração 20 (admin, auditoria, hash, negados, `sou_admin`, `checar_admin` com MFA), layout `/admin`, **telas de segurança e MFA (§5.8)**, guarda, menu, dashboard parcial, auditoria. Nenhuma RPC administrativa funciona sem MFA desde o primeiro dia.
 2. **Usuários:** listagem, busca, filtros, ficha.
-3. **Suporte:** migração 20, faixa de suporte, abas somente leitura, regra do §6.5.
-4. **Erros e solicitações:** migração 21, captador no app, botão na `TelaAjuda`, telas admin.
-5. **Anexos e e-mail:** migração 22, upload privado, validação no servidor, `route.ts`, variáveis e segredo de servidor, abertura de anexo pelo admin com concessão e auditoria.
+3. **Suporte:** migração 23, faixa de suporte, abas somente leitura, regra do §6.5.
+4. **Erros e solicitações:** migração 24, captador no app, botão na `TelaAjuda`, telas admin.
+5. **Anexos e e-mail:** migração 25, upload privado, validação no servidor, `route.ts`, variáveis e segredo de servidor, abertura de anexo pelo admin com concessão e auditoria.
+
+**Portão G-CSP (v3.3, obrigatório antes de publicar a fase 3):** a CSP definitiva do §11 implementada e provada (`/admin` carrega sem `'unsafe-inline'` em `script-src`; teste automatizado; verificação nos temas claro e escuro, 390 e 1280 px). Sem isso, a fase 3 pode ser desenvolvida, mas não publicada nem aplicada em produção.
 
 **Portão da Política de Privacidade (tarefa separada):** a revisão do texto de `/privacidade` e `/termos` é feita **antes do deploy** das fases 3, 4 e 5. Deve cobrir: acesso de suporte com motivo e auditoria; omissão de lançamentos privados de outros integrantes; coleta de erros técnicos; anexos de imagem, sua validação e retenção; envio das solicitações por e-mail a um provedor externo e à caixa `homecashofc@gmail.com`; direito de exclusão e a retenção do e-mail do alvo na auditoria depois da exclusão (#29). Não faz parte da implementação deste spec e não altera esses arquivos agora.
 
@@ -516,14 +524,17 @@ Cada fase termina testada localmente (`vitest`, `tsc`, `build`) e **espera autor
 - Toda falha de validação das categorias A, B e C devolve envelope e **não** levanta exceção. Para cada código **registrável** do §5.7 (`acesso_negado`, `sessao_invalida`, `aba_nao_confirmada`, `recurso_invalido`, `parametro_invalido` nas RPCs A, `segredo_invalido`, `servidor_nao_configurado`), um teste força o erro e confere que a linha de `admin_acessos_negados` (ou o contador, dentro do teto da hora) permaneceu. Os códigos **não registráveis** (`limite_excedido`, `em_andamento`, `ja_enviado`, `nao_encontrado` e as falhas das RPCs B) são conferidos só como resposta.
 - Funções D, E e F não respondem em `/rest/v1/rpc/...` para `anon` nem `authenticated`; as E funcionam dentro das políticas do Storage; as A, B e C só `authenticated`.
 - **MFA (§5.8):** admin ativo em `aal1` recebe `mfa_requerida` (há fator aprovado) ou `mfa_nao_configurada` em **toda** RPC A e não recebe dado algum; em `aal2` com fator aprovado, funciona. Fator verificado não aprovado → `fator_nao_aprovado`. JWT `aal2` antigo depois de remover o fator → `mfa_nao_configurada`. Com a regra de frescor mantida (#30), `amr` `totp` com mais de 8 h → `mfa_expirada`. Cada um desses códigos deixa registro (§5.7).
+- **Sessão (§5.8 R5b):** `session_id` ausente, de outro usuário, inexistente (logout/revogação) ou com `not_after` vencido → `sessao_invalida`; sessão com `aal` diferente de `aal2` no banco, sem `factor_id` ou com `factor_id` fora dos fatores TOTP verificados e aprovados → `mfa_requerida`. Cada um deixa registro (§5.7).
+- Nenhuma RPC administrativa nem função interna usa `perfis.cargo`, `perfis.grupo_id` ou grupos para autorizar; admin cadastrado (`admin_usuarios`) nunca perde o registro de negados pelos tetos por hora; `TRUNCATE` e o último admin são protegidos; `service_role` não tem privilégio nas tabelas e funções do painel.
+- **CSP (§11):** na fase 1 e na fase 2 vale a política temporária; a fase 3 só é publicada com o portão G-CSP cumprido.
 - Sem MFA válido, a política de leitura de anexos do admin **não** libera o arquivo, mesmo com concessão ativa. `sou_admin()` verdadeiro em `aal1` só mostra a tela de segurança.
 - A interface segue a tabela de estados do §5.8 R9 (inclui `aal2`/`aal1` bloqueado) e não oferece remover fator; a ativação segue a ordem do R3.
 - `admin_auditoria` e `admin_acessos_negados` rejeitam `update`, `delete` e `truncate` (três comandos testados separadamente; o trigger por instrução cobre o `truncate`).
 - Com duas sessões inserindo auditoria ao mesmo tempo, a cadeia fica sem `ordem` repetida nem salto, e `admin_verificar_auditoria` devolve `primeira_quebra = null`; após adulteração simulada em transação com rollback, devolve a `ordem` correta. A verificação funciona em páginas e uma linha com `admin_id` nulo (mudança feita no SQL Editor) é gravada sem erro e entra na cadeia.
-- A migração 19 aborta, sem criar nada, quando não há `sha256(bytea)` nem `digest`.
+- A migração 20 aborta, sem criar nada, quando não há `sha256(bytea)` nem `digest`.
 - Aba financeira sem confirmação na sessão devolve `aba_nao_confirmada`, registra a tentativa e não devolve linhas.
 - Nenhuma resposta de `admin_suporte_ler` contém chave fora do §6.4; `avatar_url`, `usuario_id`, `salario`, `privado` e `compartilhado_com` nunca aparecem.
-- **Lançamentos `privado = true` ou com `compartilhado_com` preenchido de outro integrante não aparecem em nenhuma resposta do suporte nem nas contagens da ficha**, só o número `omitidas`; os do próprio alvo aparecem. A migração 20 aborta se as colunas necessárias não existirem.
+- **Lançamentos `privado = true` ou com `compartilhado_com` preenchido de outro integrante não aparecem em nenhuma resposta do suporte nem nas contagens da ficha**, só o número `omitidas`; os do próprio alvo aparecem. A migração 23 aborta se as colunas necessárias não existirem.
 - Anexo: arquivo que não é imagem válida (truncado, SVG, GIF, HTML renomeado, poliglota, acima de 4096 px, 16 MP ou 3 MB reais, formato diferente do declarado) termina `rejeitado` e nunca é anexado ao e-mail nem aberto pelo admin; imagem válida é recodificada sem metadados e só então fica `validado`.
 - Usuário só registra anexo em solicitação própria, `nova`, dentro de 4 anexos e 12 MB, mesmo com requisições simultâneas; só lê os próprios; o admin só obtém URL assinada após `admin_abrir_anexo`, dentro de 2 minutos e apenas para anexo `validado`.
 - Um usuário chamando diretamente `solicitacao_email_reservar` ou `solicitacao_email_concluir` sem o segredo recebe `segredo_invalido` (registrado) e não muda nada; com o segredo errado idem; após 5 falhas em 10 min as RPCs C respondem `limite_excedido` sem comparar.
@@ -564,6 +575,8 @@ Cada fase termina testada localmente (`vitest`, `tsc`, `build`) e **espera autor
 **v3.1 (2026-11-05), auditoria técnica a pedido do responsável:** 20 achados documentados no §17, todos corrigidos no texto quando eram documentais. Principais mudanças: reserva de e-mail e de anexo reescritas sobre uma única linha (§10.1, §10.2); recuperação de anexos presos; hash da cadeia por `jsonb_build_array` (§5.4); verificação paginada; segredo só como hash, com rotação e bloqueio (§10.2); regras contra XSS e CSP e decisão D1 de MFA (§5.1, §11); validação de estrutura das migrações (§12.1); ACL padrão do Supabase (§5.2); critérios de aceite coerentes com o comportamento (§15).
 
 **v3.2 (2026-11-05):** decisão **D1 aprovada**: MFA TOTP (`aal2`) obrigatório para administradores. Requisitos de ativação, verificação e bloqueio no §5.8; códigos de MFA no §5.7; telas de segurança no §11; `fatores_aprovados` em `admin_usuarios`; critérios no §15; incertezas #30 a #34. Acrescentado o **plano de validação no banco** (§18): consultas somente leitura preparadas, nenhuma executada. **v3.2.1:** revisão pontual do §5.8 (comparação de `aal` segura contra nulo, só fator TOTP, janela de cadastro reduzida, compatibilidade de `verify` e `listFactors`, recuperação); a especificação está pronta para a validação do banco.
+
+**v3.3 (2026-11-05):** (1) fase 1 implementada localmente; (2) **numeração final das migrações do painel:** 20 (base), 23 (suporte), 24 (erros e solicitações), 25 (anexos e e-mail), preservando `supabase-19-excluir-grupo-convidado.sql`, `supabase-21-storage.sql` e `supabase-22-remove-objetos-antigos.sql` (#35); (3) sessão viva e ligada ao fator aprovado, com `not_after` (§5.8 R5b); (4) tetos de abuso: admin cadastrado nunca perde o rastro, página ≤ 100000, rota registrada validada, 2000 chaves de contagem por hora, lock do último admin, `TRUNCATE` em `admin_usuarios` bloqueado, `service_role` sem privilégio nas tabelas e funções novas, verificação da cadeia também para os acessos negados; (5) CSP: situação temporária e solução definitiva obrigatória antes da fase 3 (§11, portão G-CSP).
 
 **Ainda depende de confirmação no banco (nada foi consultado):** versão do PostgreSQL e SHA-256 (#14); colunas reais e privacidade de `privado` (#3, #19); `meus_membros()` (#4); políticas existentes de `storage.objects` e bucket (#13); schemas expostos da API (#15); `perfis.id` x `user_id` (#1); `last_sign_in_at` e cabeçalhos (#9, #10); `pg_default_acl` (#26); `statement_timeout` (#25); configuração de logs (#24); MFA e claim `aal` (#23, #30 a #34).
 
@@ -1004,9 +1017,9 @@ Cinco consultas, uma por vez, só `select`, mesmo projeto. Nenhuma devolveu dado
 |---|---|---|---|---|
 | E5-1 | **Migração 12 não aplicada:** `perfis_proprio_update` e `perfis_proprio_insert` deixam o usuário gravar o próprio `grupo_id`, `cargo`, `eh_convidado` e `user_id`. Quem souber o id de um grupo pode entrar nele (`meus_grupos()` passa a incluí-lo), ler os perfis do grupo, lançar despesas com qualquer membro como responsável (`membro_pertence`), e assumir `cargo = 'gestor'` para as funções de gestão (remover membros, excluir o grupo) | **Alta** (exige conhecer o id do grupo, que não é público mas aparece para os membros e ex-membros) | Vulnerabilidade, **já conhecida**, correção pronta | Sim: políticas e ausência do trigger |
 | E5-2 | `privado` não é usado pelo banco; "Só eu" com outro responsável continua visível a ele (E6-1) | Baixa a Média | Limitação de projeto | Sim |
-| E5-3 | Funções legadas ainda executáveis por `authenticated` (P1 a P3 não autorizadas); as definições **não foram inspecionadas** | Baixa (não avaliada) | Superfície desnecessária | Sim, ACL; risco não avaliado |
+| E5-3 | Funções legadas ainda executáveis por `authenticated` (P1 a P3 não autorizadas); as definições foram lidas na E5b | Baixa (avaliada) | Superfície desnecessária | Sim |
 | E5-4 | 14 funções `SECURITY DEFINER` com `search_path = public` | Baixa (informativa): `authenticated` e `anon` não têm `CREATE` no `public` (Q2.1), então não há como plantar objeto | Hardening | Sim |
-| E5-5 | `excluir_minha_conta` e o trigger de exclusão não citam `pagamentos_fatura`, `preferencias_dashboard`, `convites_grupo_familiar` nem `grupos_familiares.criado_por`; dependem de chaves estrangeiras com `cascade` (não conferidas, Q4.4 e Q4.5) | Baixa | Dependência não verificada | Não |
+| E5-5 | `excluir_minha_conta` e o trigger de exclusão não citam `pagamentos_fatura`, `preferencias_dashboard`, `convites_grupo_familiar` nem `grupos_familiares.criado_por`; dependem de chaves estrangeiras com `cascade` (não conferidas, Q4.4 e Q4.5) | Baixa | **Resolvido pela E4:** as chaves estrangeiras de dados do usuário para `auth.users` têm `ON DELETE CASCADE`; só `extrato.usuario_id` e `cartao.usuario_id` não têm, e o trigger `limpar_dados_ao_excluir_usuario` apaga essas linhas antes | Sim |
 | E5-6 | `atualizar_repasse` ignora o fechamento de mês (migração 18 pendente) | Informativa | Pendência conhecida | Sim |
 
 **Efeito no spec do painel** (já aplicado no texto):
@@ -1021,3 +1034,109 @@ Cinco consultas, uma por vez, só `select`, mesmo projeto. Nenhuma devolveu dado
 4. **Fases 2 a 5** (usuários, suporte, erros e solicitações, anexos e e-mail), uma migração por vez, cada uma com roteiro de banco e autorização.
 5. **Política de Privacidade** revisada antes do deploy das fases 3 a 5.
 6. **Em paralelo e fora do painel:** corrigir E5-1 (merge e deploy do código atual da branch, depois migração 12) e, se quiser, E5-2, E5-3 e as limpezas P1 a P4.
+
+#### E4 e Q5.5b. Colunas, restrições e histórico de migrações (executadas em 2026-11-05)
+
+Seis consultas, uma por vez, só `select`, mesmo projeto. Nenhuma devolveu dado de usuário. Este checkout (`d:\Downloads\Trabalho\SAAS-FINAN-AS`) tem o mesmo SPEC; ele também contém o arquivo `supabase/supabase-19-excluir-grupo-convidado.sql`.
+
+| Consulta | Resultado obtido | Veredito |
+|---|---|---|
+| Q4.1 | `perfis`: `id`, `nome_usuario`, `grupo_id`, `cargo`, `criado_em`, `user_id`, `eh_convidado`, `cor`, `salario`, `investido`, `reserva_atual`, `reserva_meta`, `avatar_url`, `resumo_visivel`. `grupos_familiares`: `id`, `nome`, `criado_em`. `convites_grupo_familiar`: `codigo_hash`, `expira_em`, `usado_em`, `usado_por` etc. **Nenhuma das duas primeiras tem `created_at`** | Aprovado, **muda o spec** |
+| Q4.2 | `extrato`, `cartao` e `contas_fixas` têm `owner_id`, `responsavel_id` (NOT NULL), `grupo_id`, `mes` (`text`), `valor`, `compartilhado_com`, `repasse_*`, `created_at`. `extrato` e `cartao` têm `privado`, `usuario_id` e `data` (`date`). **`contas_fixas` não tem `privado` nem `data`**; tem `vencimento`, `serie_id`, `forma_pagamento`, `pago` | Aprovado, **muda o spec** |
+| Q4.3 | `caixinha_movimentos.data` é `date`; `pagamentos_fatura.data` é `date`; `aportes_investimento` usa `data_aporte` e `descricao`; `caixinhas` usa `eh_reserva_emergencia` e tem `aporte_auto_*`; `configuracoes` tem `salario`, `investido`, `reserva_atual`, `reserva_meta` e **não** tem `created_at`; `opcoes_pagamento` tem `saldo_inicial` e `dia_vencimento` | Aprovado, **muda o spec** |
+| Q4.4 | `perfis` só tem `pkey (id)`: **`user_id` não é único**. `extrato`, `cartao` e `contas_fixas`: `responsavel_id` referencia `perfis(id) ON DELETE SET NULL` mas a coluna é `NOT NULL`. `grupo_id` referencia `grupos_familiares ON DELETE CASCADE` nas três e em `opcoes_*`. `mes` tem `check` de formato. `perfis.cargo` só aceita `gestor` ou `membro` | Aprovado, com achados |
+| Q4.5 | Todas as chaves estrangeiras de dados do usuário para `auth.users` são `ON DELETE CASCADE`, **exceto** `extrato.usuario_id` e `cartao.usuario_id` (sem ação). `membros.user_id` é `SET NULL`. Nenhuma tabela de lançamentos aponta para `auth.users` por outro caminho. Existem tabelas de MFA com cascata, inclusive `auth.mfa_recovery_code_sets` | Aprovado |
+| Q5.5b | Histórico: `20261028224627 corrige_perfis_user_id_avatar_e_trigger_duplicado`, `20261029103311 revoga_execute_anon_funcoes_security_definer`, `20261105023756 09_permissoes_funcoes`, `...023849 10_rls_auth_uid_initplan`, `...023926 11_indices_fk`, `...025949 13_convidado_so_gestor`, `...030719 14_trava_repasse_confirmado`. **Sem 12, 18 nem 19 (`excluir-grupo-convidado`)** | Aprovado |
+
+**Achados novos** (nada foi alterado)
+
+| # | Problema | Gravidade | Natureza | Confirmado? |
+|---|---|---|---|---|
+| E4-1 | O spec usava colunas que não existem (`created_at` em `perfis` e `grupos_familiares`, `eh_reserva`, `privado` em `contas_fixas`) e omitia outras (`data_aporte`, `vencimento`, `serie_id`, `aporte_auto_*`). **Já corrigido nas listas do §6.4 e no §6.5** | Média (teria quebrado a migração de suporte) | Falha de especificação, corrigida | Sim |
+| E4-2 | `perfis` guarda `salario`, `investido`, `reserva_atual` e `reserva_meta`, e a política `Visualizar perfis autorizados` libera **todas as colunas** a qualquer membro do grupo. Se essas colunas têm valores reais, um membro lê o salário e a reserva dos outros pela API, mesmo com `resumo_visivel = false` (que é um filtro de tela) | **Média (confirmada, alcance pequeno)**: a E9 achou 2 de 12 perfis com valor nas colunas legadas | Exposição de dado financeiro | Confirmado: colunas, política e contagem |
+| E4-3 | A migração local 19 (`excluir-grupo-convidado`) **não foi aplicada**. Sem ela, apagar um convidado que seja responsável por lançamentos viola o `NOT NULL` de `responsavel_id` (`23502`) e a exclusão do grupo falha | **Rebaixado pela E5b a Baixa:** a função implantada já valida antes e bloqueia com mensagem clara; a 19 local troca o bloqueio por reatribuição ao dono | Melhoria de usabilidade pendente | Sim: definição lida na E5b |
+| E4-4 | `perfis.user_id` sem unicidade permite perfis duplicados da mesma conta; as políticas e `meus_membros()` dependem de um perfil por usuário | Baixa | Limitação de projeto | Sim; duplicatas não contadas (E9) |
+| E4-5 | (E5-5 da etapa anterior) exclusão de conta | — | **Resolvido**: as cascatas existem e o trigger cobre `usuario_id` | Sim |
+
+**Efeito no spec do painel** (já aplicado): listas do §6.4 e pré-checagem do §6.5 com as colunas reais; junção do §8 por `perfis.id = auth.users.id`; #3 e #7 resolvidos; #5 confirmado pelo histórico; novos #35 a #38. Sem novo requisito de segurança para o painel.
+
+#### Avaliação consolidada de segurança (após E1 a E8, mais E4 e Q5.5b)
+
+| Prioridade | Item | Gravidade | Dono da correção |
+|---|---|---|---|
+| 1 | E5-1: migração 12 pendente (`perfis` editável: `grupo_id`, `cargo`, `eh_convidado`, `user_id`) | **Alta** | Fora do painel; deploy do código atual antes da migração |
+| 2 | E4-2: colunas financeiras legadas em `perfis` visíveis ao grupo | **Média (confirmada, 2 de 12 perfis)** | Fora do painel |
+| 3 | E4-3: exclusão de grupo com convidado é bloqueada com mensagem (migração 19 local pendente) | Baixa | Fora do painel |
+| 4 | E5-3: funções legadas executáveis, definições não lidas (#37) | Baixa (não avaliada) | Fora do painel |
+| 5 | E5-2/E6-1: "Só eu" com outro responsável | Baixa a Média | Decisão de produto |
+| — | Tabelas de backup, RLS, privilégios padrão, `anon`, SHA-256, MFA | **Sem problema** | — |
+
+**Painel administrativo:** nenhum achado impede a implementação. Ele não depende de nenhuma das correções acima. Os ajustes de colunas já estão no spec.
+
+**Pendências abertas:** E7 (Storage), E9 (agregados: perfis duplicados e convidados, valores em `perfis.salario` etc., fatores MFA), E5b (definições das funções de grupo e legadas, #37), V10.1 a V10.7 (painel do Supabase e conta de teste), decisão da numeração das migrações (#35).
+
+**Sequência recomendada para o painel:**
+1. E9 com a contagem de `perfis.salario|investido|reserva_atual|reserva_meta` (para fechar E4-2) e E5b (opcional) e E7 (antes da fase de anexos).
+2. V10.1 (TOTP habilitado) e V10.3 (schemas expostos), feitos por você no painel do Supabase.
+3. Plano de implementação (skill writing-plans) com migrações numeradas de 20 a 23.
+4. Fase 1: migração do admin base e telas de segurança e MFA; ativação do primeiro admin na ordem do §5.8; teste com conta de teste (V10.7).
+5. Fases 2 a 5, uma migração por vez, com autorização de cada uma.
+6. Política de Privacidade antes do deploy das fases 3 a 5.
+7. Em paralelo, fora do painel: deploy do código da branch e migração 12; migração 19 local (exclusão de grupo); decisão sobre E4-2.
+
+#### E9 e E5b. Contagens agregadas e leitura das funções de grupo (executadas em 2026-11-05)
+
+Dez consultas, uma por vez, só `select`. As da E9 devolveram apenas contagens (nenhum valor, nome, e-mail ou id). As da E5b devolveram código-fonte de funções. Nenhuma função foi executada.
+
+**Resultados da E9**
+
+| Consulta | Resultado |
+|---|---|
+| Perfis | 12 no total: **8 contas reais** (todas com `id = user_id`), **4 convidados** (sem `user_id`); 6 sem grupo; **1 gestor** |
+| Colunas financeiras legadas de `perfis` | `salario`: 0 perfis; `investido`: 1; `reserva_atual`: 2; `reserva_meta`: 2; **2 perfis de 12** com algum valor |
+| Integridade | 0 `user_id` com mais de um perfil; 0 perfis apontando para conta inexistente; 0 contas sem perfil |
+| MFA | **Nenhum fator** cadastrado (lista vazia) |
+
+**Análise individual das funções (E5b)**
+
+| Função | Validação de `auth.uid()` | Quem pode | O que faz | Avaliação |
+|---|---|---|---|---|
+| `criar_grupo_familiar` | Sim | Qualquer logado | Cria o grupo e põe o chamador como `gestor` do grupo novo. **Não confere se ele já está em outro grupo** | Segura quanto a acesso; **deixa o grupo anterior sem gestor** se o chamador era gestor (E5b-1). `search_path = public` |
+| `gerar_convite_grupo_familiar` | Sim | Perfil com `cargo = 'gestor'` e grupo | Código de 20 caracteres hexadecimais aleatórios (~80 bits), guarda `md5`, validade de 7 dias | Correta. Confia em `perfis.cargo`, que o usuário consegue editar (E5-1) |
+| `entrar_grupo_por_convite` | Sim | Perfil sem grupo | Valida o hash, validade e uso único (`for update`), marca usado e entra como `membro` | **Correta e segura**; o convite não é adivinhável. Só não protege contra a edição direta de `perfis` (E5-1) |
+| `entrar_grupo_familiar(uuid)` | Sim | **Ninguém** (`EXECUTE` só `postgres`/`service_role`) | Entraria em qualquer grupo só pelo id, sem convite | **Função morta e perigosa se recebesse `EXECUTE` de novo** (E5b-4) |
+| `remover_membro_grupo` | Sim | Gestor do grupo | Não remove a si, outro gestor nem pessoa de outro grupo. Convidado: apaga o perfil; membro real: `grupo_id = null`, `cargo = 'membro'` | **Preserva todos os lançamentos.** Efeitos colaterais em E5b-2 e E5b-3 |
+| `excluir_grupo_familiar` | Sim | Gestor | Bloqueia se há convidado com lançamentos; apaga convidados; **desliga `grupo_id` das linhas** em `extrato`, `cartao`, `contas_fixas`, `caixinhas_investimento`, `opcoes_categoria`, `opcoes_pagamento` (impede o `CASCADE`); tira os membros reais do grupo; apaga o grupo | **Não apaga dado financeiro de ninguém**: as linhas viram pessoais. Afeta todos os membros (todos saem do grupo). O comentário cita a trava `convidado_trava_exclusao`, que **não existe** (E5b-3). `search_path` vazio |
+| `adicionar_convidado` / `adicionar_convidado_grupo` | Sim | Gestor | Cria perfil de convidado no grupo do chamador; valida a cor | Migração 13 confirmada. Sem limite de quantidade. Confia em `perfis.cargo` |
+| `alterar_cor_membro_grupo` | Sim | Gestor | Altera a cor de perfil **do mesmo grupo** | Segura |
+| `registrar_repasse_conta` | Usa `auth.uid()` | Responsável da linha | Grava `repasse_conta_origem` só nas linhas em que o chamador é responsável; tabela validada por lista; `p_conta` sem limite de tamanho | Segura; não consulta fechamento de mês |
+| `criar_opcoes_padrao` | Sim | Qualquer logado | Cria formas de pagamento e categorias padrão do próprio usuário, uma vez | Segura |
+| `aceitar_convites`, `convidar_membro`, `criar_grupo`, `sou_dono` (legadas, tabelas `grupos` e `membros`) | Sim | Qualquer logado / dono legado | Operam só no sistema antigo de grupos. `aceitar_convites` confia na claim `email` do JWT para assumir convites por e-mail | Sem efeito prático: tabelas legadas descritas como vazias; superfície desnecessária (E5b-5) |
+| `registrar_movimentacao_caixinha` (legada) | Sim | Dono (`owner_id = auth.uid()`) | Atualiza `caixinhas_investimento` e `movimentacoes_caixinha` | Segura, mas obsoleta |
+| `criar_formas_pagamento_padrao`, `cria_perfil_automatico` | — | O primeiro só repassa a `criar_opcoes_padrao`; o segundo é função de trigger sem trigger e sem `EXECUTE` de API | Obsoletas | Inofensivas |
+
+**Respostas às perguntas da E5b**
+1. **Acessar grupos sem autorização?** Pelas funções, **não**: nenhuma recebe o id de um grupo (exceto as legadas, que checam `sou_dono`, e a morta `entrar_grupo_familiar`, sem `EXECUTE`). O caminho é a **edição direta de `perfis.grupo_id`** (E5-1), que exige conhecer o id do grupo.
+2. **Um membro elevar o próprio cargo para gestor?** **Sim.** Todas as funções de gestão confiam em `perfis.cargo`, e `perfis_proprio_update` deixa o usuário gravar `cargo = 'gestor'` na própria linha (a constraint aceita o valor). Um membro **do próprio grupo** não precisa de id nenhum: vira gestor, remove membros comuns, gera convites, adiciona convidados e pode dissolver o grupo.
+3. **A remoção de membros preserva os dados financeiros?** **Sim.** Mas as linhas continuam com o `grupo_id` antigo, e a política de `update` exige `grupo_id IN meus_grupos()`; o ex-membro pode perder a capacidade de **editar** os próprios lançamentos desse grupo (E5b-2, a confirmar por teste).
+4. **A exclusão de grupos afeta dados de outros usuários?** **Não apaga nada financeiro**; desliga o vínculo de grupo das linhas de todos e tira todos os membros do grupo. Fica sem verificação se `convites_grupo_familiar` tem chave estrangeira para o grupo (a consulta de restrições não incluiu essa tabela).
+5. **`SECURITY DEFINER`, `EXECUTE` e `auth.uid()`?** Todas as RPCs de grupo validam `auth.uid()` no início, nenhuma tem `EXECUTE` para `anon`, as de gestão usam `search_path` vazio (exceto `remover_membro_grupo` e `criar_grupo_familiar`, com `public`). Problema estrutural: a **autorização depende de uma coluna editável pelo usuário** (`perfis.cargo`).
+6. **Escalada de privilégios entre grupos?** Não pelas funções. Possível pela edição direta de `perfis` (E5-1) conhecendo o id do grupo de destino.
+
+**Achados novos e reavaliações** (nada foi alterado)
+
+| # | Problema | Gravidade | Natureza | Evidência |
+|---|---|---|---|---|
+| E5-1 (reavaliado) | Auto-promoção a gestor e troca de grupo por edição direta de `perfis` (migração 12 não aplicada). Confirmado que **todas** as funções de gestão leem `perfis.cargo` | **Alta** (mantida; evidência reforçada). Sem perda de dado financeiro; impacto em associação ao grupo, convites e dissolução do grupo | Vulnerabilidade, correção pronta | Funções lidas + políticas + ausência do trigger |
+| E4-2 (reavaliado) | Colunas financeiras legadas de `perfis` visíveis ao grupo | **Média**, alcance pequeno (2 de 12 perfis) | Exposição | E9 |
+| E4-3 (reavaliado) | Exclusão de grupo com convidado | **Baixa** | Usabilidade | E5b |
+| E5b-1 | `criar_grupo_familiar` não confere se o chamador já está em grupo; um gestor que cria outro grupo deixa o anterior sem gestor | Baixa a Média | Falha de regra | Definição lida |
+| E5b-2 | Depois de `remover_membro_grupo`, as linhas do ex-membro mantêm o `grupo_id` antigo e a política de `update` pode negar a edição | Baixa a Média | Falha funcional provável | Políticas e função lidas; **precisa de teste** |
+| E5b-3 | Comentário de `excluir_grupo_familiar` cita a trava `convidado_trava_exclusao`, que não existe (Q5.3); `remover_membro_grupo` não captura o `23502` de `responsavel_id` e devolve erro cru | Baixa | Inconsistência | Definições + Q5.3 |
+| E5b-4 | `entrar_grupo_familiar(uuid)` entra em qualquer grupo sem convite; hoje sem `EXECUTE` de API | Baixa (risco latente) | Código perigoso e morto | ACL + definição |
+| E5b-5 | Funções legadas (`aceitar_convites`, `convidar_membro`, `criar_grupo`, `criar_formas_pagamento_padrao`, `registrar_movimentacao_caixinha`) executáveis, sobre tabelas legadas | Baixa | Superfície desnecessária | Definições |
+| E5b-6 | Sem limite de quantidade em `criar_grupo_familiar`, `adicionar_convidado_grupo`; `p_conta` sem limite em `registrar_repasse_conta` | Baixa | Abuso de armazenamento | Definições |
+
+**Efeito no spec do painel:** nenhum requisito muda. A ficha do usuário mostra `cargo`, mas o painel **nunca** usa `perfis.cargo` para autorização (a permissão é `admin_usuarios`, §5.1); como `cargo` é editável pelo usuário, a tela o rotula como "informado pelo usuário" até a migração 12 ser aplicada. #36 e #37 resolvidos.
+
+**Avaliação final:** os achados de segurança restantes (E5-1, E4-2) são **do app, não do painel**, e nenhum bloqueia o planejamento ou a implementação do painel. Pendências que dependem de você: aplicar a migração 12 (depois do deploy), decidir E4-2, V10.1 e V10.3 no painel do Supabase, E7 antes da fase de anexos, numeração das migrações (#35), `sharp`, provedor de e-mail e a Política de Privacidade.

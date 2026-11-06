@@ -10,6 +10,13 @@ export const EVENTO_FECHAMENTO = "homecash:fechamento";
 const faltaTabela = (e: { code?: string; message?: string } | null) =>
   Boolean(e) && (e!.code === "42P01" || e!.code === "PGRST205" || e!.code === "PGRST202" || e!.code === "42883" || /fechamento_/.test(e!.message || ""));
 
+/**
+ * Interruptor do módulo. Com `false` o fechamento mensal fica oculto para todos: nenhuma consulta às tabelas
+ * `fechamento_*` e nenhum RPC é feito, e a interface não mostra faixa, seletor de meses nem conferência.
+ * Troque para `true` quando a migração supabase-18 estiver aplicada e o recurso estiver pronto.
+ */
+export const FECHAMENTO_ATIVO = false;
+
 export type MesFechado = { mes: string; fechadoEm: string | null; retrato: Retrato | null };
 
 /**
@@ -27,6 +34,11 @@ export function useFechamentos(userId: string | null) {
   const [pronto, setPronto] = useState(false);
 
   const carregar = useCallback(async () => {
+    if (!FECHAMENTO_ATIVO) {
+      setHabilitado(false);
+      setPronto(true);
+      return;
+    }
     if (!userId) return;
     const c = await supabase.from("fechamento_controle").select("mes_inicial").eq("user_id", userId).maybeSingle();
     if (c.error) {
@@ -66,6 +78,7 @@ export function useFechamentos(userId: string | null) {
 
   /** Chama uma função do banco e devolve `null` (sucesso) ou a mensagem de erro do banco. */
   const chamar = useCallback(async (fn: string, args: Record<string, unknown>): Promise<string | null> => {
+    if (!FECHAMENTO_ATIVO) return "O fechamento mensal está temporariamente indisponível.";
     const { error } = await supabase.rpc(fn, args);
     if (error) return faltaTabela(error) ? "O fechamento mensal ainda não foi habilitado no banco (migração supabase-18)." : error.message;
     window.dispatchEvent(new Event(EVENTO_FECHAMENTO));

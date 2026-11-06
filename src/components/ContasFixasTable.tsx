@@ -380,6 +380,7 @@ export default function ContasFixasTable({
             {itens.map((item) => (
               <tr
                 key={item.id}
+                data-lanc-id={String(item.id)}
                 className="border-b border-line/50 last:border-0 hover:bg-background/50"
               >
                 <td className="py-3 pr-3">

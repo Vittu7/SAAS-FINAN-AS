@@ -48,6 +48,10 @@ import ThemeToggle from "@/components/ThemeToggle";
 import AjudaEInstalacao from "@/components/AjudaEInstalacao";
 import InvestimentosReservaCard from "@/components/InvestimentosReservaCard";
 import GrupoModal from "@/components/GrupoModal";
+import { useDestacarLancamento, type FocoLancamento } from "@/hooks/useDestacarLancamento";
+import { ABA_DO_LANCAMENTO, type LancamentoBloqueador } from "@/lib/bloqueioExclusao";
+import RepasseTravadoModal from "@/components/RepasseTravadoModal";
+import type { LancGrupo } from "@/lib/grupo";
 import Sidebar from "@/components/Sidebar";
 import FiltrosLancamentos, { FILTROS_INICIAIS, type FiltrosLancamentoState } from "@/components/FiltrosLancamentos";
 import FiltroResponsaveis, { TOKEN_EU } from "@/components/FiltroResponsaveis";
@@ -157,6 +161,29 @@ export default function Home() {
   useEffect(() => {
     setRecentes(lerListaDoUsuario(userId, "recentes"));
   }, [userId]);
+
+  // "Ver lançamento" no aviso de exclusão bloqueada: abre a aba e o mês do lançamento, mostra todo o grupo (sem
+  // filtros que o escondam) e destaca a linha por alguns segundos.
+  const [foco, setFoco] = useState<FocoLancamento | null>(null);
+  useDestacarLancamento(foco, () => setFoco(null));
+  const verLancamento = (l: LancamentoBloqueador) => {
+    setModalGrupoAberto(false);
+    setPessoasSel([]);
+    setFiltros(FILTROS_INICIAIS);
+    if (l.mes) setMes(l.mes);
+    irPara(ABA_DO_LANCAMENTO[l.tabela]);
+    setFoco({ tabela: l.tabela, id: l.id, mes: l.mes, n: Date.now() });
+  };
+
+  // "Ir para Repasses" na orientação de repasse confirmado: abre Grupo → Repasses no mês do repasse, mostra todo o
+  // grupo e destaca a linha em "Concluídos". Não estorna nada: o estorno é feito pela pessoa, com confirmação.
+  const irParaRepasses = (l: LancGrupo | null) => {
+    setPessoasSel([]);
+    if (l?.mes) setMes(l.mes);
+    setGrupoSub("repasses");
+    irPara("grupo");
+    if (l) setFoco({ tabela: l.origem, id: l.id, mes: l.mes, n: Date.now() });
+  };
 
   const abrirNova = (preset: { tipo?: "saida" | "entrada"; como?: "avista" | "parcelado" | "fixa" } = {}) => {
     setNovaPreset(preset);
@@ -790,7 +817,8 @@ export default function Home() {
           onAdicionarConta={acao.adicionarConta}
         />
       )}
-      {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} />}
+      <RepasseTravadoModal meuId={userId || ""} onIrParaRepasses={irParaRepasses} />
+      {modalGrupoAberto && <GrupoModal onClose={() => setModalGrupoAberto(false)} dados={estado} onVerLancamento={verLancamento} />}
       {conferindo && mesTrab && mes === mesTrab && pessoasSel.length === 1 && pessoasSel[0] === TOKEN_EU && (
         <ConferenciaFechamento
           mes={mesTrab}

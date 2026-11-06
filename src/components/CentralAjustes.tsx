@@ -1,9 +1,11 @@
 'use client';
 import { sairDaConta } from '@/lib/auth';
-import { Check, Crown, LayoutDashboard, Palette, type LucideIcon } from 'lucide-react';
+import { Check, Crown, LayoutDashboard, Palette, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { ICONES, Ico } from '@/components/icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { souAdmin } from '@/lib/admin';
 import GerenciarOpcoesModal from './GerenciarOpcoesModal';
 import PerfilConta from './PerfilConta';
 import { PainelAparencia } from './ThemeToggle';
@@ -47,6 +49,14 @@ export default function CentralAjustes({ preferencias, pronto, salvando, erro, o
   const [cadastro, setCadastro] = useState<Cadastro>('cartoes');
   const atual = SECOES.find((s) => s.id === secao)!;
 
+  // O atalho do painel só aparece para quem está em admin_usuarios. A autorização real é do banco.
+  const [ehAdmin, setEhAdmin] = useState(false);
+  useEffect(() => {
+    let ativo = true;
+    void souAdmin().then((v) => { if (ativo) setEhAdmin(v); });
+    return () => { ativo = false; };
+  }, []);
+
   const sair = async () => { await sairDaConta(supabase); router.push('/login'); };
 
   return (
@@ -84,6 +94,17 @@ export default function CentralAjustes({ preferencias, pronto, salvando, erro, o
               </div>
               <button type="button" onClick={onGrupo} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent">Gerenciar</button>
             </div>
+            {ehAdmin && (
+              <div className="card-glass grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-5">
+                <div className="min-w-0">
+                  <p className="font-semibold">Painel administrativo</p>
+                  <p className="text-sm text-muted">Exige verificação em duas etapas.</p>
+                </div>
+                <Link href="/admin" className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent">
+                  <Ico icon={ShieldCheck} size={16} />Abrir
+                </Link>
+              </div>
+            )}
             <button type="button" onClick={sair} className="w-full rounded-2xl border border-rose-500/30 py-3 text-sm font-medium text-rose-500 md:hidden">Sair da conta</button>
           </>
         )}

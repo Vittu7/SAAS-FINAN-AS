@@ -8,7 +8,7 @@
  *   apenas muda a situação do repasse. Por isso entradas, saídas e saldo não mudam.
  * - Entradas nunca geram repasse.
  */
-import { arred, calcularMes, semDuplicados } from "./calculos";
+import { arred, calcularMes, mesEmBrasilia, semDuplicados } from "./calculos";
 import { mesAtual } from "./finance";
 
 type Item = Record<string, any>;
@@ -187,7 +187,7 @@ export function entradasDeRepasse(e: { extrato?: Item[]; cartao?: Item[]; contas
       if (!(i.repasse_pago ?? i.repassePago)) continue;
       saida.push({
         id: `${PREFIXO_REPASSE}${o}:${i.id}`,
-        mes: i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes),
+        mes: mesEmBrasilia(i.repasse_pago_em, String(i.mes)),
         tipo: "entrada",
         valor: num(i.valor),
         descricao: `Repasse recebido (quita o a receber) · ${(o === "contas" ? i.nome : i.descricao ?? i.nome) || "lançamento"} (${i.responsavel || "Membro"})`,
@@ -226,7 +226,7 @@ export function saidasDeRepasse(
       if (opts.nomesSelecionados.includes(i.autorNome)) continue;
       saida.push({
         id: `${PREFIXO_REPASSE}${o}:${i.id}`,
-        mes: i.repasse_pago_em ? String(i.repasse_pago_em).slice(0, 7) : String(i.mes),
+        mes: mesEmBrasilia(i.repasse_pago_em, String(i.mes)),
         tipo: "saida",
         valor: num(i.valor),
         descricao: `Repasse enviado · ${(o === "contas" ? i.nome : i.descricao ?? i.nome) || "lançamento"} (para ${i.autorNome || "Membro"})`,
@@ -342,7 +342,7 @@ export function resumoPorMembro(
     };
   });
 }
-export type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir";
+export type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir" | "recusar";
 
 /**
  * Quem pode fazer o quê num repasse (a mesma regra é conferida no banco pela função atualizar_repasse):
@@ -354,8 +354,24 @@ export type AcaoRepasse = "informar" | "desinformar" | "concluir" | "reabrir";
 export function acoesDoRepasse(l: Pick<LancGrupo, "autorId" | "respId" | "situacaoRepasse">, meuId: string): AcaoRepasse[] {
   if (!meuId) return [];
   if (l.respId === meuId) return l.situacaoRepasse === "pendente" ? ["informar"] : l.situacaoRepasse === "aguardando" ? ["desinformar"] : [];
-  if (l.autorId === meuId) return l.situacaoRepasse === "concluido" ? ["reabrir"] : ["concluir"];
+  if (l.autorId === meuId) return l.situacaoRepasse === "concluido" ? ["reabrir"] : l.situacaoRepasse === "aguardando" ? ["concluir", "recusar"] : ["concluir"];
   return [];
+}
+
+/**
+ * Se o lançamento ainda pode receber a ação, para quem é "meuId". Usada para montar e reconferir lotes:
+ * repasse concluído nunca entra, e quem informou o pagamento nunca confirma nem recusa o próprio repasse.
+ */
+export function repasseValidoParaAcao(l: Pick<LancGrupo, "autorId" | "respId" | "situacaoRepasse" | "repassePago">, acao: AcaoRepasse, meuId: string): boolean {
+  if (!meuId || l.repassePago || l.situacaoRepasse === "concluido") return false;
+  if (l.autorId === l.respId) return false;
+  switch (acao) {
+    case "concluir": return l.autorId === meuId;
+    case "recusar": return l.autorId === meuId && l.situacaoRepasse === "aguardando";
+    case "informar": return l.respId === meuId && l.situacaoRepasse === "pendente";
+    case "desinformar": return l.respId === meuId && l.situacaoRepasse === "aguardando";
+    default: return false;
+  }
 }
 
 /**

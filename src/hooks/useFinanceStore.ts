@@ -728,32 +728,35 @@ export function useFinanceStore() {
    */
   const atualizarRepasses = async (
     itens: { origem: Tabela; id: string }[],
-    acao: "informar" | "desinformar" | "concluir" | "reabrir",
+    acao: "informar" | "desinformar" | "concluir" | "reabrir" | "recusar",
     /** "concluir": conta de débito que recebeu o valor. "informar": conta de débito de onde saiu o repasse. null = sem conta */
     conta: string | null = null,
   ): Promise<boolean> => {
     if (!userId || itens.length === 0) return false;
     const agora = new Date().toISOString();
 
+    let aplicouAlgum = false; // lote em mais de uma tabela: se uma falhar, relê o banco para mostrar o que de fato ficou gravado
     for (const origem of ["extrato", "cartao", "contas"] as Tabela[]) {
       const ids = itens.filter((i) => i.origem === origem).map((i) => i.id);
       if (ids.length === 0) continue;
 
-      const { data, error } = await supabase.rpc("atualizar_repasse", { p_tabela: NOME_TABELA_DB[origem], p_ids: ids, p_acao: acao });
+      const { data, error } = await supabase.rpc("atualizar_repasse", { p_tabela: NOME_TABELA_DB[origem], p_ids: ids, p_acao: acao === "recusar" ? "reabrir" : acao }); // recusar = quem recebeu desfaz o aviso (no banco, é a mesma operação do estorno, sem efeito em pago=false)
 
       if (error) {
         const faltaScript = /atualizar_repasse|repasse_/.test(error.message) || error.code === "PGRST202" || error.code === "42883";
         if (faltaScript) avisos.erro("Repasses ainda não habilitados", "Execute os scripts supabase-04 e supabase-05 no Supabase.");
         else falhou("atualizar o repasse", error);
+        if (aplicouAlgum) void sincronizarLancamentos();
         return false;
       }
       if (Number(data) !== ids.length) {
         avisos.erro(
-          acao === "informar" || acao === "desinformar" ? "Não foi possível marcar como repassado" : "Não foi possível confirmar o recebimento",
+          acao === "informar" || acao === "desinformar" ? "Não foi possível marcar como repassado" : acao === "recusar" ? "Não foi possível recusar o recebimento" : "Não foi possível confirmar o recebimento",
           acao === "informar" || acao === "desinformar"
             ? "Só quem é o responsável pelo valor pode marcar como repassado (e só antes de concluído)."
             : "Só quem fez o lançamento pode confirmar o recebimento do repasse.",
         );
+        if (aplicouAlgum) void sincronizarLancamentos();
         return false;
       }
 
@@ -764,7 +767,7 @@ export function useFinanceStore() {
         const { error: e1 } = await supabase.from(NOME_TABELA_DB[origem]).update({ repasse_conta: conta }).in("id", ids);
         if (e1) avisos.aviso(/repasse_conta/.test(e1.message) ? avisoScript : "O repasse foi concluído, mas a conta de destino não foi registrada", /repasse_conta/.test(e1.message) ? undefined : e1.message);
       }
-      if (acao === "reabrir") {
+      if (acao === "reabrir" || acao === "recusar") {
         const { error: e2 } = await supabase.from(NOME_TABELA_DB[origem]).update({ repasse_conta: null, repasse_conta_origem: null }).in("id", ids);
         if (e2) avisos.aviso(/repasse_conta/.test(e2.message) ? avisoScript : "O repasse foi reaberto, mas as contas não foram limpas", /repasse_conta/.test(e2.message) ? undefined : e2.message);
       }
@@ -773,6 +776,7 @@ export function useFinanceStore() {
         if (e3 && (conta || acao === "desinformar")) avisos.aviso(/registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? avisoScript : "O repasse foi atualizado, mas a conta de origem não foi registrada", /registrar_repasse_conta|repasse_conta/.test(e3.message) || e3.code === "PGRST202" ? undefined : e3.message);
       }
 
+      aplicouAlgum = true;
       const alvo = new Set(ids.map(String)); // ids podem vir como número do banco: compara sempre como texto
       const patch: Record<string, any> =
         acao === "informar" ? { repasse_informado: true, repasse_informado_em: agora, repasseInformado: true, repasse_conta_origem: conta }
@@ -793,6 +797,7 @@ export function useFinanceStore() {
     if (acao === "informar") avisos.sucesso(varios ? `${n} repasses informados` : "Repasse informado", "Agora aguarda quem lançou confirmar o recebimento.");
     else if (acao === "desinformar") avisos.sucesso(varios ? `${n} repasses desmarcados` : "Repasse desmarcado", "Voltou para pendente.");
     else if (acao === "concluir") avisos.sucesso(varios ? `${n} recebimentos confirmados` : "Recebimento confirmado", conta ? `O valor entrou como entrada em ${conta}.` : "O valor foi abatido do que a pessoa devia.");
+    else if (acao === "recusar") avisos.sucesso(varios ? `${n} recebimentos recusados` : "Recebimento recusado", "Voltou para pendente: quem deve verá que ainda precisa repassar.");
     else avisos.sucesso(varios ? `${n} repasses reabertos` : "Repasse reaberto", "Voltou para pendente.");
     return true;
   };

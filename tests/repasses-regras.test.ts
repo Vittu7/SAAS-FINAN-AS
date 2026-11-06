@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { acoesDoRepasse, lancamentosDoGrupo, resumoRepasses } from "../src/lib/grupo";
+import { acoesDoRepasse, lancamentosDoGrupo, repasseValidoParaAcao, resumoRepasses } from "../src/lib/grupo";
 import { calcularPainel } from "../src/lib/painel";
 import { travadoPorRepasse } from "../src/lib/grupo";
 
@@ -7,7 +7,7 @@ const l = (situacaoRepasse: "pendente" | "aguardando" | "concluido") => ({ autor
 
 describe("quem pode fazer o quê num repasse", () => {
   it("só o destinatário (quem pagou a despesa) confirma o recebimento", () => {
-    expect(acoesDoRepasse(l("aguardando"), "vitu")).toEqual(["concluir"]);
+    expect(acoesDoRepasse(l("aguardando"), "vitu")).toEqual(["concluir", "recusar"]);
     expect(acoesDoRepasse(l("aguardando"), "gisa")).not.toContain("concluir");
     expect(acoesDoRepasse(l("aguardando"), "outra")).toEqual([]);
   });
@@ -22,6 +22,33 @@ describe("quem pode fazer o quê num repasse", () => {
   });
   it("convidado não usa o app: quem recebeu registra direto do pendente", () => {
     expect(acoesDoRepasse({ autorId: "vitu", respId: "convidada", situacaoRepasse: "pendente" }, "vitu")).toEqual(["concluir"]);
+  });
+});
+
+describe("ações em lote: quais repasses entram", () => {
+  const lanc = (situacaoRepasse: "pendente" | "aguardando" | "concluido") => ({ autorId: "vitu", respId: "gisa", situacaoRepasse, repassePago: situacaoRepasse === "concluido" });
+  it("quem deve nunca confirma nem recusa o próprio repasse", () => {
+    expect(repasseValidoParaAcao(lanc("aguardando"), "concluir", "gisa")).toBe(false);
+    expect(repasseValidoParaAcao(lanc("aguardando"), "recusar", "gisa")).toBe(false);
+  });
+  it("quem recebeu confirma pendente ou aguardando e só recusa o que foi informado", () => {
+    expect(repasseValidoParaAcao(lanc("pendente"), "concluir", "vitu")).toBe(true);
+    expect(repasseValidoParaAcao(lanc("aguardando"), "concluir", "vitu")).toBe(true);
+    expect(repasseValidoParaAcao(lanc("aguardando"), "recusar", "vitu")).toBe(true);
+    expect(repasseValidoParaAcao(lanc("pendente"), "recusar", "vitu")).toBe(false);
+  });
+  it("quem deve informa só o pendente e cancela só o aguardando", () => {
+    expect(repasseValidoParaAcao(lanc("pendente"), "informar", "gisa")).toBe(true);
+    expect(repasseValidoParaAcao(lanc("aguardando"), "informar", "gisa")).toBe(false);
+    expect(repasseValidoParaAcao(lanc("aguardando"), "desinformar", "gisa")).toBe(true);
+    expect(repasseValidoParaAcao(lanc("pendente"), "desinformar", "gisa")).toBe(false);
+  });
+  it("repasse concluído e terceiros ficam de fora de qualquer ação", () => {
+    for (const a of ["concluir", "recusar", "informar", "desinformar"] as const) {
+      expect(repasseValidoParaAcao(lanc("concluido"), a, "vitu")).toBe(false);
+      expect(repasseValidoParaAcao(lanc("concluido"), a, "gisa")).toBe(false);
+      expect(repasseValidoParaAcao(lanc("aguardando"), a, "outra")).toBe(false);
+    }
   });
 });
 

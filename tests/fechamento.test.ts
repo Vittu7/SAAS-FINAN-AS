@@ -9,6 +9,7 @@ import {
   statusDoMes,
   travaDoLancamento,
   travaDoEstorno,
+  travaDoReconhecimento,
   validarMotivo,
   verificarAlteracao,
   type EstadoFechamento,
@@ -141,5 +142,41 @@ describe("verificarAlteracao: todas as formas de mexer num mês fechado", () => 
   });
   it("virada do mês usa o horário de Brasília (00:30 UTC de 1/11 ainda é outubro)", () => {
     expect(verificarAlteracao({ tipo: "estornar", itens: [{ owner_id: "vitu", responsavel_id: "x", repasse_pago: true, repasse_pago_em: "2026-11-01T00:30:00Z" }] }, ctx)).toMatch(/mês fechado/);
+  });
+});
+
+describe("confirmar/estornar repasse: o mês ORIGINAL da despesa não pode estar fechado para o responsável", () => {
+  // Gisa fechou outubro; Vitu (autor) tenta confirmar ou estornar o repasse de uma despesa de outubro dela.
+  const ctx = {
+    estado: est(["2026-09"]),
+    porPessoa: new Map([["vitu", new Set(["2026-09"])], ["gisa", new Set(["2026-09", "2026-10"])]]),
+    hoje: HOJE,
+    meuId: "vitu",
+    nomes: new Map([["vitu", "Vitu"], ["gisa", "Gisa"]]),
+  };
+  const despesa = (mes: string, extra: Record<string, unknown> = {}) => ({ mes, owner_id: "vitu", responsavel_id: "gisa", ...extra });
+  it("travaDoReconhecimento só olha o responsável e o mês original", () => {
+    expect(travaDoReconhecimento(despesa("2026-10"), ctx.porPessoa)).toEqual({ travado: true, quem: ["gisa"] });
+    expect(travaDoReconhecimento(despesa("2026-11"), ctx.porPessoa).travado).toBe(false);
+    // o mês de quem lançou não bloqueia o reconhecimento no responsável
+    expect(travaDoReconhecimento({ mes: "2026-10", owner_id: "gisa", responsavel_id: "vitu" }, new Map([["gisa", new Set(["2026-10"])]])).travado).toBe(false);
+    // despesa própria não passa por repasse
+    expect(travaDoReconhecimento({ mes: "2026-10", owner_id: "gisa", responsavel_id: "gisa" }, ctx.porPessoa).travado).toBe(false);
+  });
+  it("confirmar o recebimento de despesa de mês fechado do responsável: bloqueado, pedindo para reabrir", () => {
+    expect(verificarAlteracao({ tipo: "confirmar", itens: [despesa("2026-10")] }, ctx)).toMatch(/Gisa já fechou outubro.*reabrir/);
+    expect(verificarAlteracao({ tipo: "confirmar", itens: [despesa("2026-11"), despesa("2026-12")] }, ctx)).toBeNull();
+  });
+  it("estornar também é bloqueado pelo mês original, mesmo que o mês da confirmação esteja aberto", () => {
+    const confirmado = { repasse_pago: true, repasse_pago_em: "2026-12-01T12:00:00Z" };
+    expect(verificarAlteracao({ tipo: "estornar", itens: [despesa("2026-10", confirmado)] }, ctx)).toMatch(/Gisa já fechou outubro/);
+    expect(verificarAlteracao({ tipo: "estornar", itens: [despesa("2026-11", confirmado)] }, ctx)).toBeNull();
+  });
+  it("em lote basta um item de mês fechado para bloquear tudo", () => {
+    expect(verificarAlteracao({ tipo: "confirmar", itens: [despesa("2026-11"), despesa("2026-10")] }, ctx)).toMatch(/outubro/);
+  });
+  it("vale igual para qualquer par de integrantes (sem exceção por pessoa)", () => {
+    const inverso = { ...ctx, meuId: "gisa", porPessoa: new Map([["vitu", new Set(["2026-10"])], ["gisa", new Set<string>()]]) };
+    expect(verificarAlteracao({ tipo: "confirmar", itens: [{ mes: "2026-10", owner_id: "gisa", responsavel_id: "vitu" }] }, inverso)).toMatch(/Vitu já fechou outubro/);
   });
 });

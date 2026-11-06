@@ -75,15 +75,35 @@ export function vencimentoDaFatura(mes: string, dia: number | null | undefined):
   return `${mes}-${String(Math.min(d, ultimo)).padStart(2, "0")}`;
 }
 
-export type FaturaAberta = { cartao: string; mes: string; total: number; pago: number; restante: number };
+export type FaturaAberta = {
+  cartao: string;
+  mes: string;
+  total: number;
+  pago: number;
+  restante: number;
+  /** Só com `meuId`: a MINHA parte do que falta pagar (compras em que eu sou o responsável), proporcional ao pago */
+  restanteProprio?: number;
+};
 
 /**
  * Faturas com valor a pagar (informativo, para o bloco "Ainda vai sair" do Resumo).
  * A conta fixa pendente lançada no cartão fica de fora: ela já aparece como conta pendente e só entra na fatura
  * quando é marcada como paga. Assim o mesmo valor nunca aparece duas vezes.
+ *
+ * - `ateData` (AAAA-MM-DD): só pagamentos até essa data contam. Assim um mês já visto nunca é recalculado por um
+ *   pagamento feito depois dele.
+ * - `meuId`: acrescenta `restanteProprio`, a parte da fatura que é despesa minha (a fatura inteira inclui o que os
+ *   outros integrantes usaram no meu cartão; essa parte é deles e volta por repasse).
  */
-export function faturasEmAberto(estado: Estado, cartoes: string[], pagamentos: PagamentoFatura[], meses: string[]): FaturaAberta[] {
+export function faturasEmAberto(
+  estado: Estado,
+  cartoes: string[],
+  pagamentos: PagamentoFatura[],
+  meses: string[],
+  opts: { meuId?: string | null; ateData?: string } = {},
+): FaturaAberta[] {
   const lista: FaturaAberta[] = [];
+  const validos = opts.ateData ? pagamentos.filter((p) => p.data <= opts.ateData!) : pagamentos;
   for (const cartao of cartoes) {
     for (const mes of meses) {
       const pendentes = estado.contas
@@ -91,11 +111,31 @@ export function faturasEmAberto(estado: Estado, cartoes: string[], pagamentos: P
         .reduce((s, c) => s + num(c.valor), 0);
       const total = arred(calcularFatura(estado, cartao, mes, 0).total - pendentes);
       if (total <= 0) continue;
-      const r = resumoFatura(total, pagamentosDaFatura(pagamentos, cartao, mes));
-      if (r.restante > 0) lista.push({ cartao, mes, total: r.total, pago: r.pago, restante: r.restante });
+      const r = resumoFatura(total, pagamentosDaFatura(validos, cartao, mes));
+      if (r.restante <= 0) continue;
+      const fatura: FaturaAberta = { cartao, mes, total: r.total, pago: r.pago, restante: r.restante };
+      if (opts.meuId) {
+        // Itens do meu cartão (lançados por mim); conta fixa pendente fica de fora, como acima
+        const meus = itensDaFaturaDoUsuario(estado, cartao, mes, opts.meuId);
+        const totalMeus = meus.reduce((s, x) => s + x.valor, 0);
+        const proprios = meus.filter((x) => x.responsavelId === opts.meuId).reduce((s, x) => s + x.valor, 0);
+        const restanteMeus = Math.max(0, totalMeus - r.pago);
+        fatura.restanteProprio = totalMeus > 0 ? arred((restanteMeus * proprios) / totalMeus) : 0;
+      }
+      lista.push(fatura);
     }
   }
   return lista;
+}
+
+/** Itens de uma fatura lançados pelo usuário (dono do cartão), sem conta fixa pendente: valor e responsável. */
+function itensDaFaturaDoUsuario(estado: Estado, cartao: string, mes: string, meuId: string): { valor: number; responsavelId: string }[] {
+  const dele = (i: { owner_id?: unknown }) => String(i.owner_id ?? "") === meuId;
+  const resp = (i: { responsavel_id?: unknown; owner_id?: unknown }) => String(i.responsavel_id ?? i.owner_id ?? "");
+  const parcelas = (estado.cartao as Item[]).filter((i) => i.cartao === cartao && i.mes === mes && dele(i));
+  const compras = (estado.extrato as Item[]).filter((i) => i.pagamento === cartao && i.mes === mes && !ehEntrada(i) && dele(i));
+  const contas = (estado.contas as Item[]).filter((i) => (i.formaPagamento || i.forma_pagamento) === cartao && i.mes === mes && i.pago && dele(i));
+  return [...parcelas, ...compras, ...contas].map((i) => ({ valor: num(i.valor), responsavelId: resp(i) }));
 }
 
 const nomeDoCartao = (origem: "extrato" | "cartao" | "contas", i: Item): string =>

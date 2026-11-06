@@ -165,6 +165,26 @@ export function marcarForaDaVisao<T extends Item>(item: T, escopo: Set<string> |
   return { ...item, foraDoMeuSaldo: true };
 }
 
+/**
+ * Despesa que OUTRO integrante lançou e atribuiu a mim, cujo repasse ainda não foi concluído.
+ * Ela só entra no meu financeiro quando o autor confirma o recebimento do repasse (no mês original da despesa).
+ * Pendente e "repassado, aguardando confirmação" ainda não contam. Vale igual para todos os integrantes.
+ */
+export const aguardandoRepasseDoResponsavel = (item: Item, meuId: string | null | undefined): boolean =>
+  Boolean(meuId) &&
+  item.tipo !== "entrada" &&
+  !item.repasseSintetico &&
+  Boolean(item.owner_id) &&
+  Boolean(item.responsavel_id) &&
+  String(item.owner_id) !== String(item.responsavel_id) &&
+  String(item.responsavel_id) === String(meuId) &&
+  !(item.repasse_pago ?? item.repassePago);
+
+/** Token da visão individual (não é um nome, para não confundir com um membro de mesmo nome). */
+export const TOKEN_EU = "__EU__";
+/** O financeiro individual mostra só o próprio usuário; não há filtro por outros membros. Despesa dividida vive em Repasses. */
+export const VISAO_SOMENTE_EU: string[] = [TOKEN_EU];
+
 export const PREFIXO_REPASSE = "repasse:";
 
 /**

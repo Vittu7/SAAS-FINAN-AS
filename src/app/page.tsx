@@ -15,6 +15,8 @@ import ExtratoTable from "@/components/ExtratoTable";
 import ExtratoGeral from "@/components/ExtratoGeral";
 import ResponsavelPanel from "@/components/ResponsavelPanel";
 import PainelResumo from "@/components/resumo/PainelResumo";
+import FinanceiroGrupoCard, { SeletorVisaoFinanceira, type VisaoFinanceira } from "@/components/resumo/FinanceiroGrupoCard";
+import { financeiroDoGrupo } from "@/lib/financeiroGrupo";
 import Pendencias from "@/components/resumo/Pendencias";
 import { AvisoMesNaoAberto, ConferenciaFechamento, FaixaFechamento, HistoricoFechamento, ListaMeses, ReabrirMes, SeletorMes, type AvisoConferencia } from "@/components/fechamento/Fechamento";
 import { useFechamentos } from "@/hooks/useFechamentos";
@@ -33,7 +35,7 @@ import GuiaInicial, { type PassoGuia } from "@/components/GuiaInicial";
 import TelaGrupo from "@/components/TelaGrupo";
 import { calcularPainel, serieEntradasSaidas, type ModoSaldo } from "@/lib/painel";
 import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
-import { autorNaVisao, entradasDeRepasse, filtrarGrupoPorPessoas, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, repassesDoMes, resumoRepasses, saidasDeRepasse } from "@/lib/grupo";
+import { TOKEN_EU, VISAO_SOMENTE_EU, aguardandoRepasseDoResponsavel, autorNaVisao, filtrarGrupoPorPessoas, idsDaSelecao, lancamentosDoGrupo, marcarForaDaVisao, repassesDoMes, resumoRepasses } from "@/lib/grupo";
 import TelaAjuda from "@/components/TelaAjuda";
 import CadastrarCartaoModal from "@/components/CadastrarCartaoModal";
 import { ICONE_ABA } from "@/components/icons";
@@ -55,7 +57,6 @@ import RepasseTravadoModal from "@/components/RepasseTravadoModal";
 import type { LancGrupo } from "@/lib/grupo";
 import Sidebar from "@/components/Sidebar";
 import FiltrosLancamentos, { FILTROS_INICIAIS, type FiltrosLancamentoState } from "@/components/FiltrosLancamentos";
-import FiltroResponsaveis, { TOKEN_EU } from "@/components/FiltroResponsaveis";
 import { ordenarPorValor } from "@/lib/extrato";
 import { dataDoItem } from "@/lib/datas";
 import { arred } from "@/lib/calculos";
@@ -85,7 +86,7 @@ export default function Home() {
 
   const [verificandoAuth, setVerificandoAuth] = useState(true);
   const [modalGrupoAberto, setModalGrupoAberto] = useState(false);
-  const [pessoasSel, setPessoasSel] = useState<string[]>([TOKEN_EU]); // Privacidade: começa mostrando só os seus registros
+  const pessoasSel = VISAO_SOMENTE_EU; // Privacidade: o financeiro individual mostra só os registros do próprio usuário
   const [sidebarExpandida, setSidebarExpandida] = useState(true);
   const [mes, setMes] = useState("");
   const [aba, setAba] = useState<AbaId>("inicio");
@@ -96,6 +97,7 @@ export default function Home() {
   const [recentes, setRecentes] = useState<string[]>([]);
   const [detalheExtrato, setDetalheExtrato] = useState<TipoDetalhe | null>(null);
   const [modoSaldo, setModoSaldo] = useState<ModoSaldo>("total"); // Resultado do mês x Total disponível
+  const [visaoFin, setVisaoFin] = useState<VisaoFinanceira>("pessoal"); // Meu financeiro x Financeiro do grupo (duas opções fixas)
 
   // Permite abrir direto uma aba (ex.: /?aba=ajustes&secao=perfil, vindo da antiga página de perfil)
   useEffect(() => {
@@ -169,17 +171,15 @@ export default function Home() {
   useDestacarLancamento(foco, () => setFoco(null));
   const verLancamento = (l: LancamentoBloqueador) => {
     setModalGrupoAberto(false);
-    setPessoasSel([]);
     setFiltros(FILTROS_INICIAIS);
     if (l.mes) setMes(l.mes);
     irPara(ABA_DO_LANCAMENTO[l.tabela]);
     setFoco({ tabela: l.tabela, id: l.id, mes: l.mes, n: Date.now() });
   };
 
-  // "Ir para Repasses" na orientação de repasse confirmado: abre Grupo → Repasses no mês do repasse, mostra todo o
+  // "Ir para Repasses" na orientação de repasse confirmado: abre Grupo → Repasses no mês do repasse
   // grupo e destaca a linha em "Concluídos". Não estorna nada: o estorno é feito pela pessoa, com confirmação.
   const irParaRepasses = (l: LancGrupo | null) => {
-    setPessoasSel([]);
     if (l?.mes) setMes(l.mes);
     setGrupoSub("repasses");
     irPara("grupo");
@@ -219,19 +219,19 @@ export default function Home() {
   const estadoFiltrado = useMemo(() => {
     // O que alguém da visão lançou para uma pessoa fora dela vira "adiantado" (foraDoMeuSaldo) e o repasse
     // concluído volta ao saldo de quem recebeu. Vale para "Somente eu" e para qualquer pessoa filtrada.
-    const nomesSel = pessoasSel.filter((t) => t !== TOKEN_EU);
+    // Despesa que outro integrante lançou para mim só entra no meu financeiro quando o autor confirma o recebimento do
+    // repasse (a partir do mês de corte). Pendente e "repassado" continuam só na tela de Repasses.
     const daVisao = (lista: any[]) =>
-      lista.filter((item) => passaFiltro(item) || autorNaVisao(item, escopoPessoas)).map((item) => marcarForaDaVisao(item, escopoPessoas));
+      lista
+        .filter((item) => passaFiltro(item) || autorNaVisao(item, escopoPessoas))
+        .filter((item) => !(String(item.mes) >= MES_CORTE_CAIXA && aguardandoRepasseDoResponsavel(item, userId)))
+        .map((item) => marcarForaDaVisao(item, escopoPessoas));
     const filtrado = {
       extrato: daVisao(estado.extrato),
       cartao: daVisao(estado.cartao),
       contas: daVisao(estado.contas),
     };
-    // Repasse confirmado = entrada para quem lançou (a despesa continua só no resumo do responsável)
-    const repasses = entradasDeRepasse(filtrado);
-    // Repasse confirmado = saída ("Repasse enviado") para quem deve; a despesa já está no resumo dele
-    const enviados = saidasDeRepasse(filtrado, { meuId: userId || "", incluiEu: pessoasSel.includes(TOKEN_EU), nomesSelecionados: nomesSel });
-    return { ...estado, ...filtrado, extrato: [...filtrado.extrato, ...repasses, ...enviados] };
+    return { ...estado, ...filtrado };
   }, [estado, passaFiltro, escopoPessoas, pessoasSel, userId, pessoaEu?.nome]);
 
   const arraysMensais = useMemo(
@@ -257,8 +257,6 @@ export default function Home() {
       if (aba === "extrato" && filtros.tipo !== "todos" && filtros.tipo !== origem) return false;
       const descricao = String(item.descricao || item.nome || "").toLocaleLowerCase("pt-BR");
       if (filtros.busca && !descricao.includes(filtros.busca.trim().toLocaleLowerCase("pt-BR"))) return false;
-      if (filtros.autoria === "mim" && item.owner_id && item.owner_id !== userId) return false;
-      if (filtros.autoria === "grupo" && !(item.owner_id && item.owner_id !== userId)) return false;
       if (filtros.categoria && item.categoria !== filtros.categoria) return false;
       const pagamento = item.pagamento || item.forma_pagamento || item.cartao || "";
       if (filtros.pagamento && pagamento !== filtros.pagamento) return false;
@@ -324,8 +322,9 @@ export default function Home() {
   // ---- Novo Resumo: gráfico e faturas em aberto (informativo) ----
   const serieResumo = useMemo(() => (mes ? serieEntradasSaidas(estadoFiltrado, mes) : []), [estadoFiltrado, mes]);
   const faturasAbertas = useMemo(
-    () => (!mes || !(pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU)) ? [] : faturasEmAberto(estado, cartoesCredito, pagamentosFatura, [addMeses(mes, -1), mes])),
-    [estado, cartoesCredito, pagamentosFatura, mes, pessoasSel],
+    // Só pagamentos até o fim do mês visto (um mês passado não é recalculado por pagamento posterior) e a minha parte da fatura
+    () => (!mes || !(pessoasSel.length === 0 || pessoasSel.includes(TOKEN_EU)) ? [] : faturasEmAberto(estado, cartoesCredito, pagamentosFatura, [addMeses(mes, -1), mes], { meuId: userId, ateData: `${mes}-31` })),
+    [estado, cartoesCredito, pagamentosFatura, mes, pessoasSel, userId],
   );
 
   // ---- Fechamento mensal (fica inativo enquanto a migração supabase-18 não existir no banco) ----
@@ -393,9 +392,10 @@ export default function Home() {
     },
     atualizarRepasses: (...a: Parameters<typeof loja.atualizarRepasses>) => {
       const [itens, acaoRep] = a;
-      if (acaoRep === "reabrir") {
+      if (acaoRep === "reabrir" || acaoRep === "concluir") {
+        // Confirmar e estornar reconhecem/desfazem a despesa do responsável no mês original: mês fechado dele bloqueia
         const lista = itens.map((i) => achar(i.origem, i.id)).filter((x): x is ItemLanc => Boolean(x));
-        if (barrar({ tipo: "estornar", itens: lista }, "Não foi possível estornar")) return Promise.resolve(false);
+        if (acaoRep === "reabrir" ? barrar({ tipo: "estornar", itens: lista }, "Não foi possível estornar") : barrar({ tipo: "confirmar", itens: lista }, "Não foi possível confirmar o recebimento")) return Promise.resolve(false);
       }
       return loja.atualizarRepasses(...a);
     },
@@ -412,7 +412,6 @@ export default function Home() {
     const ok = podeFechar(mesTrab, fech.estado, hoje);
     if (!ok.ok) { avisos.erro("Ainda não dá para fechar", ok.motivo); return; }
     // O fechamento é pessoal: a conferência usa a visão "Somente eu" do mês em aberto
-    setPessoasSel([TOKEN_EU]);
     setMes(mesTrab);
     setAba("inicio");
     setAvisoMes(null);
@@ -508,18 +507,9 @@ export default function Home() {
   const vazioDoModulo = aba === "cartao" ? semParcelas : aba === "contas" ? semContas : aba === "extrato" || aba === "graficos" ? nadaVisivel : aba === "fatura" ? !temCartao : false;
   const dica = DICAS_MODULO[aba];
   const nomeUsuario = membros.find((m) => m.id === userId)?.nome?.split(" ")[0];
-  // O filtro de responsáveis aparece em todo módulo com lançamentos por pessoa (inclusive Grupo familiar e Faturas).
-  // Fica de fora só onde não há responsável: Configurações, Investimentos (caixinhas) e Ajuda.
-  const mostrarVisualizacao = aba !== "ajustes" && aba !== "investimentos" && aba !== "ajuda";
   // Filtro de responsáveis: pílula fixa no topo, junto do seletor de mês (cabeçalho fixo no celular e barra fixa no desktop)
-  const filtroResp = mostrarVisualizacao && membros.length > 1 ? (
-    <FiltroResponsaveis
-      eu={{ nome: pessoaEu?.nome || "Eu", avatar: pessoaEu?.avatar, cor: pessoaEu?.cor }}
-      outros={membros.filter((m) => m.id !== userId).map((m) => ({ nome: m.nome, avatar: m.avatar, cor: m.cor }))}
-      selecionados={pessoasSel}
-      onChange={setPessoasSel}
-    />
-  ) : null;
+  // Sem filtro por pessoa: o financeiro individual mostra só o que é do próprio usuário (despesa dividida = Repasses)
+  const filtroResp = null;
   const pessoasFiltradas = idsDaSelecao(pessoasSel, membros, userId || "", TOKEN_EU);
   const mostrarMesNoCabecalho = aba !== "ajustes" && aba !== "fatura" && aba !== "investimentos" && aba !== "ajuda";
   const rotuloVisualizacao =
@@ -618,7 +608,13 @@ export default function Home() {
             // Análises e histórico (evolução dos meses, "como chegamos ao disponível") ficam em Gráficos e relatórios.
             <div className="@container grid gap-5">
               {mostrarGuia && <GuiaInicial passos={passosGuia} puladas={puladasGuia} onPular={onb.pularEtapa} onRetomar={onb.retomarEtapa} onOcultar={() => onb.atualizar({ guiaOculto: true })} onAjuda={() => abrirAjuda()} />}
-              {dashboard.preferencias.resumo && (
+              {dashboard.preferencias.resumo && painel && userId && (
+                <div className="flex justify-center @xl:justify-start"><SeletorVisaoFinanceira visao={visaoFin} onVisao={setVisaoFin} /></div>
+              )}
+              {dashboard.preferencias.resumo && visaoFin === "grupo" && painel && userId && (
+                <FinanceiroGrupoCard g={financeiroDoGrupo(painel, estado, userId)} onAbrirRepasses={() => abrirGrupo("repasses")} />
+              )}
+              {dashboard.preferencias.resumo && visaoFin === "pessoal" && (
                 <PainelResumo
                   painel={painel}
                   mesCorrente={mesCorrente}
@@ -683,7 +679,6 @@ export default function Home() {
               <FiltrosLancamentos
                 filtros={filtros}
                 setFiltros={setFiltros}
-                mostrarAutoria={membros.length > 1}
                 mes={mes}
                 categorias={opcoesFiltro.categorias}
                 pagamentos={opcoesFiltro.pagamentos}

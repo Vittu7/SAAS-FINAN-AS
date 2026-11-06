@@ -33,7 +33,7 @@ describe("painel: resultado do mês x total disponível", () => {
     expect(concluido).toMatchObject({ entradas: 100, resultadoMes: 100, repassesRecebidos: 100, aReceber: 0, saldoAnterior: 900, totalDisponivel: 1000 });
   });
 
-  it("repasse concluído só conta a partir do mês da conclusão", () => {
+  it("repasse concluído só conta a partir do mês da conclusão (outubro nunca é recalculado)", () => {
     expect(calcularPainel(somenteEu(compra(pago)), { mes: "2026-10" }).totalDisponivel).toBe(900);
     expect(calcularPainel(somenteEu(compra(pago)), { mes: "2026-12" })).toMatchObject({ repassesRecebidos: 0, saldoAnterior: 1000, totalDisponivel: 1000 });
   });

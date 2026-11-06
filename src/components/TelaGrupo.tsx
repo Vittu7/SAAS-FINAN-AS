@@ -8,16 +8,14 @@ import { useMovimentosConta } from "@/hooks/useMovimentosConta";
 import { usePagamentosFatura } from "@/hooks/usePagamentosFatura";
 import { calcularSaldoConta, tipoDaConta } from "@/lib/contas";
 import { ArrowRight, Check, HandCoins, Lock, Settings2, Undo2, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import Avatar, { AvatarPilha } from "@/components/Avatar";
 import AutorTag from "@/components/AutorTag";
 import EstadoVazio from "@/components/EstadoVazio";
 import PessoaIcone from "@/components/PessoaIcone";
 import { Ico, ICONE_ABA, ICONES } from "@/components/icons";
 import { brl, rotuloMes } from "@/lib/finance";
-import { avisarPerfilAtualizado } from "@/lib/perfil";
 import { arred } from "@/lib/calculos";
-import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, repasseValidoParaAcao, repassesDoMes, resumoPorMembro, type FiltroGrupo, type LancGrupo } from "@/lib/grupo";
+import { FILTRO_GRUPO_INICIAL, filtrarGrupo, filtrarGrupoPorPessoas, lancamentosDoGrupo, repasseValidoParaAcao, repassesDoMes, resumoRepasses, type FiltroGrupo, type LancGrupo } from "@/lib/grupo";
 import type { Membro } from "@/hooks/useFinanceStore";
 
 type Sub = "resumo" | "lancamentos" | "repasses";
@@ -476,62 +474,48 @@ function AbaLancamentos({ lista, membros, meuId, mes, onRepasse }: { lista: Lanc
   );
 }
 
-/* ---------- Resumo por membro ---------- */
-function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Membro[]; meuId: string; mes: string }) {
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState("");
-  const resumos = useMemo(() => resumoPorMembro(dados, membros, mes, { meuId }), [dados, membros, mes, meuId]);
+/* ---------- Resumo dos repasses (não mistura saldos individuais) ---------- */
+type LadoResumo = ReturnType<typeof resumoRepasses>["aReceber"];
 
-  const alternarMeuResumo = async (visivel: boolean) => {
-    setSalvando(true);
-    setErro("");
-    const { data, error } = await supabase.from("perfis").update({ resumo_visivel: visivel }).eq("id", meuId).select("id").maybeSingle();
-    setSalvando(false);
-    if (error || !data) {
-      const msg = /resumo_visivel/.test(error?.message || "") ? "Execute o script supabase-04-grupo-repasses.sql no Supabase para habilitar esta opção." : "Não foi possível salvar sua preferência.";
-      setErro(msg);
-      avisos.erro("Preferência não salva", msg);
-      return;
-    }
-    avisarPerfilAtualizado();
-    avisos.sucesso(visivel ? "Seu resumo agora aparece para o grupo" : "Seu resumo ficou oculto para o grupo");
-  };
+function CartaoLado({ titulo, dica, lado, tom }: { titulo: string; dica: string; lado: LadoResumo; tom: "pos" | "neg" }) {
+  const aguardando = lado.aguardando;
+  const pendente = arred(lado.agora + lado.aVencer - aguardando);
+  const cor = tom === "pos" ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400";
+  return (
+    <article className="card-glass space-y-4 p-5">
+      <header><p className="text-base font-bold">{titulo}</p><p className="text-xs text-muted">{dica}</p></header>
+      <dl className="grid grid-cols-3 gap-2 text-sm">
+        <div className="rounded-xl bg-amber-500/10 p-3"><dt className="text-xs text-muted">Pendentes</dt><dd className={`font-semibold tabular-nums ${cor}`}>{brl(pendente)}</dd></div>
+        <div className="rounded-xl bg-sky-500/10 p-3"><dt className="text-xs text-muted">Aguardando</dt><dd className="font-semibold tabular-nums text-sky-700 dark:text-sky-400">{brl(aguardando)}</dd></div>
+        <div className="rounded-xl bg-emerald-500/10 p-3"><dt className="text-xs text-muted">Concluídos</dt><dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{brl(lado.recebido)}</dd></div>
+      </dl>
+      {lado.pessoas.length > 0 && (
+        <ul className="divide-y divide-line text-sm">
+          {lado.pessoas.map((p) => (
+            <li key={p.pessoaId} className="flex items-center gap-3 py-2">
+              <Avatar src={p.avatar} nome={p.nome} cor={p.cor} tamanho="sm" />
+              <span className="min-w-0 flex-1 truncate font-medium">{p.nome}</span>
+              <span className="text-right text-xs tabular-nums text-muted">
+                Pend. {brl(arred(p.agora + p.aVencer - p.aguardando))} · Aguard. {brl(p.aguardando)} · Concl. {brl(p.recebido)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
 
+function AbaResumo({ dados, meuId, mes }: { dados: Dados; meuId: string; mes: string }) {
+  // Só repasses em que eu sou parte (quem lançou ou quem deve): nenhum saldo, entrada ou despesa de outro membro aparece aqui.
+  const r = useMemo(() => resumoRepasses(repassesDoMes(lancamentosDoGrupo(dados), mes), meuId), [dados, mes, meuId]);
   return (
     <div className="space-y-4">
-      <p className="px-1 text-sm text-muted">Resumo de {rotuloMes(mes)} por pessoa. Para os outros membros, considera os lançamentos que você tem permissão para ver.</p>
+      <p className="px-1 text-sm text-muted">Repasses de {rotuloMes(mes)}: pendentes e concluídos. O seu financeiro individual não se mistura com o dos outros membros.</p>
       <div className="anim-stagger grid gap-4 md:grid-cols-2">
-        {membros.map((m) => {
-          const eu = m.id === meuId;
-          const r = resumos.find((x) => x.id === m.id)!;
-          const oculto = !eu && !m.resumoVisivel;
-          return (
-            <article key={m.id} className="card-glass space-y-4 p-5">
-              <header className="flex items-center gap-3">
-                <Avatar src={m.avatar} nome={m.nome} cor={m.cor} tamanho="lg" anel />
-                <div className="min-w-0"><p className="truncate text-base font-bold">{m.nome}{eu && <span className="ml-2 text-xs font-medium text-accent">você</span>}</p><p className="text-xs text-muted">{m.cargo === "gestor" || m.cargo === "admin" ? "Gestor" : m.convidado ? "Convidado" : "Membro"}</p></div>
-              </header>
-              {oculto ? (
-                <p className="flex items-center gap-2 rounded-xl bg-background p-4 text-sm text-muted"><Ico icon={Lock} size={16} />{m.nome} escolheu não exibir o resumo financeiro.</p>
-              ) : (
-                <dl className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-xl bg-emerald-500/10 p-3"><dt className="text-xs text-muted">Entradas</dt><dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{brl(r.entradas)}</dd></div>
-                  <div className="rounded-xl bg-rose-500/10 p-3"><dt className="text-xs text-muted">Despesas</dt><dd className="font-semibold tabular-nums text-rose-700 dark:text-rose-400">{brl(r.saidas)}</dd></div>
-                  <div className="rounded-xl bg-background p-3 ring-1 ring-line"><dt className="text-xs text-muted">Saldo restante</dt><dd className={`font-semibold tabular-nums ${r.saldo < 0 ? "text-rose-700 dark:text-rose-400" : ""}`}>{r.saldo < 0 ? "− " : ""}{brl(Math.abs(r.saldo))}</dd></div>
-                  <div className="rounded-xl bg-amber-500/10 p-3"><dt className="text-xs text-muted">Repasses</dt><dd className="text-xs font-semibold tabular-nums">Receber {brl(r.aReceber)}<br />Repassar {brl(r.aRepassar)}{(r.aReceberAguardando > 0 || r.aRepassarAguardando > 0) && <span className="mt-1 block font-medium text-sky-700 dark:text-sky-400">Aguardando confirmação {brl(r.aReceberAguardando + r.aRepassarAguardando)}</span>}</dd></div>
-                </dl>
-              )}
-              {eu && (
-                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-line p-3 text-sm">
-                  <span><span className="block font-medium">Mostrar meu resumo ao grupo</span><span className="block text-xs text-muted">Desligado, os outros não veem suas entradas, despesas e saldo aqui.</span></span>
-                  <input type="checkbox" role="switch" checked={m.resumoVisivel} disabled={salvando} onChange={(e) => alternarMeuResumo(e.target.checked)} className="size-5 shrink-0 accent-[var(--accent)]" />
-                </label>
-              )}
-            </article>
-          );
-        })}
+        <CartaoLado titulo="A receber" dica="Despesas que você pagou e outra pessoa deve" lado={r.aReceber} tom="pos" />
+        <CartaoLado titulo="A repassar" dica="Despesas que outra pessoa pagou e você deve" lado={r.aRepassar} tom="neg" />
       </div>
-      {erro && <p role="alert" className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-400">{erro}</p>}
     </div>
   );
 }
@@ -539,14 +523,13 @@ function AbaResumo({ dados, membros, meuId, mes }: { dados: Dados; membros: Memb
 /* ---------- Tela ---------- */
 export default function TelaGrupo({
   dados, membros, userId, mes, onRepasse, onGerenciar, onNova, abaInicial = "resumo", pessoasFiltradas = null,
-}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub; /** ids das pessoas do filtro de responsáveis; null = todo o grupo */ pessoasFiltradas?: Set<string> | null }) {
+}: { dados: Dados; membros: Membro[]; userId: string | null; mes: string; onRepasse: Repasse; onGerenciar: () => void; onNova: () => void; abaInicial?: Sub; /** isolamento: ids visíveis (só o próprio usuário); repasses entre terceiros não aparecem */ pessoasFiltradas?: Set<string> | null }) {
   const [sub, setSub] = useState<Sub>(abaInicial);
   const meuId = userId || "";
   // Lançamentos e repasses mostram só o mês selecionado (o mês atual, por padrão), sem misturar períodos.
   // Os meses anteriores continuam guardados: basta trocar o mês no topo para consultar.
   const doGrupo = useMemo(() => filtrarGrupoPorPessoas(lancamentosDoGrupo(dados), pessoasFiltradas), [dados, pessoasFiltradas]);
   const lista = useMemo(() => repassesDoMes(doGrupo, mes), [doGrupo, mes]);
-  const membrosVisiveis = useMemo(() => (pessoasFiltradas ? membros.filter((m) => pessoasFiltradas.has(m.id)) : membros), [membros, pessoasFiltradas]);
   // Repasses: também só do mês selecionado. O que ficou em outros meses é só avisado (contagem), não misturado.
   const listaRepasses = lista;
   const repassesOutrosMeses = useMemo(() => ({ total: doGrupo.length - lista.length, abertos: doGrupo.filter((l) => l.mes !== mes && !l.repassePago).length }), [doGrupo, lista, mes]);
@@ -589,7 +572,7 @@ export default function TelaGrupo({
         <button type="button" role="tab" aria-selected={sub === "repasses"} onClick={() => setSub("repasses")} className={chip(sub === "repasses")}>Repasses{pendentes > 0 && <span className="ml-1.5 inline-grid min-w-5 place-items-center rounded-full bg-warn px-1.5 text-[11px] font-bold text-surface">{pendentes}</span>}</button>
       </div>
 
-      {sub === "resumo" && <AbaResumo dados={dados} membros={membrosVisiveis} meuId={meuId} mes={mes} />}
+      {sub === "resumo" && <AbaResumo dados={dados} meuId={meuId} mes={mes} />}
       {sub === "lancamentos" && <AbaLancamentos lista={lista} membros={membros} meuId={meuId} mes={mes} onRepasse={repasseComConta} />}
       {sub === "repasses" && <AbaRepasses lista={listaRepasses} mes={mes} outrosMeses={repassesOutrosMeses} meuId={meuId} membros={membros} ocupado={ocupado} onRepasse={repasseComConta} onEstornar={(ls) => setEstornando(ls)} onNova={onNova} />}
       {pedindoConta && (

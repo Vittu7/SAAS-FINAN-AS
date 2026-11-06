@@ -5,8 +5,9 @@ import { entradasDeRepasse, marcarForaDaVisao } from "../src/lib/grupo";
 import { ajusteDeFaturas, MES_CORTE_CAIXA, type PagamentoFatura } from "../src/lib/pagamentoFatura";
 
 /**
- * REGRA DE CAIXA DO CRÉDITO: o dinheiro só sai quando a fatura é paga; o repasse de compra no crédito só compensa
- * nos pagamentos da fatura (proporcional); débito/dinheiro seguem a data real do recebimento.
+ * REGRA DE COMPETÊNCIA DO CRÉDITO (a partir do mês de corte): a compra no cartão é despesa na compra e já reduz o
+ * Total disponível; pagar a fatura apenas liquida a obrigação e NUNCA desconta de novo. Repasse e adiantado para
+ * outro integrante são acertos: não mexem no meu disponível (aparecem no Financeiro do grupo).
  */
 const OUT = "2026-10";
 const NOV = "2026-11";
@@ -33,54 +34,51 @@ function painel(mes: string, o: Opcoes = {}) {
   });
 }
 
-describe("regra de caixa: compra própria no crédito", () => {
-  it("fatura aberta: o dinheiro não saiu, nem no mês da compra nem depois", () => {
-    expect(painel(OUT).totalDisponivel).toBe(1000);
-    expect(painel(NOV).totalDisponivel).toBe(1000);
+describe("competência: compra própria no crédito", () => {
+  it("a compra já reduz o disponível no mês dela, com a fatura aberta", () => {
+    expect(painel(OUT).totalDisponivel).toBe(800);
+    expect(painel(NOV).totalDisponivel).toBe(800);
   });
-  it("o resultado do mês continua por competência (a compra aparece nas saídas)", () => {
+  it("o resultado do mês é por competência e a fatura continua como compromisso (informativo)", () => {
     const p = painel(OUT);
     expect(p.saidas).toBe(200);
     expect(p.resultadoMes).toBe(800);
     expect(p.faturaEmAberto).toBe(200);
   });
-  it("fatura paga no mês seguinte: sai só em novembro, uma vez, e o saldo acumulado continua", () => {
+  it("pagar a fatura (mês seguinte ou mesmo mês) não desconta de novo: só liquida a obrigação", () => {
     const pagamentos = [pag(300, "2026-11-10")];
-    expect(painel(OUT, { pagamentos }).totalDisponivel).toBe(1000);
+    expect(painel(OUT, { pagamentos }).totalDisponivel).toBe(800);
     const nov = painel(NOV, { pagamentos });
-    expect(nov.faturasPagas).toBe(300);
-    expect(nov.totalDisponivel).toBe(700);
-    expect(painel(DEZ, { pagamentos }).totalDisponivel).toBe(700);
-  });
-  it("fatura paga no mesmo mês da compra: não muda nada em relação à compra à vista", () => {
-    expect(painel(OUT, { pagamentos: [pag(300, "2026-10-25")] }).totalDisponivel).toBe(700);
+    expect(nov.faturasPagas).toBe(300); // informativo: a saída efetiva da conta
+    expect(nov.totalDisponivel).toBe(800);
+    expect(painel(DEZ, { pagamentos }).totalDisponivel).toBe(800);
+    expect(painel(OUT, { pagamentos: [pag(300, "2026-10-25")] }).totalDisponivel).toBe(800);
   });
   it("sem mês de corte vale a regra antiga (compra própria sai na compra)", () => {
     expect(painel(OUT, { corte: null }).totalDisponivel).toBe(800);
   });
-  it("faturas anteriores ao corte ficam como estavam (histórico preservado)", () => {
+  it("meses anteriores ao corte ficam como estavam (histórico preservado)", () => {
     const antes = { cartao: [{ ...propria, mes: "2026-09" }, deX({ mes: "2026-09" })], extrato: [{ ...entrada, mes: "2026-09" }] };
     expect(painel("2026-09", antes).totalDisponivel).toBe(800);
     expect(painel(OUT, antes).totalDisponivel).toBe(800);
   });
 });
 
-describe("regra de caixa: repasse de compra de terceiros no crédito", () => {
+describe("competência: repasse e compra de terceiros no meu cartão", () => {
   const confirmadoEmOut = { cartao: [propria, deX(confirmado("2026-10-20"))] };
-  it("marcar como recebido NÃO entra no total enquanto a fatura não foi paga", () => {
-    expect(painel(OUT, confirmadoEmOut).totalDisponivel).toBe(1000);
-    expect(painel(NOV, confirmadoEmOut).totalDisponivel).toBe(1000);
+  it("a compra do outro integrante não é minha despesa e o repasse recebido não é entrada: o disponível não muda", () => {
+    expect(painel(OUT, confirmadoEmOut).totalDisponivel).toBe(800);
+    expect(painel(NOV, confirmadoEmOut).totalDisponivel).toBe(800);
+    expect(painel(NOV, confirmadoEmOut).entradas).toBe(0);
+    expect(painel(OUT).totalDisponivel).toBe(painel(OUT, confirmadoEmOut).totalDisponivel);
   });
-  it("entra no mês do pagamento da fatura, não no mês do clique", () => {
+  it("fatura paga + repasse confirmado em qualquer ordem nunca mexem no meu disponível", () => {
     const pagamentos = [pag(300, "2026-11-10")];
     const emDezembro = { cartao: [propria, deX(confirmado("2026-12-05"))], pagamentos };
     const emOutubro = { ...confirmadoEmOut, pagamentos };
-    // 1000 − 300 (fatura inteira) + 100 (repasse da compra de X)
-    expect(painel(NOV, emOutubro).totalDisponivel).toBe(800);
-    expect(painel(NOV, emOutubro).repassesRecebidos).toBe(100);
-    // Confirmado só em dezembro (depois do pagamento): novembro NÃO muda; o repasse entra em dezembro
-    expect(painel(NOV, emDezembro).totalDisponivel).toBe(700);
-    expect(painel(DEZ, emDezembro).totalDisponivel).toBe(800);
+    for (const c of [emOutubro, emDezembro, { pagamentos }, {}]) {
+      for (const mes of [OUT, NOV, DEZ, "2027-01"]) expect(painel(mes, c).totalDisponivel).toBe(800);
+    }
   });
   it("uma confirmação posterior nunca altera um mês já passado (fechamento)", () => {
     const pagamentos = [pag(300, "2026-11-10")];
@@ -94,29 +92,24 @@ describe("regra de caixa: repasse de compra de terceiros no crédito", () => {
     expect(mesEmBrasilia("2026-11-01T04:00:00Z")).toBe("2026-11");
     expect(mesEmBrasilia(null, "2026-09")).toBe("2026-09");
   });
-  it("pagamento parcial compensa proporcionalmente em cada pagamento, sem duplicar", () => {
-    const parcial = (pagamentos: PagamentoFatura[], mes: string) => painel(mes, { ...confirmadoEmOut, pagamentos });
+  it("pagamento parcial ou total da fatura, antes ou depois do repasse, dá sempre o mesmo disponível", () => {
     const p1 = pag(150, "2026-11-10");
     const p2 = pag(150, "2026-12-10");
-    expect(parcial([p1], NOV).totalDisponivel).toBe(900); // −150 + 50
-    expect(parcial([p1, p2], NOV).totalDisponivel).toBe(900);
-    expect(parcial([p1, p2], DEZ).totalDisponivel).toBe(800); // igual a pagar tudo de uma vez
-    expect(parcial([p1, p2], "2027-01").totalDisponivel).toBe(800);
+    for (const pagamentos of [[p1], [p1, p2]]) {
+      for (const mes of [NOV, DEZ, "2027-01"]) expect(painel(mes, { ...confirmadoEmOut, pagamentos }).totalDisponivel).toBe(800);
+    }
   });
-  it("repasse ainda não confirmado não compensa nada, mesmo com a fatura paga", () => {
-    expect(painel(NOV, { pagamentos: [pag(300, "2026-11-10")] }).totalDisponivel).toBe(700);
-  });
-  it("visão Todos: o repasse é interno e não aparece como entrada; o dinheiro sai só no pagamento", () => {
+  it("visão Todos: o gasto de cada responsável conta na compra; pagar a fatura não muda", () => {
     const pagamentos = [pag(300, "2026-11-10")];
-    expect(painel(OUT, { escopo: null, cartao: confirmadoEmOut.cartao }).totalDisponivel).toBe(1000);
+    expect(painel(OUT, { escopo: null, cartao: confirmadoEmOut.cartao }).totalDisponivel).toBe(700);
     const nov = painel(NOV, { escopo: null, cartao: confirmadoEmOut.cartao, pagamentos });
     expect(nov.totalDisponivel).toBe(700);
     expect(nov.repassesRecebidos).toBe(0);
   });
 });
 
-describe("regra de caixa: consistência interna", () => {
-  it("a composição soma exatamente o total e a identidade da sobra prevista fecha, em todos os meses", () => {
+describe("competência: consistência interna", () => {
+  it("a composição soma exatamente o total e sobraPrevista = totalDisponivel + faturasOutros, em todos os meses", () => {
     const cenarios: Opcoes[] = [
       { pagamentos: [pag(150, "2026-11-10"), pag(150, "2026-12-10")], cartao: [propria, deX(confirmado("2026-12-20"))] },
       { pagamentos: [pag(300, "2026-11-10")] },
@@ -125,22 +118,23 @@ describe("regra de caixa: consistência interna", () => {
     for (const c of cenarios) {
       for (const mes of [OUT, NOV, DEZ]) {
         const p = painel(mes, c);
+        expect(p.regraCompetencia).toBe(true);
         const soma = composicaoDoDisponivel(p, "mês anterior").reduce((s, l) => s + l.valor, 0);
         expect(Math.round(soma * 100) / 100).toBe(p.totalDisponivel);
-        const ident = p.totalDisponivel + p.previsao.receber - p.previsao.repassar + p.previsao.faturasOutros;
-        expect(Math.round(ident * 100) / 100).toBe(p.sobraPrevista);
+        expect(Math.round((p.totalDisponivel + p.previsao.faturasOutros) * 100) / 100).toBe(p.sobraPrevista);
       }
     }
   });
 });
 
-describe("regra de caixa: débito e dinheiro não mudam", () => {
+describe("competência: débito e dinheiro", () => {
   const debito = { id: "d1", mes: OUT, tipo: "saida", categoria: "Casa", valor: 300, pagamento: "Itaú Débito", owner_id: "eu", responsavel_id: "x", responsavel: "X", descricao: "Prestação" };
-  it("adiantado no débito sai no mês da despesa e o repasse volta na data real do recebimento", () => {
+  it("o que paguei por outro integrante não é despesa minha; o repasse recebido também não mexe no meu disponível", () => {
     const base = { extrato: [entrada, debito], cartao: [] as any[] };
-    expect(painel(OUT, base).totalDisponivel).toBe(700);
+    expect(painel(OUT, base).totalDisponivel).toBe(1000);
+    expect(painel(OUT, base).adiantado).toBe(300); // informativo: aparece no grupo
     const recebido = { extrato: [entrada, { ...debito, ...confirmado("2026-11-06") }], cartao: [] as any[] };
-    expect(painel(OUT, recebido).totalDisponivel).toBe(700);
+    expect(painel(OUT, recebido).totalDisponivel).toBe(1000);
     expect(painel(NOV, recebido).totalDisponivel).toBe(1000);
   });
 });
@@ -169,16 +163,16 @@ describe("ajusteDeFaturas: segurança", () => {
   });
 });
 
-describe("regra de caixa: parcela em forma que não é cartão de crédito cadastrado", () => {
-  const emDebito = { ...propria, id: "c9", cartao: "DEBITO" }; // sem fatura para pagar: o dinheiro saiu na compra
-  it("a partir do corte, a parcela sai do disponível na compra (como despesa comum)", () => {
+describe("competência: parcela em forma que não é cartão de crédito cadastrado", () => {
+  const emDebito = { ...propria, id: "c9", cartao: "DEBITO" };
+  it("a parcela sai do disponível na compra (como despesa comum)", () => {
     expect(painel(OUT, { cartao: [emDebito] }).totalDisponivel).toBe(800);
   });
   it("antes do corte nada muda (histórico preservado)", () => {
     const antes = { cartao: [{ ...emDebito, mes: "2026-09" }], extrato: [{ ...entrada, mes: "2026-09" }] };
     expect(painel("2026-09", antes).totalDisponivel).toBe(800);
   });
-  it("cartão de crédito cadastrado segue a regra de caixa", () => {
-    expect(painel(OUT, { cartao: [propria] }).totalDisponivel).toBe(1000);
+  it("cartão de crédito cadastrado também conta na compra", () => {
+    expect(painel(OUT, { cartao: [propria] }).totalDisponivel).toBe(800);
   });
 });

@@ -9,8 +9,6 @@ export type FiltrosLancamentoState = {
   pagamento: string;
   tipo: string;
   status: string;
-  /** Quem lançou: todos | mim (lançados por mim) | grupo (lançados por outros membros) */
-  autoria: "todos" | "mim" | "grupo";
   /** Ordenação: padrão, data, nome A→Z / Z→A, valor ou categoria */
   ordem: Ordem;
   /** Período dentro do mês (AAAA-MM-DD), vazio = sem limite */
@@ -27,7 +25,6 @@ export const FILTROS_INICIAIS: FiltrosLancamentoState = {
   pagamento: "",
   tipo: "todos",
   status: "todos",
-  autoria: "todos",
   ordem: "",
   dataDe: "",
   dataAte: "",
@@ -42,13 +39,11 @@ type Props = {
   pagamentos: string[];
   mostrarTipo?: boolean;
   mostrarStatus?: boolean;
-  /** Mostra os filtros "Lançados por mim / pelo grupo" (só faz sentido com mais de uma pessoa) */
-  mostrarAutoria?: boolean;
   /** Mês exibido (AAAA-MM): limita o seletor de datas */
   mes?: string;
 };
 
-/** Filtros de lista. Responsáveis não ficam aqui: o filtro de pessoas é único e global, no topo da tela. */
+/** Filtros de lista. Sem filtro por pessoa: a tela mostra só os lançamentos do próprio usuário; despesas divididas ficam em Repasses. */
 export default function FiltrosLancamentos({
   filtros,
   setFiltros,
@@ -56,15 +51,14 @@ export default function FiltrosLancamentos({
   pagamentos,
   mostrarTipo = false,
   mostrarStatus = false,
-  mostrarAutoria = false,
   mes,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const ativos = Object.entries(filtros).filter(([chave, valor]) =>
-    chave === "tipo" || chave === "status" || chave === "autoria" ? valor !== "todos" : Boolean(valor),
+    chave === "tipo" || chave === "status" ? valor !== "todos" : Boolean(valor),
   ).length;
 
-  const atualizar = (campo: Exclude<keyof FiltrosLancamentoState, "autoria">, valor: string) =>
+  const atualizar = (campo: keyof FiltrosLancamentoState, valor: string) =>
     setFiltros({ ...filtros, [campo]: valor } as FiltrosLancamentoState);
 
   const selectClass = "min-w-0 rounded-lg border border-line bg-background px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
@@ -86,13 +80,6 @@ export default function FiltrosLancamentos({
         </button>
       </div>
       <div className={`${aberto ? "grid" : "hidden"} mt-3 grid-cols-1 gap-3 sm:grid-cols-2 md:grid md:grid-cols-3 xl:grid-cols-6`}>
-        {mostrarAutoria && (
-          <div className="col-span-full flex gap-1 rounded-full bg-background p-1 ring-1 ring-line sm:w-fit" role="group" aria-label="Quem lançou">
-            {([["todos", "Todos"], ["mim", "Lançados por mim"], ["grupo", "Lançados pelo grupo"]] as const).map(([id, r]) => (
-              <button key={id} type="button" aria-pressed={filtros.autoria === id} onClick={() => setFiltros({ ...filtros, autoria: id })} className={`h-9 flex-1 rounded-full px-3 text-xs font-semibold transition sm:flex-none sm:px-4 ${filtros.autoria === id ? "bg-accent text-on-accent shadow-sm" : "text-muted"}`}>{r}</button>
-            ))}
-          </div>
-        )}
         <input
           type="search"
           value={filtros.busca}

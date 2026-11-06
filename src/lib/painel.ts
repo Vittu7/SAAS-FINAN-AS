@@ -17,10 +17,18 @@
  * - CAIXINHAS: aporte feito "pagando com o saldo da conta" tira dinheiro do disponível no mês do aporte (e o resgate
  *   devolvido a uma conta volta). Não é despesa nem receita: entradas, saídas e "sobra do mês" não mudam.
  * - Os saldos por conta (Saldos e limites) são outro controle: dinheiro de cada conta de débito do usuário.
+ *
+ * REGRA DE COMPETÊNCIA (meses a partir de `mesCorteCaixa`; antes do corte, tudo acima continua valendo):
+ * - Total disponível = saldo acumulado das MINHAS entradas − MINHAS despesas (crédito conta na compra; conta fixa
+ *   pendente já está separada). Pagar fatura, adiantar para outro integrante e receber/enviar repasse NÃO mexem nele:
+ *   cada valor é contado uma única vez, no mês da despesa. Repasse nunca é entrada nem despesa adicional.
+ * - Despesa que outro integrante lançou para mim só entra aqui quando o autor CONFIRMA o recebimento do repasse, no
+ *   mês original da despesa (ver aguardandoRepasseDoResponsavel). Pendente e "repassado" ainda não contam.
+ * - O que os integrantes usaram e devolveram aparece no Financeiro do grupo (financeiroGrupo.ts), não aqui.
  */
 import { arred, calcularMes, ehEntrada, mesEmBrasilia, semDuplicados } from "./calculos";
 import { addMeses } from "./finance";
-import { lancamentosDoGrupo } from "./grupo";
+import { aguardandoRepasseDoResponsavel, lancamentosDoGrupo } from "./grupo";
 import type { MovCaixinhaConta } from "./contas";
 import { ajusteDeFaturas, compraDeTerceirosNoCredito, type PagamentoFatura } from "./pagamentoFatura";
 
@@ -121,6 +129,10 @@ export type Painel = {
   totalDisponivel: number;
   /** Repasses do usuário (todas as situações), para o resumo sempre mostrar onde cada valor está */
   repasses: SituacaoRepassesPainel;
+  /** O mês usa a regra de competência (total disponível = entradas − minhas despesas); antes do corte vale a regra antiga */
+  regraCompetencia: boolean;
+  /** Só na regra de competência: acertos NESTE mês de lançamentos anteriores ao corte (regra antiga): devolução recebida (+), repasse enviado (−), fatura de compra de terceiros paga (−) */
+  acertosAnterioresAoCorte: number;
 
   /* ---- Indicadores do Resumo (derivados; não mudam nenhuma regra acima) ---- */
   /** Entrou: renda lançada no mês, sem repasses e sem saldo anterior */
@@ -158,6 +170,19 @@ export type LinhaComposicao = { rotulo: string; dica?: string; valor: number };
  * A soma das linhas é exatamente `totalDisponivel` (testado). Linhas zeradas ficam de fora, exceto o saldo anterior.
  */
 export function composicaoDoDisponivel(p: Painel, rotuloMesAnterior: string): LinhaComposicao[] {
+  if (p.regraCompetencia) {
+    // Competência: só entra o que é meu. Fatura paga, adiantado e repasse não mexem no total (cada valor conta uma vez).
+    const linhasCompetencia: LinhaComposicao[] = [
+      { rotulo: `Saldo até ${rotuloMesAnterior}`, dica: "Saldo inicial das contas + meses anteriores", valor: p.saldoAnterior },
+      { rotulo: "Entrou (renda do mês)", valor: p.entradasRenda },
+      { rotulo: "Saiu (despesas do mês, inclusive no crédito)", dica: "A compra no crédito já foi descontada; pagar a fatura não desconta de novo", valor: -p.saidasRealizadas },
+      { rotulo: "Contas fixas pendentes do mês", dica: "Já separadas do disponível até serem pagas", valor: -p.contasPendentes },
+      { rotulo: "Acertos de lançamentos anteriores ao corte", dica: "Devoluções, repasses e faturas de meses que seguem a regra antiga", valor: p.acertosAnterioresAoCorte },
+      { rotulo: "Aportes em caixinhas", dica: "Saíram do saldo, não são despesa", valor: -p.aportesCaixinha },
+      { rotulo: "Resgates de caixinhas", valor: p.resgatesCaixinha },
+    ];
+    return linhasCompetencia.filter((l, i) => i === 0 || Math.abs(l.valor) >= 0.005);
+  }
   const linhas: LinhaComposicao[] = [
     { rotulo: `Saldo até ${rotuloMesAnterior}`, dica: "Saldo inicial das contas + meses anteriores", valor: p.saldoAnterior },
     { rotulo: "Entrou (renda do mês)", valor: p.entradasRenda },
@@ -200,6 +225,12 @@ export function calcularPainel(
   const adiant = adiantamentos(e, (o, i) => compraDeTerceirosNoCredito(o, i, opts.meuId, credito));
   const faturas = ajusteDeFaturas(opts.dadosRepasses ?? e, opts.pagamentosFatura ?? [], { meuId: opts.meuId, escopo: opts.escopo ?? null, cartoesCredito: credito, mesCorte: opts.mesCorteCaixa ?? null });
   const corte = opts.mesCorteCaixa ?? null;
+  const regraCompetencia = (m: string) => corte !== null && m >= corte;
+  // Competência: o que outro integrante lançou para mim só conta depois que o autor confirma o repasse
+  const meuIdCompetencia = opts.meuId ? String(opts.meuId) : null;
+  const eCompetencia: Dados = meuIdCompetencia
+    ? Object.fromEntries(ORIGENS.map((o) => [o, (e[o] || []).filter((i) => !aguardandoRepasseDoResponsavel(i, meuIdCompetencia))])) as Dados
+    : e;
   const deve = devidos(e, opts.escopo ?? null);
   const soma = (l: { valor: number }[]) => arred(l.reduce((s, a) => s + a.valor, 0));
   // Só aporte/resgate que usou o saldo de uma conta mexe no disponível (sem conta, o dinheiro não saiu do saldo)
@@ -207,10 +238,12 @@ export function calcularPainel(
     .filter((x) => x.conta && (x.tipo === "aporte" || x.tipo === "resgate") && /^\d{4}-\d{2}/.test(String(x.data)))
     .map((x) => ({ tipo: x.tipo, valor: num(x.valor), mes: String(x.data).slice(0, 7) }));
   const movimentoDoMes = (m: string) => {
-    const r = calcularMes(e, { mes: m });
+    const nova = regraCompetencia(m);
+    const r = calcularMes(nova ? eCompetencia : e, { mes: m });
     // Repasse de compra no crédito (regra de caixa) NÃO entra pelo dia do clique: compensa nos pagamentos da fatura
     const recebidos = arred(soma(adiant.filter((a) => a.concluido && a.mesRepasse === m && !(a.naFatura && corte !== null && a.mes >= corte))) + (faturas.recebido[m] || 0));
-    // Compra no crédito do titular só tira dinheiro quando a fatura é paga (faturas.pago); as demais, na compra
+    // Competência: a despesa adiantada sai do caixa no mês em que foi lançada, mesmo que o repasse seja concluído depois.
+    // O recebimento aumenta o caixa só no mês em que ocorre (acima); um mês passado nunca é recalculado por ele.
     const adiantadoMes = arred(soma(adiant.filter((a) => a.mes === m && !a.naFatura)) + (faturas.pago[m] || 0));
     const faturaAberta = faturas.emAberto[m] || 0;
     const faturasPagas = faturas.pagoCaixa[m] || 0;
@@ -218,7 +251,19 @@ export function calcularPainel(
     const aindaNaoSaiu = soma(deve.filter((a) => a.mes === m)); // despesa contada no resultado, dinheiro ainda não saiu
     const aportes = soma(movsCaixinha.filter((x) => x.tipo === "aporte" && x.mes === m));
     const resgates = soma(movsCaixinha.filter((x) => x.tipo === "resgate" && x.mes === m));
-    return { r, recebidos, adiantadoMes, faturaAberta, faturasPagas, enviados, aindaNaoSaiu, aportes, resgates, liquido: arred(r.saldoRestante + recebidos - adiantadoMes - faturasPagas + faturaAberta + aindaNaoSaiu - enviados - aportes + resgates) };
+    // Competência: cada valor conta uma vez, no mês da despesa. Fatura paga, adiantado e repasse são acertos e não mexem aqui.
+    // EXCEÇÃO (fronteira do corte): lançamento de mês ANTERIOR ao corte segue a regra antiga mesmo que o acerto aconteça
+    // depois dele. O desconto já foi feito pela regra antiga no mês da despesa, então a devolução (ou o repasse enviado, ou
+    // o pagamento da fatura de compra de terceiros) precisa ser acertada pela mesma regra, senão o valor sumiria ou duplicaria.
+    const anteriorAoCorte = (a: Rep) => corte !== null && a.mes < corte;
+    const recebidosLegado = nova ? soma(adiant.filter((a) => anteriorAoCorte(a) && a.concluido && a.mesRepasse === m)) : 0;
+    const enviadosLegado = nova ? soma(deve.filter((a) => anteriorAoCorte(a) && a.concluido && a.mesRepasse === m)) : 0;
+    const faturaLegado = nova ? faturas.pago[m] || 0 : 0; // só vem de faturas anteriores ao corte (regra antiga)
+    const acertosLegado = arred(recebidosLegado - enviadosLegado - faturaLegado);
+    const liquido = nova
+      ? arred(r.saldoRestante - aportes + resgates + acertosLegado)
+      : arred(r.saldoRestante + recebidos - adiantadoMes - faturasPagas + faturaAberta + aindaNaoSaiu - enviados - aportes + resgates);
+    return { r, recebidos, adiantadoMes, faturaAberta, faturasPagas, enviados, aindaNaoSaiu, aportes, resgates, acertosLegado, liquido };
   };
 
   const meses = [...(e.extrato || []), ...(e.cartao || []), ...(e.contas || [])]
@@ -276,6 +321,7 @@ export function calcularPainel(
     repasses.temMovimento = repasses.aReceber + repasses.aReceberAguardando + repasses.aRepassar + repasses.aRepassarAguardando + repasses.recebidosNoMes + repasses.enviadosNoMes > 0;
   }
 
+  const nova = regraCompetencia(mes);
   const totalDisponivel = arred(saldoAnterior + atual.liquido);
   const receber = arred(soma(aReceberAberto));
   const repassar = arred(soma(aRepassarAberto));
@@ -289,14 +335,16 @@ export function calcularPainel(
     rendaPorOrigem: entradasPorOrigem,
     saidasPorOrigem: { avista: atual.r.porOrigem.extrato, parcelas: atual.r.porOrigem.cartao, contasPagas: arred(atual.r.porOrigem.contas - atual.r.faltaPagar) },
     sobraPrevista: competencia,
-    // O ajuste de faturas fecha a identidade: é a parte de compras no crédito para outras pessoas ainda não paga
-    previsao: { receber, repassar, faturasOutros: arred(competencia - totalDisponivel - receber + repassar) },
+    // Regra antiga: o ajuste de faturas fecha a identidade (compras no crédito para outros ainda não pagas).
+    // Competência: receber/repassar são informativos; sobraPrevista = totalDisponivel + faturasOutros (resíduo só de meses antes do corte).
+    previsao: { receber, repassar, faturasOutros: arred(competencia - totalDisponivel - (nova ? 0 : receber - repassar)) },
     mes,
-    // Repasse concluído = entrada real de quem recebeu (compensa o "adiantado", que já saiu do disponível)
-    entradas: arred(atual.r.entradas + atual.recebidos),
-    entradasPorOrigem: atual.recebidos > 0 ? [...entradasPorOrigem, { rotulo: "Repasse recebido", valor: atual.recebidos }].sort((a, b) => b.valor - a.valor) : entradasPorOrigem,
+    // Regra antiga: repasse concluído = entrada real de quem recebeu (compensa o "adiantado").
+    // Competência: repasse é acerto entre integrantes, nunca entrada nem resultado.
+    entradas: nova ? atual.r.entradas : arred(atual.r.entradas + atual.recebidos),
+    entradasPorOrigem: !nova && atual.recebidos > 0 ? [...entradasPorOrigem, { rotulo: "Repasse recebido", valor: atual.recebidos }].sort((a, b) => b.valor - a.valor) : entradasPorOrigem,
     saidas: atual.r.saidas,
-    resultadoMes: arred(atual.r.saldoRestante + atual.recebidos),
+    resultadoMes: nova ? atual.r.saldoRestante : arred(atual.r.saldoRestante + atual.recebidos),
     saldoAnterior,
     repassesRecebidos: atual.recebidos,
     adiantado: atual.adiantadoMes,
@@ -312,5 +360,7 @@ export function calcularPainel(
     resgatesCaixinha: atual.resgates,
     totalDisponivel,
     repasses,
+    regraCompetencia: nova,
+    acertosAnterioresAoCorte: nova ? atual.acertosLegado : 0,
   };
 }

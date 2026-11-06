@@ -61,7 +61,9 @@ export default function PainelResumo({
   const pendentes = contasDoMes
     .filter((c) => !c.pago && !c.foraDoMeuSaldo && c.mes === p.mes)
     .sort((a, b) => (Number(a.vencimento) || 99) - (Number(b.vencimento) || 99));
-  const totalFaturas = faturas.reduce((t, f) => t + f.restante, 0);
+  // Meu financeiro: só a minha parte das faturas (o resto é o que os outros usaram no meu cartão e volta por repasse)
+  const faturasMinhas = faturas.filter((f) => (f.restanteProprio ?? f.restante) > 0.004);
+  const totalFaturas = faturasMinhas.reduce((t, f) => t + (f.restanteProprio ?? f.restante), 0);
   const aindaVaiSair = p.contasPendentes + totalFaturas;
   const proxima = pendentes[0];
   const vouReceber = r.receber;
@@ -192,7 +194,7 @@ export default function PainelResumo({
             aindaVaiSair > 0 ? "text-warn" : "text-muted",
             aindaVaiSair <= 0
               ? "Nenhuma conta ou fatura em aberto"
-              : [pendentes.length ? plural(pendentes.length, "conta fixa", "contas fixas") : "", faturas.length ? plural(faturas.length, "fatura", "faturas") : ""].filter(Boolean).join(" e ") + (proxima ? `. Próxima: ${proxima.nome}${proxima.vencimento ? `, dia ${proxima.vencimento}` : ""}` : ""),
+              : [pendentes.length ? plural(pendentes.length, "conta fixa", "contas fixas") : "", faturasMinhas.length ? plural(faturasMinhas.length, "fatura", "faturas") : ""].filter(Boolean).join(" e ") + (proxima ? `. Próxima: ${proxima.nome}${proxima.vencimento ? `, dia ${proxima.vencimento}` : ""}` : ""),
             abrirCompromisso,
           )}
           {tile("Vou receber", vouReceber, vouReceber > 0 ? "text-pos" : "text-muted", vouReceber > 0 ? (r.receberAguardando > 0 ? "Inclui repasse aguardando sua confirmação" : "Despesas que você adiantou") : "Nenhum repasse a receber", onAbrirRepasses)}

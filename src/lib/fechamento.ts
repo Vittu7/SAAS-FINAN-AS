@@ -120,6 +120,20 @@ export function travaDoEstorno(
   return travaDoLancamento({ mes, owner_id: item.owner_id, responsavel_id: item.responsavel_id }, porPessoa);
 }
 
+/**
+ * Confirmar ou estornar o recebimento de um repasse reconhece (ou desfaz) a despesa no financeiro do RESPONSÁVEL,
+ * no mês ORIGINAL do lançamento. Se esse mês está fechado para o responsável, a operação mudaria um mês fechado:
+ * fica bloqueada até ele reabrir. Só vale para despesa de outro autor; o mês de quem lançou não é afetado.
+ */
+export function travaDoReconhecimento(
+  item: { mes?: string | null; owner_id?: string | null; responsavel_id?: string | null },
+  porPessoa: FechadosPorPessoa,
+): { travado: boolean; quem: string[] } {
+  const { mes, owner_id: autor, responsavel_id: resp } = item;
+  if (!mes || !resp || !autor || autor === resp) return { travado: false, quem: [] };
+  return porPessoa.get(resp)?.has(mes) ? { travado: true, quem: [resp] } : { travado: false, quem: [] };
+}
+
 /** Lançamento NOVO no mês: proibido em mês fechado e em meses depois do mês em aberto. */
 export function bloqueioParaLancar(mes: string, e: EstadoFechamento, hoje: string): string | null {
   const s = statusDoMes(mes, e, hoje);
@@ -138,7 +152,8 @@ export type Alteracao =
   | { tipo: "editar"; item: ItemLanc; mesNovo?: string | null }
   | { tipo: "remover"; itens: ItemLanc[] }
   | { tipo: "pagar"; item: ItemLanc }
-  | { tipo: "estornar"; itens: ItemLanc[] };
+  | { tipo: "estornar"; itens: ItemLanc[] }
+  | { tipo: "confirmar"; itens: ItemLanc[] };
 
 const quemFechou = (quem: string[], mes: string, ctx: ContextoTrava) => {
   if (quem.includes(ctx.meuId)) return `${rotuloMes(mes)} está fechado. Reabra o mês para alterar.`;
@@ -171,6 +186,15 @@ export function verificarAlteracao(a: Alteracao, ctx: ContextoTrava): string | n
     return `Há lançamentos desta série em meses fechados (${meses.map(nomeMes).join(", ")}). Reabra o mês para excluir.`;
   }
   for (const i of a.itens) {
+    // Reconhecer/desfazer a despesa do responsável no mês original: bloqueado se esse mês está fechado para ele
+    const r = travaDoReconhecimento(i, ctx.porPessoa);
+    if (r.travado) return `Este repasse reconhece a despesa em ${nomeMes(String(i.mes))}, que está fechado. ${quemFechou(r.quem, String(i.mes), ctx)}`;
+    if (a.tipo === "confirmar") {
+      // A confirmação acontece agora: o mês de hoje não pode estar fechado para quem lançou nem para o responsável
+      const t = travaDoLancamento({ mes: ctx.hoje.slice(0, 7), owner_id: i.owner_id, responsavel_id: i.responsavel_id }, ctx.porPessoa);
+      if (t.travado) return `O mês da confirmação está fechado. ${quemFechou(t.quem, ctx.hoje.slice(0, 7), ctx)}`;
+      continue;
+    }
     const t = travaDoEstorno(i, ctx.porPessoa);
     if (t.travado) return `Este repasse foi confirmado em um mês fechado. ${quemFechou(t.quem, hojeEmBrasilia(new Date(i.repasse_pago_em!)).slice(0, 7), ctx)}`;
   }

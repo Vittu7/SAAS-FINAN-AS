@@ -147,6 +147,8 @@ export default function EditarLancamentoModal({
         vencimento: vencimento ? Number(vencimento) : null,
         pago,
         responsavel,
+        // Valor variável: informar/ajustar o valor confirma o mês (só esta linha; meses anteriores não mudam)
+        ...(item.valor_variavel ? { valor_confirmado: true } : {}),
       };
     }
 

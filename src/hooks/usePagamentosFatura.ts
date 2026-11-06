@@ -21,11 +21,16 @@ export function usePagamentosFatura() {
   const carregar = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data, error } = await supabase
+    // Pagamentos estornados não contam (coluna estornado_em: script supabase-24). Sem a coluna, vale a lista inteira.
+    let { data, error } = await supabase
       .from("pagamentos_fatura")
       .select("id, cartao, mes, conta, valor, data")
       .eq("user_id", user.id)
+      .is("estornado_em", null)
       .order("data", { ascending: true });
+    if (error && (error.code === "42703" || /estornado_em/.test(error.message || ""))) {
+      ({ data, error } = await supabase.from("pagamentos_fatura").select("id, cartao, mes, conta, valor, data").eq("user_id", user.id).order("data", { ascending: true }));
+    }
     if (error) {
       setPagamentos([]);
       setDisponivel(!faltaTabela(error));
@@ -54,5 +59,20 @@ export function usePagamentosFatura() {
     return null;
   }, []);
 
-  return { pagamentos, disponivel, registrar };
+  /**
+   * Estorna um pagamento: ele não é apagado, só deixa de valer. A atualização é condicional (só se ainda não foi estornado),
+   * então clicar duas vezes ou estornar em duas telas nunca devolve o valor duas vezes. Devolve null ou a mensagem de erro.
+   */
+  const estornar = useCallback(async (id: string): Promise<string | null> => {
+    const { data, error } = await supabase.from("pagamentos_fatura").update({ estornado_em: new Date().toISOString() }).eq("id", id).is("estornado_em", null).select("id");
+    if (error) {
+      if (error.code === "42703" || error.code === "PGRST204" || /estornado_em/.test(error.message || "")) return "O estorno ainda não foi habilitado. Rode o script supabase-24-estorno-pagamento-fatura.sql no Supabase.";
+      return error.message;
+    }
+    if (!data || data.length === 0) return "Este pagamento já foi estornado ou não existe.";
+    window.dispatchEvent(new Event(EVENTO_PAGAMENTOS_FATURA));
+    return null;
+  }, []);
+
+  return { pagamentos, disponivel, registrar, estornar };
 }

@@ -1,0 +1,123 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Meu financeiro (golden) > painel de 2026-10 1`] = `
+{
+  "aReceber": 0,
+  "aReceberAguardando": 0,
+  "aRepassar": 0,
+  "aRepassarAguardando": 0,
+  "acertosAnterioresAoCorte": 0,
+  "adiantado": 0,
+  "aportesCaixinha": 0,
+  "contasPendentes": 0,
+  "despesasARepassar": 0,
+  "entradas": 2159,
+  "entradasPorOrigem": [
+    {
+      "rotulo": "Salário",
+      "valor": 2159,
+    },
+  ],
+  "entradasRenda": 2159,
+  "faturaEmAberto": 300,
+  "faturasPagas": 0,
+  "mes": "2026-10",
+  "previsao": {
+    "faturasOutros": 0,
+    "receber": 0,
+    "repassar": 0,
+  },
+  "regraCompetencia": true,
+  "rendaPorOrigem": [
+    {
+      "rotulo": "Salário",
+      "valor": 2159,
+    },
+  ],
+  "repasses": {
+    "aReceber": 0,
+    "aReceberAguardando": 0,
+    "aRepassar": 0,
+    "aRepassarAguardando": 0,
+    "enviadosNoMes": 0,
+    "recebidosNoMes": 0,
+    "temMovimento": false,
+  },
+  "repassesEnviados": 0,
+  "repassesRecebidos": 0,
+  "resgatesCaixinha": 0,
+  "resultadoMes": 1759,
+  "resultadoRealizado": 1759,
+  "saidas": 400,
+  "saidasPorOrigem": {
+    "avista": 0,
+    "contasPagas": 100,
+    "parcelas": 300,
+  },
+  "saidasRealizadas": 400,
+  "saldoAnterior": 0,
+  "sobraPrevista": 1759,
+  "totalDisponivel": 1759,
+}
+`;
+
+exports[`Meu financeiro (golden) > painel de 2026-11 1`] = `
+{
+  "aReceber": 0,
+  "aReceberAguardando": 0,
+  "aRepassar": 0,
+  "aRepassarAguardando": 0,
+  "acertosAnterioresAoCorte": 0,
+  "adiantado": 0,
+  "aportesCaixinha": 0,
+  "contasPendentes": 150,
+  "despesasARepassar": 0,
+  "entradas": 2000,
+  "entradasPorOrigem": [
+    {
+      "rotulo": "Salário",
+      "valor": 2000,
+    },
+  ],
+  "entradasRenda": 2000,
+  "faturaEmAberto": 120,
+  "faturasPagas": 300,
+  "mes": "2026-11",
+  "previsao": {
+    "faturasOutros": 0,
+    "receber": 0,
+    "repassar": 0,
+  },
+  "regraCompetencia": true,
+  "rendaPorOrigem": [
+    {
+      "rotulo": "Salário",
+      "valor": 2000,
+    },
+  ],
+  "repasses": {
+    "aReceber": 0,
+    "aReceberAguardando": 0,
+    "aRepassar": 0,
+    "aRepassarAguardando": 0,
+    "enviadosNoMes": 0,
+    "recebidosNoMes": 0,
+    "temMovimento": false,
+  },
+  "repassesEnviados": 0,
+  "repassesRecebidos": 0,
+  "resgatesCaixinha": 0,
+  "resultadoMes": 1730,
+  "resultadoRealizado": 1880,
+  "saidas": 270,
+  "saidasPorOrigem": {
+    "avista": 80,
+    "contasPagas": 40,
+    "parcelas": 0,
+  },
+  "saidasRealizadas": 120,
+  "saldoAnterior": 1759,
+  "sobraPrevista": 3489,
+  "totalDisponivel": 3489,
+}
+`;

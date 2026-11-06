@@ -14,7 +14,7 @@ import type {
 import { supabase } from "@/lib/supabase";
 import { garantirPerfil } from "@/lib/perfil";
 import { avisos, falhou } from "@/lib/avisos";
-import { dataValida, somarMesesData } from "@/lib/datas";
+import { dataValida, hojeISO, somarMesesData } from "@/lib/datas";
 import { travadoPorRepasse } from "@/lib/grupo";
 import { ehTravaDeRepasse, montarOrientacaoRepasse, pedirOrientacaoRepasse, type LinhaRepasse } from "@/lib/repasseTravado";
 
@@ -381,6 +381,8 @@ export function useFinanceStore() {
       vencimento: (item as any).vencimento
         ? Number((item as any).vencimento)
         : null,
+      // Só envia quando marcado: sem a migração supabase-23 o cadastro comum continua funcionando
+      ...((item as any).valor_variavel ? { valor_variavel: true } : {}),
     };
 
     const { data, error } = await supabase
@@ -465,6 +467,8 @@ export function useFinanceStore() {
       );
 
       const novas = contasUnicasAnteriores
+        // Série encerrada: não gera o mês de encerramento em diante (as linhas existentes ficam)
+        .filter((conta: any) => !(conta.encerrada_em && mes >= conta.encerrada_em))
         .filter((conta: any) => !chavesExistentesNoMes.has(chaveConta(conta)))
         .map((conta: any) => ({
         owner_id: conta.owner_id || userId,
@@ -480,6 +484,9 @@ export function useFinanceStore() {
         vencimento: conta.vencimento
           ? Number(conta.vencimento)
           : null,
+        // Valor variável: o valor do mês anterior vem como previsão, para o usuário informar o real
+        ...(conta.valor_variavel ? { valor_variavel: true, valor_confirmado: false } : {}),
+        ...(conta.encerrada_em ? { encerrada_em: conta.encerrada_em } : {}),
         }));
 
       if (novas.length === 0) return;
@@ -637,17 +644,46 @@ export function useFinanceStore() {
     return true;
   };
 
-  const alternarPago = async (id: string) => {
+  /**
+   * Encerra a série da conta fixa a partir de `aPartirDe` (AAAA-MM): esse mês em diante não é mais gerado.
+   * Nada é apagado e nenhum mês anterior é alterado; só as linhas do mês anterior ao encerramento em diante
+   * (as que a geração do mês seguinte consulta) recebem `encerrada_em`.
+   */
+  const encerrarConta = async (id: string, aPartirDe: string): Promise<boolean> => {
+    if (!/^[0-9]{4}-[0-9]{2}$/.test(aPartirDe)) { avisos.erro("Mês inválido", "Use o formato AAAA-MM."); return false; }
+    const ids = idsDaSerieConta(estado.contas as any[], id);
+    const limite = addMeses(aPartirDe, -1);
+    const alvo = (estado.contas as any[]).filter((c) => ids.includes(c.id) && String(c.mes) >= limite);
+    if (alvo.length === 0) { avisos.aviso("Nada para encerrar", "Não há lançamento desta conta no mês anterior ao encerramento."); return false; }
+    const { data, error } = await supabase.from("contas_fixas").update({ encerrada_em: aPartirDe }).in("id", alvo.map((c) => c.id)).select("id");
+    if (error) {
+      if ((error.code === "PGRST204" || error.code === "42703") && /encerrada_em/.test(String(error.message ?? ""))) avisos.erro("Falta executar o script", "Rode o supabase-23-contas-fixas.sql no Supabase para poder encerrar contas fixas.");
+      else falhou("encerrar a conta fixa", error);
+      return false;
+    }
+    const feitos = new Set((data || []).map((r: any) => r.id));
+    setEstado((atual) => ({ ...atual, contas: atual.contas.map((c: any) => (feitos.has(c.id) ? { ...c, encerrada_em: aPartirDe } : c)) }));
+    avisos.sucesso("Conta fixa encerrada", `Não será mais gerada a partir de ${aPartirDe}. O histórico foi mantido.`);
+    return true;
+  };
+
+  /** Marca paga (débito/dinheiro) ou cobrada no cartão (crédito) e guarda a data em pago_em; desmarcar limpa a data. */
+  const alternarPago = async (id: string, dataPagamento?: string) => {
     const contaAtual = estado.contas.find((conta) => conta.id === id);
     if (!contaAtual) return;
 
     const novoStatus = !contaAtual.pago;
+    const pagoEm = novoStatus ? (dataValida(dataPagamento) ? dataPagamento : hojeISO()) : null;
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("contas_fixas")
-      .update({ pago: novoStatus })
+      .update({ pago: novoStatus, pago_em: pagoEm })
       .eq("id", id)
       .select("id");
+    // Migração supabase-23 ainda não executada: grava só o status, como antes (a data fica para depois)
+    if (error && (error.code === "PGRST204" || error.code === "42703") && /pago_em/.test(String(error.message ?? ""))) {
+      ({ data, error } = await supabase.from("contas_fixas").update({ pago: novoStatus }).eq("id", id).select("id"));
+    }
 
     if (error) {
       falhou("atualizar o pagamento da conta", error);
@@ -662,7 +698,7 @@ export function useFinanceStore() {
     setEstado((atual) => ({
       ...atual,
       contas: atual.contas.map((conta) =>
-        conta.id === id ? { ...conta, pago: novoStatus } : conta,
+        conta.id === id ? { ...conta, pago: novoStatus, pago_em: pagoEm } : conta,
       ),
     }));
     avisos.sucesso(novoStatus ? "Conta marcada como paga" : "Conta voltou para pendente", contaAtual.nome);
@@ -818,6 +854,7 @@ export function useFinanceStore() {
     atualizar,
     remover,
     alternarPago,
+    encerrarConta,
     atualizarConfig,
     carregarDados,
   };

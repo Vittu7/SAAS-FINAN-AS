@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import DialogResponsivo from "@/components/DialogResponsivo";
 import ExtratoLista from "@/components/ExtratoLista";
 import { brl, rotuloMes } from "@/lib/finance";
-import { montarLinhas, ordenarPorValor, totalGastos, totalPendentes, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
+import { entradasDoMeuFinanceiro, montarLinhas, ordenarPorValor, saidasDoMeuFinanceiro, totalGastos, totalPendentes, type LinhaExtrato, type Ordem, type OrigemLinha } from "@/lib/extrato";
 
 import type { ModoSaldo, Painel } from "@/lib/painel";
 
@@ -68,12 +68,14 @@ export default function ExtratoDetalhe({
 
   const responsaveis = useMemo(() => [...new Set(base.map((l) => l.responsavel).filter(Boolean))].sort(), [base]);
 
-  const entradasLinhas = useMemo(() => base.filter((l) => l.entrada && !l.foraDoSaldo), [base]); // repasse recebido só quita o a receber
+  const entradasLinhas = useMemo(() => entradasDoMeuFinanceiro(base), [base]); // só as minhas (responsável); repasse não é entrada
   const entradasTotal = entradasLinhas.reduce((t, l) => t + l.valor, 0);
 
+  // Só despesas em que eu sou o responsável: o que lancei para outra pessoa fica de fora (é dela e não entra no total)
+  const minhasSaidas = useMemo(() => saidasDoMeuFinanceiro(base), [base]);
   const gastosLinhas = useMemo(
-    () => base.filter((l) => !l.entrada && (!origem || l.origem === origem) && (!responsavel || l.responsavel === responsavel)),
-    [base, origem, responsavel],
+    () => minhasSaidas.filter((l) => (!origem || l.origem === origem) && (!responsavel || l.responsavel === responsavel)),
+    [minhasSaidas, origem, responsavel],
   );
 
   const totalMes = totalGastos(base); // gastos realizados do mês, independente dos filtros do detalhe
@@ -122,7 +124,7 @@ export default function ExtratoDetalhe({
           </p>
           <p className={`mt-1 text-xs ${tipo === "gastos" ? "text-muted" : "opacity-80"}`}>
             {tipo === "gastos"
-              ? `${base.length} ${base.length === 1 ? "movimentação" : "movimentações"} no mês`
+              ? `${minhasSaidas.length} ${minhasSaidas.length === 1 ? "movimentação" : "movimentações"} no mês`
               : tipo === "entradas"
               ? `${entradasLinhas.length} ${entradasLinhas.length === 1 ? "entrada" : "entradas"} no mês`
               : totalModo && painel
@@ -170,7 +172,7 @@ export default function ExtratoDetalhe({
 
           {filtrado && (
             <p className="text-xs text-muted">
-              Mostrando {gastosLinhas.length} de {base.length} · {brl(totalFiltrado)}
+              Mostrando {gastosLinhas.length} de {minhasSaidas.length} · {brl(totalFiltrado)}
               {pendentesFiltrado > 0 && <span className="text-amber-600 dark:text-amber-400"> + {brl(pendentesFiltrado)} a pagar</span>}
             </p>
           )}

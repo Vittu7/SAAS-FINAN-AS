@@ -38,6 +38,13 @@ export type ContaFixa = {
   responsavel: Responsavel;
   formaPagamento: string;
   categoria?: string;
+  /** Data em que foi paga (débito/dinheiro) ou cobrada no cartão (crédito). Vazio: vale o mês da linha */
+  pago_em?: string | null;
+  valor_variavel?: boolean;
+  /** false = valor ainda é a previsão copiada do mês anterior */
+  valor_confirmado?: boolean;
+  /** Mês (AAAA-MM) a partir do qual a série não gera mais linhas */
+  encerrada_em?: string | null;
 };
 
 export type Config = {

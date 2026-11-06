@@ -393,10 +393,11 @@ export default function Home() {
       if (barrar({ tipo: "remover", itens }, "Não foi possível remover o lançamento")) return Promise.resolve(false);
       return loja.remover(tabela, id);
     },
-    alternarPago: (id: string) => {
+    encerrarConta: (id: string, aPartirDe: string) => loja.encerrarConta(id, aPartirDe),
+    alternarPago: (id: string, dataPagamento?: string) => {
       const item = achar("contas", id);
       if (item && barrar({ tipo: "pagar", item }, "Não foi possível atualizar o pagamento")) return Promise.resolve();
-      return loja.alternarPago(id);
+      return loja.alternarPago(id, dataPagamento);
     },
     atualizarRepasses: (...a: Parameters<typeof loja.atualizarRepasses>) => {
       const [itens, acaoRep] = a;
@@ -620,7 +621,7 @@ export default function Home() {
                 <div className="flex justify-center @xl:justify-start"><SeletorVisaoFinanceira visao={visaoFin} onVisao={setVisaoFin} /></div>
               )}
               {dashboard.preferencias.resumo && visaoFin === "grupo" && painel && userId && (
-                <FinanceiroGrupoCard g={financeiroDoGrupo(painel, estado, userId)} onAbrirRepasses={() => abrirGrupo("repasses")} />
+                <FinanceiroGrupoCard g={financeiroDoGrupo(painel, estado, userId, { pagamentosFatura, cartoesCredito, fechamentos: Object.fromEntries(formasPagamento.map((o) => [o.nome, o.dia_fechamento])) })} onAbrirRepasses={() => abrirGrupo("repasses")} />
               )}
               {dashboard.preferencias.resumo && visaoFin === "pessoal" && (
                 <PainelResumo
@@ -792,6 +793,7 @@ export default function Home() {
                   onRemove={(id) => acao.remover("contas", id)}
                   onEdit={(id, patch) => acao.atualizar("contas", id, patch)}
                   onTogglePago={acao.alternarPago}
+                  onEncerrar={acao.encerrarConta}
                 />
               )}
             </section>

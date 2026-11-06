@@ -12,11 +12,44 @@
 import { arred, ehEntrada, mesDoRecebimento, semDuplicados } from "./calculos";
 import type { Estado } from "./types";
 
-/** Fatura de um cartão em um mês: soma tudo o que o grupo lançou nele (que o usuário pode ver). */
-export function calcularFatura(estado: Estado, nome: string, mes: string, limite: number) {
+/**
+ * FECHAMENTO DO CARTÃO (contas fixas cobradas no crédito). Vale a partir de MES_CORTE_FECHAMENTO: antes disso, e sem
+ * `dia_fechamento` no cartão, a conta fixa fica na fatura do próprio `mes` (histórico preservado).
+ */
+export const MES_CORTE_FECHAMENTO = "2026-11";
+
+/** Fatura (AAAA-MM) em que cai uma cobrança feita em `data`: até o dia de fechamento fica no mês, depois vai para o seguinte. */
+export function mesDaFatura(data: string, diaFechamento: number | null | undefined): string {
+  const mes = String(data).slice(0, 7);
+  const dia = Number(String(data).slice(8, 10));
+  const f = Math.trunc(Number(diaFechamento) || 0);
+  if (!/^\d{4}-\d{2}$/.test(mes) || !(f >= 1 && f <= 31) || !(dia >= 1) || dia <= f) return mes;
+  const [a, m] = mes.split("-").map(Number);
+  return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/** dia de fechamento por nome do cartão (null/ausente = sem regra de fechamento) */
+export type Fechamentos = Record<string, number | null | undefined>;
+
+type ContaLike = { mes: string; pago?: boolean; pago_em?: string | null; pagoEm?: string | null; formaPagamento?: string; forma_pagamento?: string };
+
+/** Mês da fatura de uma conta fixa no cartão. Sem fechamento definido, antes do corte ou sem data da cobrança: o `mes` dela. */
+export function mesDaFaturaDaConta(c: ContaLike, fechamentos?: Fechamentos): string {
+  const forma = c.formaPagamento || c.forma_pagamento || "";
+  const dia = fechamentos?.[forma];
+  const data = c.pago_em || c.pagoEm;
+  if (!dia || !data || String(c.mes) < MES_CORTE_FECHAMENTO) return String(c.mes);
+  return mesDaFatura(data, dia);
+}
+
+/**
+ * Fatura de um cartão em um mês: soma tudo o que o grupo lançou nele (que o usuário pode ver).
+ * Com `somenteCobradas`, conta fixa só entra depois de COBRADA no cartão (pago); a pendente ainda não está na fatura.
+ */
+export function calcularFatura(estado: Estado, nome: string, mes: string, limite: number, opts: { fechamentos?: Fechamentos; /** true = conta fixa pendente fica de fora (fatura a pagar). Padrão: entra, como no cálculo do limite */ somenteCobradas?: boolean } = {}) {
   const parcelas = estado.cartao.filter(i => i.cartao === nome && i.mes === mes).map(i => ({ id: `cartao:${i.id}`, descricao: i.descricao || i.nome, categoria: i.categoria, responsavel: i.responsavel, responsavelAvatar: (i as any).responsavelAvatar, responsavelCor: (i as any).responsavelCor, valor: Number(i.valor) || 0, detalhe: `${i.parcelaAtual}/${i.parcelaTotal}` }));
   const compras = estado.extrato.filter(i => i.pagamento === nome && i.mes === mes).map(i => ({ id: `extrato:${i.id}`, descricao: i.descricao, categoria: i.categoria, responsavel: i.responsavel, responsavelAvatar: (i as any).responsavelAvatar, responsavelCor: (i as any).responsavelCor, valor: Number(i.valor) || 0, detalhe: 'Compra' }));
-  const contas = estado.contas.filter(i => (i.formaPagamento || (i as typeof i & { forma_pagamento?: string }).forma_pagamento) === nome && i.mes === mes).map(i => ({ id: `contas:${i.id}`, descricao: i.nome, categoria: i.categoria || '', responsavel: i.responsavel, responsavelAvatar: (i as any).responsavelAvatar, responsavelCor: (i as any).responsavelCor, valor: Number(i.valor) || 0, detalhe: 'Conta fixa' }));
+  const contas = estado.contas.filter(i => (i.formaPagamento || (i as typeof i & { forma_pagamento?: string }).forma_pagamento) === nome && (!opts.somenteCobradas || i.pago) && mesDaFaturaDaConta(i as ContaLike, opts.fechamentos) === mes).map(i => ({ id: `contas:${i.id}`, descricao: i.nome, categoria: i.categoria || '', responsavel: i.responsavel, responsavelAvatar: (i as any).responsavelAvatar, responsavelCor: (i as any).responsavelCor, valor: Number(i.valor) || 0, detalhe: 'Conta fixa' }));
   const itens = [...parcelas, ...compras, ...contas];
   const total = itens.reduce((s, i) => s + i.valor, 0);
   return { itens, total, disponivel: Math.max(0, limite - total), excedido: Math.max(0, total - limite) };
@@ -66,6 +99,18 @@ export function validarPagamento(valor: number, restante: number, opts: { conta?
   return null;
 }
 
+/**
+ * ESTORNO de pagamento: o pagamento sai da lista de pagamentos válidos (no banco ganha `estornado_em`, não é apagado).
+ * Tudo se recalcula sozinho: fatura volta a aberta, saldo da conta usada recupera o valor, Disponível e grupo refeitos.
+ * Compras e lançamentos originais não são tocados. Devolve a mensagem de erro ou null se o estorno pode ser feito.
+ */
+export function validarEstorno(id: string, validos: PagamentoFatura[]): string | null {
+  return validos.some((p) => p.id === id) ? null : "Este pagamento já foi estornado ou não existe.";
+}
+
+/** Lista de pagamentos válidos depois de estornar `id`. Estornar de novo o mesmo id não muda nada (sem duplicar efeito). */
+export const aposEstorno = (validos: PagamentoFatura[], id: string): PagamentoFatura[] => validos.filter((p) => p.id !== id);
+
 /** Vencimento (AAAA-MM-DD) da fatura de `mes` para o dia informado; dia 31 em mês curto vira o último dia. */
 export function vencimentoDaFatura(mes: string, dia: number | null | undefined): string | null {
   const d = Math.trunc(num(dia));
@@ -100,23 +145,20 @@ export function faturasEmAberto(
   cartoes: string[],
   pagamentos: PagamentoFatura[],
   meses: string[],
-  opts: { meuId?: string | null; ateData?: string } = {},
+  opts: { meuId?: string | null; ateData?: string; /** fechamento por cartão: só o Financeiro do grupo e as telas de fatura passam isto; o painel pessoal não */ fechamentos?: Fechamentos } = {},
 ): FaturaAberta[] {
   const lista: FaturaAberta[] = [];
   const validos = opts.ateData ? pagamentos.filter((p) => p.data <= opts.ateData!) : pagamentos;
   for (const cartao of cartoes) {
     for (const mes of meses) {
-      const pendentes = estado.contas
-        .filter((c) => (c.formaPagamento || (c as typeof c & { forma_pagamento?: string }).forma_pagamento) === cartao && c.mes === mes && !c.pago)
-        .reduce((s, c) => s + num(c.valor), 0);
-      const total = arred(calcularFatura(estado, cartao, mes, 0).total - pendentes);
+      const total = arred(calcularFatura(estado, cartao, mes, 0, { fechamentos: opts.fechamentos, somenteCobradas: true }).total);
       if (total <= 0) continue;
       const r = resumoFatura(total, pagamentosDaFatura(validos, cartao, mes));
       if (r.restante <= 0) continue;
       const fatura: FaturaAberta = { cartao, mes, total: r.total, pago: r.pago, restante: r.restante };
       if (opts.meuId) {
         // Itens do meu cartão (lançados por mim); conta fixa pendente fica de fora, como acima
-        const meus = itensDaFaturaDoUsuario(estado, cartao, mes, opts.meuId);
+        const meus = itensDaFaturaDoUsuario(estado, cartao, mes, opts.meuId, opts.fechamentos);
         const totalMeus = meus.reduce((s, x) => s + x.valor, 0);
         const proprios = meus.filter((x) => x.responsavelId === opts.meuId).reduce((s, x) => s + x.valor, 0);
         const restanteMeus = Math.max(0, totalMeus - r.pago);
@@ -129,12 +171,12 @@ export function faturasEmAberto(
 }
 
 /** Itens de uma fatura lançados pelo usuário (dono do cartão), sem conta fixa pendente: valor e responsável. */
-function itensDaFaturaDoUsuario(estado: Estado, cartao: string, mes: string, meuId: string): { valor: number; responsavelId: string }[] {
+function itensDaFaturaDoUsuario(estado: Estado, cartao: string, mes: string, meuId: string, fechamentos?: Fechamentos):{ valor: number; responsavelId: string }[] {
   const dele = (i: { owner_id?: unknown }) => String(i.owner_id ?? "") === meuId;
   const resp = (i: { responsavel_id?: unknown; owner_id?: unknown }) => String(i.responsavel_id ?? i.owner_id ?? "");
   const parcelas = (estado.cartao as Item[]).filter((i) => i.cartao === cartao && i.mes === mes && dele(i));
   const compras = (estado.extrato as Item[]).filter((i) => i.pagamento === cartao && i.mes === mes && !ehEntrada(i) && dele(i));
-  const contas = (estado.contas as Item[]).filter((i) => (i.formaPagamento || i.forma_pagamento) === cartao && i.mes === mes && i.pago && dele(i));
+  const contas = (estado.contas as Item[]).filter((i) => (i.formaPagamento || i.forma_pagamento) === cartao && i.pago && mesDaFaturaDaConta(i as ContaLike, fechamentos) === mes && dele(i));
   return [...parcelas, ...compras, ...contas].map((i) => ({ valor: num(i.valor), responsavelId: resp(i) }));
 }
 

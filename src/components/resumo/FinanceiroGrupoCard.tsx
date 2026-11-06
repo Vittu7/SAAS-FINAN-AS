@@ -1,10 +1,12 @@
 "use client";
 
-import { Eye, EyeOff, Users } from "lucide-react";
+import { useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, Eye, EyeOff, Users } from "lucide-react";
 import { Ico } from "@/components/icons";
 import CartaoSecao from "@/components/dashboard/CartaoSecao";
-import { rotuloMes, useValoresOcultos } from "@/lib/finance";
-import type { FinanceiroGrupo } from "@/lib/financeiroGrupo";
+import DialogResponsivo from "@/components/DialogResponsivo";
+import { brl, rotuloMes, useValoresOcultos } from "@/lib/finance";
+import type { FinanceiroGrupo, MovimentoGrupo } from "@/lib/financeiroGrupo";
 import { comSinal, saldo, tomDoValor } from "./valores";
 
 export type VisaoFinanceira = "pessoal" | "grupo";
@@ -33,31 +35,75 @@ export function SeletorVisaoFinanceira({ visao, onVisao }: { visao: VisaoFinance
   );
 }
 
-/** Linha de indicador: descrição à esquerda (com apoio opcional) e valor alinhado à direita. */
-function Linha({ rotulo, valor, tom = false, dica, forte = false }: { rotulo: string; valor: string; tom?: number | false; dica?: string; forte?: boolean }) {
+/** Detalhe de Entradas/Saídas do grupo: a lista é a mesma que gera o indicador, com quem lançou e de quem é. */
+function DetalheMovimentoGrupo({ titulo, mes, mov, onFechar }: { titulo: string; mes: string; mov: MovimentoGrupo; onFechar: () => void }) {
   return (
-    <div className={`flex items-baseline justify-between gap-4 py-3 ${forte ? "font-semibold" : ""}`}>
-      <span className="min-w-0 text-sm">
-        <span className={forte ? "" : "text-muted"}>{rotulo}</span>
-        {dica && <span className="mt-0.5 block text-xs font-normal leading-snug text-muted">{dica}</span>}
-      </span>
-      <span data-sinal className={`shrink-0 text-right tabular-nums ${forte ? "text-base" : "text-sm font-medium"} ${tom === false ? "" : tomDoValor(tom)}`}>{valor}</span>
-    </div>
+    <DialogResponsivo titulo={titulo} onFechar={onFechar}>
+      <div className="space-y-4">
+        <div className="rounded-3xl bg-background p-5 ring-1 ring-line">
+          <p className="text-xs font-medium text-muted">{rotuloMes(mes)} · Financeiro do grupo</p>
+          <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">{brl(mov.total)}</p>
+          <p className="mt-1 text-xs text-muted">{mov.itens.length} {mov.itens.length === 1 ? "lançamento" : "lançamentos"} visíveis para você. Repasses e pagamentos de fatura não entram.</p>
+        </div>
+        {mov.itens.length === 0 ? (
+          <p className="text-sm text-muted">Nenhum lançamento neste mês.</p>
+        ) : (
+          <ul className="divide-y divide-line/60 rounded-2xl border border-line bg-background px-4">
+            {mov.itens.map((l) => (
+              <li key={l.id} className="flex items-start justify-between gap-4 py-3">
+                <span className="min-w-0 text-sm">
+                  <span className="block truncate font-medium">{l.descricao}</span>
+                  <span className="mt-0.5 block text-xs text-muted">
+                    {[l.data ? l.data.split("-").reverse().join("/") : "", l.categoria, l.forma].filter(Boolean).join(" · ")}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted">Lançado por <b className="font-medium text-ink">{l.lancou}</b> · Responsável <b className="font-medium text-ink">{l.responsavel}</b></span>
+                </span>
+                <span className="shrink-0 text-sm font-medium tabular-nums">{brl(l.valor)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </DialogResponsivo>
   );
-}
-
-/** Bloco de linhas: fundo do tema, borda arredondada e divisórias discretas (mesmo acabamento dos cartões do Resumo). */
-function Bloco({ children, rotulo }: { children: React.ReactNode; rotulo: string }) {
-  return <div role="group" aria-label={rotulo} className="divide-y divide-line/60 rounded-2xl border border-line bg-background px-4">{children}</div>;
 }
 
 export default function FinanceiroGrupoCard({ g, onAbrirRepasses }: { g: FinanceiroGrupo; onAbrirRepasses?: () => void }) {
   const nome = rotuloMes(g.mes).split(" de ")[0].toLowerCase();
   const [oculto, setOculto] = useValoresOcultos();
+  const [detalhe, setDetalhe] = useState<"entradas" | "saidas" | null>(null);
   const negativo = g.disponivelGrupo < -0.004;
+  const resultado = Math.round((g.entradasGrupo.total - g.saidasGrupo.total) * 100) / 100;
+  const maior = Math.max(g.entradasGrupo.total, g.saidasGrupo.total, 1);
+
+  // Mesmo desenho das linhas "Entrou" e "Saiu" do Meu financeiro; ao tocar abre o detalhe do grupo
+  const linhaMes = (tipo: "entradas" | "saidas", rotulo: string, valor: number) => {
+    const entrada = tipo === "entradas";
+    return (
+      <button
+        type="button"
+        onClick={() => setDetalhe(tipo)}
+        aria-label={`Ver ${entrada ? "entradas" : "saídas"} do grupo: ${brl(valor)}`}
+        className="-mx-2 grid gap-2 rounded-xl p-2 text-left transition hover:bg-background"
+      >
+        <span className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2.5 text-sm font-medium">
+            <span className={`hc-glow-pt grid size-8 place-items-center rounded-full ${entrada ? "bg-pos-bg text-pos [--glow-c:var(--pos)]" : "bg-neg-bg text-neg [--glow-c:var(--neg)]"}`}>
+              <Ico icon={entrada ? ArrowDownLeft : ArrowUpRight} size={16} />
+            </span>
+            {rotulo}
+          </span>
+          <span className={`text-lg font-semibold tabular-nums ${entrada ? "text-pos" : "text-neg"}`}>{brl(valor)}</span>
+        </span>
+        <span className="h-1.5 overflow-hidden rounded-full bg-background" aria-hidden>
+          <span className={`hc-glow-pt block h-full rounded-full ${entrada ? "bg-serie-in [--glow-c:var(--serie-in)]" : "bg-serie-out [--glow-c:var(--serie-out)]"}`} style={{ width: `${(valor / maior) * 100}%` }} />
+        </span>
+      </button>
+    );
+  };
   return (
     <div className="grid gap-5">
-      <CartaoSecao titulo="Financeiro do grupo" descricao={`Meu dinheiro, o que os integrantes utilizaram e o que já devolveram, até o fim de ${nome}. Cada despesa e cada devolução contam uma vez.`}>
+      <CartaoSecao titulo="Financeiro do grupo" descricao={`Meu dinheiro e o que os integrantes utilizaram e devolveram, até o fim de ${nome}.`}>
         {/* Destaque: mesmo card do Total disponível do Meu financeiro (cor de destaque; vermelho quando negativo) */}
         <div className={`hc-hero hc-glow relative isolate grid content-between gap-3 overflow-hidden rounded-3xl p-5 @xl:p-6 ${negativo ? "hc-hero-neg" : ""}`}>
           <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 -z-10 size-60 rounded-full bg-white/10" />
@@ -78,21 +124,24 @@ export default function FinanceiroGrupoCard({ g, onAbrirRepasses }: { g: Finance
             </button>
           </div>
           <p data-sinal className="text-4xl font-bold leading-none tracking-tight tabular-nums [overflow-wrap:anywhere] @4xl:text-5xl">{saldo(g.disponivelGrupo)}</p>
-          <p className="max-w-[48ch] text-xs leading-relaxed">Meu dinheiro disponível + repasses recebidos − utilizado pelos integrantes, até o fim de {nome}.</p>
+          <p className="max-w-[48ch] text-xs leading-relaxed">
+            {g.regraCaixa
+              ? `Meu dinheiro disponível + contas pendentes e faturas em aberto (ainda não pagas) + repasses recebidos − utilizado pelos integrantes já pago, até o fim de ${nome}.`
+              : `Meu dinheiro disponível + repasses recebidos − utilizado pelos integrantes, até o fim de ${nome}.`}
+          </p>
         </div>
+      </CartaoSecao>
 
-        <Bloco rotulo="Composição do disponível do grupo">
-          <Linha rotulo="Meu dinheiro disponível" valor={saldo(g.meuDisponivel)} tom={g.meuDisponivel} dica="Minhas entradas menos minhas despesas, as mesmas do Meu financeiro" />
-          <Linha rotulo="Repasses recebidos" valor={comSinal(g.recebido)} tom={g.recebido} dica="Só o que os integrantes devolveram e eu confirmei; não é entrada nem resultado" />
-          <Linha rotulo="Utilizado pelos integrantes" valor={comSinal(-g.utilizado)} tom={-g.utilizado} dica="Despesas que eu lancei e que são de responsabilidade deles, em qualquer forma de pagamento" />
-          <Linha rotulo="Disponível do grupo" valor={saldo(g.disponivelGrupo)} tom={g.disponivelGrupo} forte />
-        </Bloco>
-
-        <Bloco rotulo={`Acompanhamento de ${nome}`}>
-          <Linha rotulo="Ainda falta receber" valor={saldo(g.pendente)} tom={g.pendente} dica={g.aguardando > 0.004 ? `${saldo(g.aguardando)} já marcado como repassado, aguardando a minha confirmação` : undefined} />
-          <Linha rotulo={`Utilizado em ${nome}`} valor={saldo(g.utilizadoNoMes)} />
-          <Linha rotulo={`Devolvido em ${nome}`} valor={saldo(g.recebidoNoMes)} tom={g.recebidoNoMes} dica="Conta no mês em que eu confirmo o recebimento" />
-        </Bloco>
+      {/* Entrou e saiu: mesmo desenho do Meu financeiro, mas com todo o grupo (lançamentos visíveis para você) */}
+      <CartaoSecao titulo={`Entrou e saiu em ${nome}`} descricao="Todo o grupo, nos lançamentos visíveis para você. Repasse e fatura paga não entram.">
+        <div className="grid gap-3">
+          {linhaMes("entradas", "Entrou", g.entradasGrupo.total)}
+          {linhaMes("saidas", "Saiu", g.saidasGrupo.total)}
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+          <span className="text-sm font-medium">Resultado do mês</span>
+          <span data-sinal className={`shrink-0 text-xl font-semibold tabular-nums ${tomDoValor(resultado)}`}>{comSinal(resultado)}</span>
+        </div>
       </CartaoSecao>
 
       <CartaoSecao titulo="Repasses por integrante" descricao={`Quanto cada integrante utilizou, devolveu e ainda falta, até o fim de ${nome}.`} acao={onAbrirRepasses ? { rotulo: "Ver repasses", onClick: onAbrirRepasses } : undefined}>
@@ -113,6 +162,15 @@ export default function FinanceiroGrupoCard({ g, onAbrirRepasses }: { g: Finance
           </ul>
         )}
       </CartaoSecao>
+
+      {detalhe && (
+        <DetalheMovimentoGrupo
+          titulo={detalhe === "entradas" ? "Entradas do grupo" : "Saídas do grupo"}
+          mes={g.mes}
+          mov={detalhe === "entradas" ? g.entradasGrupo : g.saidasGrupo}
+          onFechar={() => setDetalhe(null)}
+        />
+      )}
     </div>
   );
 }

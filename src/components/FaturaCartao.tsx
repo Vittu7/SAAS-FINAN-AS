@@ -12,7 +12,7 @@ import type { Estado } from '@/lib/types';
 import type { Opcao } from '@/lib/useOpcoes';
 import { avisos } from '@/lib/avisos';
 import { calcularSaldoConta, tipoDaConta } from '@/lib/contas';
-import { calcularFatura, pagamentosDaFatura, resumoFatura, vencimentoDaFatura, ROTULO_SITUACAO } from '@/lib/pagamentoFatura';
+import { calcularFatura, pagamentosDaFatura, resumoFatura, validarEstorno, vencimentoDaFatura, ROTULO_SITUACAO, type PagamentoFatura } from '@/lib/pagamentoFatura';
 import { usePagamentosFatura } from '@/hooks/usePagamentosFatura';
 import { useMovimentosConta } from '@/hooks/useMovimentosConta';
 import PagarFaturaModal from '@/components/PagarFaturaModal';
@@ -20,13 +20,27 @@ import PagarFaturaModal from '@/components/PagarFaturaModal';
 /** Mesmo visual da tela de Contas parceladas: carrossel de cartões + lista em painel. */
 export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId = null }: { estado: Estado; /** Estado já filtrado por responsável: vale para a lista de compras. O limite dos cartões usa sempre o `estado` completo. */ estadoLista?: Estado; mes: string; setMes: (mes: string) => void; userId?: string | null }) {
   const { pagamento, corPagamento, recarregar, atualizarPagamento } = useOpcoes();
-  const { pagamentos, disponivel: pagamentosHabilitados, registrar } = usePagamentosFatura();
+  const { pagamentos, disponivel: pagamentosHabilitados, registrar, estornar } = usePagamentosFatura();
+  const [estornando, setEstornando] = useState<string | null>(null);
+  const estornarPagamento = async (p: PagamentoFatura) => {
+    if (estornando) return;
+    const problema = validarEstorno(p.id, pagamentos);
+    if (problema) return avisos.aviso("Não foi possível estornar", problema);
+    if (!window.confirm(`Estornar o pagamento de ${brl(p.valor)} de ${p.data.split("-").reverse().join("/")}? A fatura volta a ficar aberta e o valor volta para ${p.conta}. As compras não são alteradas.`)) return;
+    setEstornando(p.id);
+    const falha = await estornar(p.id);
+    setEstornando(null);
+    if (falha) return avisos.erro("Não foi possível estornar", falha);
+    avisos.sucesso("Pagamento estornado", `${brl(p.valor)} voltou para ${p.conta} e a fatura de ${p.cartao} está aberta de novo.`);
+  };
   const caixinhaMovs = useMovimentosConta();
   const [pagando, setPagando] = useState(false);
+  // Fatura a pagar: só conta fixa já cobrada e com o fechamento de cada cartão
+  const opcoesFatura = { somenteCobradas: true, fechamentos: Object.fromEntries(pagamento.map((o) => [o.nome, o.dia_fechamento])) };
   // Cartões com a maior fatura do mês aparecem primeiro
   const cartoes = pagamento
     .filter((i) => i.eh_cartao)
-    .map((c) => ({ c, total: calcularFatura(estado, c.nome, mes, Number(c.limite) || 0).total }))
+    .map((c) => ({ c, total: calcularFatura(estado, c.nome, mes, Number(c.limite) || 0, opcoesFatura).total }))
     .sort((a, b) => b.total - a.total || a.c.nome.localeCompare(b.c.nome, 'pt-BR'))
     .map((x) => x.c);
   const [id, setId] = useState('');
@@ -38,9 +52,9 @@ export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId 
       {cadastrando && <CadastrarCartaoModal onFechar={() => setCadastrando(false)} onConcluir={() => recarregar()} />}
     </>
   );
-  const fatura = calcularFatura(estadoLista ?? estado, escolhido.nome, mes, Number(escolhido.limite) || 0);
+  const fatura = calcularFatura(estadoLista ?? estado, escolhido.nome, mes, Number(escolhido.limite) || 0, opcoesFatura);
   // Quitação usa a fatura COMPLETA do cartão (o filtro de pessoas só muda a lista de compras)
-  const faturaCompleta = calcularFatura(estado, escolhido.nome, mes, Number(escolhido.limite) || 0);
+  const faturaCompleta = calcularFatura(estado, escolhido.nome, mes, Number(escolhido.limite) || 0, opcoesFatura);
   const historico = pagamentosDaFatura(pagamentos, escolhido.nome, mes);
   const resumo = resumoFatura(faturaCompleta.total, historico);
   const vencimento = vencimentoDaFatura(mes, escolhido.dia_vencimento);
@@ -56,6 +70,18 @@ export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId 
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       avisos.erro("Não foi possível salvar o vencimento", /dia_vencimento/.test(msg) ? "Rode o script supabase-08-pagamentos-fatura.sql no Supabase." : msg);
+    }
+  };
+  const definirFechamento = async () => {
+    const txt = window.prompt("Dia do fechamento da fatura (1 a 31). Cobranças depois desse dia entram na fatura seguinte (vale a partir de nov/2026):", escolhido.dia_fechamento ? String(escolhido.dia_fechamento) : "");
+    if (txt === null) return;
+    const dia = Math.trunc(Number(txt));
+    if (!(dia >= 1 && dia <= 31)) return avisos.erro("Dia inválido", "Informe um número de 1 a 31.");
+    try {
+      await atualizarPagamento(escolhido.id, { dia_fechamento: dia });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      avisos.erro("Não foi possível salvar o fechamento", /dia_fechamento/.test(msg) ? "Rode o script supabase-23-contas-fixas.sql no Supabase." : msg);
     }
   };
   const corSituacao = { aberta: "bg-amber-500/15 text-amber-700 dark:text-amber-400", parcial: "bg-sky-500/15 text-sky-700 dark:text-sky-400", paga: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" }[resumo.situacao];
@@ -77,7 +103,7 @@ export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId 
 
         <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 md:mx-0 md:px-0 [-webkit-overflow-scrolling:touch]">
           {cartoes.map((c) => {
-            const f = calcularFatura(estado, c.nome, mes, Number(c.limite) || 0);
+            const f = calcularFatura(estado, c.nome, mes, Number(c.limite) || 0, opcoesFatura);
             const limite = Number(c.limite) || 0;
             const pct = limite > 0 ? Math.min(100, (f.total / limite) * 100) : 0;
             const ativo = c.id === escolhido.id;
@@ -116,6 +142,10 @@ export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId 
               {vencimento ? <>Vence em <b className="text-ink">{vencimento.split("-").reverse().join("/")}</b></> : "Sem vencimento definido"}
               {" · "}
               <button type="button" onClick={definirVencimento} className="font-medium text-accent underline-offset-2 hover:underline">{vencimento ? "alterar" : "definir"}</button>
+              {" · "}
+              {escolhido.dia_fechamento ? <>Fecha dia <b className="text-ink">{escolhido.dia_fechamento}</b></> : "Sem fechamento definido"}
+              {" · "}
+              <button type="button" onClick={definirFechamento} className="font-medium text-accent underline-offset-2 hover:underline">{escolhido.dia_fechamento ? "alterar" : "definir"}</button>
             </p>
           </div>
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${corSituacao}`}>{ROTULO_SITUACAO[resumo.situacao]}</span>
@@ -145,7 +175,7 @@ export default function FaturaCartao({ estado, estadoLista, mes, setMes, userId 
               {historico.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span className="min-w-0"><span className="block font-medium">{p.data.split("-").reverse().join("/")}</span><span className="block truncate text-xs text-muted">saiu de {p.conta}</span></span>
-                  <span className="shrink-0 font-semibold tabular-nums">− {brl(p.valor)}</span>
+                  <span className="flex shrink-0 items-center gap-3"><span className="font-semibold tabular-nums">− {brl(p.valor)}</span><button type="button" onClick={() => estornarPagamento(p)} disabled={estornando !== null} className="text-xs font-medium text-red-400 hover:underline disabled:opacity-50">Estornar pagamento</button></span>
                 </li>
               ))}
             </ul>

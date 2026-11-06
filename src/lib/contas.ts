@@ -52,8 +52,10 @@ export function calcularSaldoConta(
   const extrato = semDuplicados(estado.extrato as any[], "extrato").filter(
     (i) => i.pagamento === conta.nome && doUsuario(i, opts.userId) && ate(i, opts.ateMes),
   );
+  // Conta fixa paga sai do saldo no mês em que foi paga (pago_em); sem data (histórico), vale o mês da linha
+  const mesDoPagamento = (i: any): string => (i.pago_em || i.pagoEm ? String(i.pago_em || i.pagoEm).slice(0, 7) : String(i.mes));
   const fixasPagas = semDuplicados(estado.contas as any[], "contas").filter(
-    (i) => (i.formaPagamento || i.forma_pagamento) === conta.nome && i.pago && doUsuario(i, opts.userId) && ate(i, opts.ateMes),
+    (i) => (i.formaPagamento || i.forma_pagamento) === conta.nome && i.pago && doUsuario(i, opts.userId) && (!opts.ateMes || mesDoPagamento(i) <= opts.ateMes),
   );
   // Repasses que o usuário (autor) recebeu e mandou para esta conta
   const repassesRecebidos = soma(

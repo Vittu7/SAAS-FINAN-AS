@@ -14,6 +14,9 @@ import ModalFormulario from "@/components/ModalFormulario";
 import { useOpcoes } from "@/lib/useOpcoes";
 import { SeletorOpcao, Selo } from "@/components/SeletorOpcao";
 import EditarLancamentoModal from "@/components/EditarLancamentoModal";
+import { tipoDaConta } from "@/lib/contas";
+import { dataValida, hojeISO } from "@/lib/datas";
+import { addMeses } from "@/lib/finance";
 
 type Props = {
   mes: string;
@@ -21,7 +24,9 @@ type Props = {
   onAdd: (item: any) => unknown;
   onRemove: (id: string) => void;
   onEdit?: (id: string, patch: Record<string, any>) => Promise<boolean | void>;
-  onTogglePago: (id: string) => void;
+  onTogglePago: (id: string, dataPagamento?: string) => void;
+  /** Encerra a série a partir de um mês (AAAA-MM), mantendo o histórico */
+  onEncerrar?: (id: string, aPartirDe: string) => Promise<boolean | void> | void;
 };
 
 // O cadastro foi centralizado em "Nova transação" (botão +). O formulário antigo fica oculto aqui.
@@ -34,6 +39,7 @@ export default function ContasFixasTable({
   onRemove,
   onEdit,
   onTogglePago,
+  onEncerrar,
 }: Props) {
   const [nome, setNome] = useState("");
   const [valorTexto, setValorTexto] = useState("");
@@ -58,6 +64,35 @@ export default function ContasFixasTable({
   const [modalOpcaoAberto, setModalOpcaoAberto] =
     useState<"pagamento" | "categoria" | null>(null);
   const [editando, setEditando] = useState<any | null>(null);
+
+  // Conta fixa no cartão de crédito: "Cobrada no cartão" (entra na fatura; o dinheiro só sai quando a fatura é paga)
+  const noCredito = (item: any) => {
+    const nomeForma = item.formaPagamento || item.forma_pagamento;
+    const opcao = pagamento.find((o) => o.nome === nomeForma);
+    return Boolean(opcao) && tipoDaConta(opcao!) === "credito";
+  };
+  const encerrar = (item: any) => {
+    if (!onEncerrar) return;
+    const sugestao = addMeses(mes, 1);
+    const txt = window.prompt("Encerrar esta conta fixa a partir de qual mês (AAAA-MM)? Os meses anteriores e o histórico ficam como estão.", sugestao);
+    if (txt === null) return;
+    if (!/^[0-9]{4}-[0-9]{2}$/.test(txt.trim())) { avisos.erro("Mês inválido", "Use o formato AAAA-MM, por exemplo 2026-12."); return; }
+    onEncerrar(item.id, txt.trim());
+  };
+  const rotuloPago = (item: any) => (noCredito(item) ? "Cobrada no cartão" : "Paga");
+  const alternar = (item: any) => {
+    if (!item.pago && noCredito(item)) {
+      const txt = window.prompt("Data em que a cobrança apareceu no cartão (AAAA-MM-DD):", hojeISO());
+      if (txt === null) return;
+      if (!dataValida(txt.trim())) {
+        avisos.erro("Data inválida", "Use o formato AAAA-MM-DD, por exemplo 2026-11-28.");
+        return;
+      }
+      onTogglePago(item.id, txt.trim());
+      return;
+    }
+    onTogglePago(item.id);
+  };
 
   const carregarMembros = useCallback(async () => {
     const {
@@ -351,13 +386,13 @@ export default function ContasFixasTable({
         resumo={{
           rotulo: "Falta pagar",
           valor: itens.filter((i: any) => !i.pago && !i.foraDoMeuSaldo).reduce((t: number, i: any) => t + (Number(i.valor) || 0), 0),
-          extra: `${itens.filter((i: any) => i.pago).length} de ${itens.length} pagas`,
+          extra: `${itens.filter((i: any) => i.pago).length} de ${itens.length} pagas ou cobradas`,
         }}
         itens={[...itens].sort((x: any, y: any) => Number(x.pago) - Number(y.pago)).map((item: any) => ({
           id: item.id, titulo: item.nome || "Sem nome", subtitulo: [item.categoria, item.formaPagamento || item.forma_pagamento].filter(Boolean).join(" · "),
           valor: item.valor, icone: item.pago ? Check : ICONE_ABA.contas, autor: item.lancadoPorOutro ? { nome: item.autorNome, avatar: item.autorAvatar, cor: item.autorCor } : null, repasse: item.repasseDevido ? (item.repassePago ? "pago" : item.repasseInformado ? "aguardando" : "pendente") : null, pessoa: { nome: item.responsavel, avatar: item.responsavelAvatar, cor: item.responsavelCor }, tags: [item.formaPagamento || item.forma_pagamento, item.categoria, item.responsavel],
-          status: item.pago ? { texto: "Paga", tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
-          onAlternar: () => onTogglePago(item.id), rotuloAlternar: item.pago ? "Desmarcar" : "Marcar como paga",
+          status: item.pago ? { texto: rotuloPago(item), tom: "ok" as const } : { texto: "Pendente", tom: "alerta" as const },
+          onAlternar: () => alternar(item), rotuloAlternar: item.pago ? "Desmarcar" : (noCredito(item) ? "Marcar como cobrada no cartão" : "Marcar como paga"),
           onEditar: () => setEditando(item), onRemover: () => onRemove(item.id), confirmarRemocao: "Remover esta conta fixa de todos os meses (passados e futuros)? Essa ação não pode ser desfeita.",
         }))}
       />
@@ -386,10 +421,10 @@ export default function ContasFixasTable({
                 <td className="py-3 pr-3">
                   <button
                     type="button"
-                    onClick={() => onTogglePago(item.id)}
-                    aria-label={item.pago ? "Marcar como pendente" : "Marcar como paga"}
+                    onClick={() => alternar(item)}
+                    aria-label={item.pago ? "Marcar como pendente" : noCredito(item) ? "Marcar como cobrada no cartão" : "Marcar como paga"}
                     aria-pressed={Boolean(item.pago)}
-                    className={`inline-flex min-w-[112px] items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${item.pago
+                    className={`inline-flex min-w-[112px] whitespace-nowrap items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${item.pago
                       ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
                       : "border-amber-500/25 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
                       }`}
@@ -403,10 +438,10 @@ export default function ContasFixasTable({
                     >
                       <Ico icon={item.pago ? Check : TriangleAlert} size={10} />
                     </span>
-                    {item.pago ? "Pago" : "Pendente"}
+                    {item.pago ? (noCredito(item) ? "Cobrada no cartão" : "Pago") : "Pendente"}
                   </button>
                 </td>
-                <td className="py-3 pr-3 font-medium">{item.nome}</td>
+                <td className="py-3 pr-3 font-medium">{item.nome}{item.valor_variavel && item.valor_confirmado === false && <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">valor previsto · informe o real</span>}</td>
                 <td className="py-3 pr-3">
                   {item.forma_pagamento ? (
                     <Selo
@@ -446,6 +481,10 @@ export default function ContasFixasTable({
                       <span className="inline-flex items-center gap-1"><Ico icon={Pencil} size={13} />Editar</span>
                     </button>
                   )}
+                  {onEncerrar && !item.encerrada_em && (
+                    <button type="button" onClick={() => encerrar(item)} className="mr-3 text-xs text-muted hover:underline">Encerrar</button>
+                  )}
+                  {item.encerrada_em && <span className="mr-3 text-xs text-muted">Encerra em {item.encerrada_em}</span>}
                   <button
                     type="button"
                     onClick={() => { if (window.confirm("Remover esta conta fixa de todos os meses (passados e futuros)? Essa ação não pode ser desfeita.")) onRemove(item.id); }}

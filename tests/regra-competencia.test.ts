@@ -65,7 +65,7 @@ function visao(mes: string, pagamentos = FATURAS) {
   const f = (l: Item[]) => l.map((i) => marcarForaDaVisao(i, escopo));
   const dados = { extrato: f(extrato), cartao: f(cartao), contas: f(contas) };
   const painel = calcularPainel(dados, { mes, saldoInicial: 0, meuId: V, dadosRepasses: todos, escopo, cartoesCredito: CREDITO, pagamentosFatura: pagamentos, mesCorteCaixa: MES_CORTE_CAIXA });
-  return { painel, grupo: financeiroDoGrupo(painel, todos, V) };
+  return { painel, grupo: financeiroDoGrupo(painel, todos, V, { pagamentosFatura: pagamentos, cartoesCredito: CREDITO }) };
 }
 
 describe("meu financeiro: entradas − minhas despesas", () => {
@@ -122,16 +122,16 @@ describe("despesas a pagar do meu financeiro", () => {
 });
 
 describe("financeiro do grupo: meu disponível + recebido − utilizado", () => {
-  it("outubro: 512,99 + 0 − 1.861,11 = −1.348,12 (repasses só foram confirmados em novembro)", () => {
+  it("outubro (regra de caixa): 512,99 + 932,01 + 0 − 425,00 = 1.020,00 (faturas pagas só em novembro; débito já saiu)", () => {
     const { grupo } = visao(OUT);
-    expect(grupo).toMatchObject({ meuDisponivel: 512.99, utilizado: 1861.11, recebido: 0, pendente: 1861.11, disponivelGrupo: -1348.12 });
+    expect(grupo).toMatchObject({ meuDisponivel: 512.99, utilizado: 1861.11, utilizadoPago: 425, naoDescontado: 932.01, recebido: 0, pendente: 1861.11, disponivelGrupo: 1020, regraCaixa: true });
     const por = Object.fromEntries(grupo.membros.map((m) => [m.nome, m.utilizado]));
     expect(por).toEqual({ Gisa: 828.73, "Mãe": 510.05, Dimitrios: 522.33 });
   });
 
-  it("novembro (acumulado): 1.279,74 + 1.522,86 − 3.451,86 = −649,26", () => {
+  it("novembro (regra de caixa): 1.279,74 + 1.267,25 + 1.522,86 − 1.986,11 = 2.083,74 (pendentes e faturas abertas não descontam)", () => {
     const { grupo } = visao(NOV);
-    expect(grupo).toMatchObject({ meuDisponivel: 1279.74, utilizado: 3451.86, recebido: 1522.86, pendente: 1929, disponivelGrupo: -649.26, utilizadoNoMes: 1590.75, recebidoNoMes: 1522.86 });
+    expect(grupo).toMatchObject({ meuDisponivel: 1279.74, utilizado: 3451.86, recebido: 1522.86, pendente: 1929, disponivelGrupo: 2083.74, utilizadoPago: 1986.11, naoDescontado: 1267.25, regraCaixa: true, utilizadoNoMes: 1590.75, recebidoNoMes: 1522.86 });
     const por = Object.fromEntries(grupo.membros.map((m) => [m.nome, [m.utilizado, m.recebido, m.pendente]]));
     expect(por).toEqual({ Gisa: [1956.98, 503.73, 1453.25], "Mãe": [959.3, 496.8, 462.5], Dimitrios: [535.58, 522.33, 13.25] });
   });

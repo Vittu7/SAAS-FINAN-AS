@@ -124,3 +124,20 @@ describe("caixinhas usando o saldo de uma conta de débito", () => {
     expect(com).toMatchObject({ ok: false, disponivel: 220, faltante: 80 });
   });
 });
+
+import { calcularSaldoConta as saldoPorPagamento } from "../src/lib/contas";
+describe("saldo de débito: conta fixa sai no mês em que foi paga", () => {
+  const conta = { nome: "Inter", saldo_inicial: 1000 };
+  const e = (extra: any) => ({ extrato: [], cartao: [], contas: [{ id: "f", mes: "2026-10", nome: "Luz", valor: 100, pago: true, forma_pagamento: "Inter", owner_id: "u", ...extra }] }) as any;
+  it("paga em novembro uma conta de outubro: outubro não muda, novembro desconta", () => {
+    expect(saldoPorPagamento(e({ pago_em: "2026-11-03" }), conta, { userId: "u", ateMes: "2026-10" }).saldo).toBe(1000);
+    expect(saldoPorPagamento(e({ pago_em: "2026-11-03" }), conta, { userId: "u", ateMes: "2026-11" }).saldo).toBe(900);
+  });
+  it("histórico sem pago_em continua pelo mês da linha", () => {
+    expect(saldoPorPagamento(e({}), conta, { userId: "u", ateMes: "2026-10" }).saldo).toBe(900);
+  });
+  it("pendente nunca desconta; crédito nunca é conta de saldo", () => {
+    expect(saldoPorPagamento(e({ pago: false }), conta, { userId: "u", ateMes: "2026-12" }).saldo).toBe(1000);
+    expect(saldoPorPagamento(e({ forma_pagamento: "Nubank", pago_em: "2026-11-03" }), conta, { userId: "u", ateMes: "2026-12" }).saldo).toBe(1000);
+  });
+});

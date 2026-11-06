@@ -72,6 +72,7 @@ export default function NovaTransacao({
   const [parcelaAtual, setParcelaAtual] = useState("1");
   const [parcelaTotal, setParcelaTotal] = useState("2");
   const [vencimento, setVencimento] = useState("");
+  const [valorVariavel, setValorVariavel] = useState(false);
   // Data do lançamento (entrada, saída à vista e compra parcelada). O mês do lançamento vem dela.
   const [data, setData] = useState(() => dataPadraoDoMes(mes));
   const [dataMexida, setDataMexida] = useState(false);
@@ -187,7 +188,7 @@ export default function NovaTransacao({
         }
         const feitos: unknown[] = [];
         for (const r of responsaveis) {
-          feitos.push(await onAdicionarConta({ mes, nome: nomeDe(r), valor: individual, vencimento: vencimento || null, categoria: categoria || "Outros", forma_pagamento: forma || null, pago: false, responsavel: r, compartilhado_com }, opcoes));
+          feitos.push(await onAdicionarConta({ mes, nome: nomeDe(r), valor: individual, vencimento: vencimento || null, categoria: categoria || "Outros", forma_pagamento: forma || null, pago: false, responsavel: r, compartilhado_com, ...(valorVariavel ? { valor_variavel: true } : {}) }, opcoes));
           if (falhouAlgum(feitos)) return;
         }
         if (varios) avisarDivisao("Conta fixa");
@@ -307,6 +308,10 @@ export default function NovaTransacao({
 
         {saida && como === "fixa" && (
           <div><label htmlFor="nt-venc" className={rotulo}>Dia do vencimento (opcional)</label><input id="nt-venc" type="number" min={1} max={31} inputMode="numeric" placeholder="Ex.: 10" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={campo} /></div>
+        )}
+
+        {saida && como === "fixa" && (
+          <label className="flex items-start gap-2 text-sm text-ink"><input type="checkbox" checked={valorVariavel} onChange={(e) => setValorVariavel(e.target.checked)} className="mt-0.5" /><span>O valor muda todo mês (energia, água...). Cada mês traz o anterior como previsão e você informa o real, sem alterar os meses passados.</span></label>
         )}
 
         {membros.length > 0 && (

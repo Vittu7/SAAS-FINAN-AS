@@ -172,6 +172,16 @@ export function agruparPorOrigem(linhas: LinhaExtrato[]): GrupoExtrato[] {
     .filter((g) => g.linhas.length > 0);
 }
 
+/**
+ * Detalhe de Saídas do Meu financeiro: só despesas em que EU sou o responsável (o autor não decide).
+ * Fora ficam as lançadas por mim para outro responsável (`foraDoSaldo`). Contas fixas pendentes continuam listadas
+ * (marcadas `pendente`) e ficam fora do realizado. A soma das linhas não pendentes é o indicador "Saiu".
+ */
+export const saidasDoMeuFinanceiro = (linhas: LinhaExtrato[]) => linhas.filter((l) => !l.entrada && !l.foraDoSaldo);
+
+/** Detalhe de Entradas do Meu financeiro: só as entradas em que eu sou o responsável. A soma é o indicador "Entrou". */
+export const entradasDoMeuFinanceiro = (linhas: LinhaExtrato[]) => linhas.filter((l) => l.entrada && !l.foraDoSaldo);
+
 /** Gastos realizados: sem entradas, sem itens fora do meu saldo e sem contas fixas pendentes. */
 export const totalGastos = (linhas: LinhaExtrato[]) => somaValor(linhas.filter((l) => !l.entrada && !l.foraDoSaldo && !l.pendente));
 

@@ -491,33 +491,44 @@ body::after {
   opacity: 0;
 }
 
-/* --- Aurora: três manchas suaves de cor, uma em cada canto --- */
-:root[data-bg="aurora"] body::before,
-.hc-fx[data-fx="aurora"]::before {
-  opacity: calc(var(--fx) * var(--k, 1));
+/* --- Bolhas: círculos translúcidos de vários tamanhos espalhados pela tela, com contorno fino.
+   Tamanho fixo em px e posição em %, então fica igual em celular e desktop. --- */
+:root[data-bg="bolhas"] body::before,
+.hc-fx[data-fx="bolhas"]::before {
+  opacity: calc(var(--fx) * 1.9 * var(--k, 1));
   background:
-    radial-gradient(60% 50% at 6% 0%, var(--accent), transparent 70%),
-    radial-gradient(50% 45% at 100% 8%, #38bdf8, transparent 70%),
-    radial-gradient(60% 50% at 88% 100%, var(--accent), transparent 72%);
+    radial-gradient(circle 74px at 88% 10%, color-mix(in srgb, var(--accent) 22%, transparent) 0 72px, var(--accent) 72px 74px, transparent 75px),
+    radial-gradient(circle 38px at 70% 24%, color-mix(in srgb, var(--accent) 22%, transparent) 0 36px, var(--accent) 36px 38px, transparent 39px),
+    radial-gradient(circle 22px at 94% 36%, color-mix(in srgb, var(--accent) 22%, transparent) 0 20px, var(--accent) 20px 22px, transparent 23px),
+    radial-gradient(circle 56px at 6% 58%, color-mix(in srgb, var(--accent) 22%, transparent) 0 54px, var(--accent) 54px 56px, transparent 57px),
+    radial-gradient(circle 28px at 22% 76%, color-mix(in srgb, var(--accent) 22%, transparent) 0 26px, var(--accent) 26px 28px, transparent 29px),
+    radial-gradient(circle 90px at 78% 92%, color-mix(in srgb, var(--accent) 22%, transparent) 0 88px, var(--accent) 88px 90px, transparent 91px),
+    radial-gradient(circle 34px at 52% 84%, color-mix(in srgb, var(--accent) 22%, transparent) 0 32px, var(--accent) 32px 34px, transparent 35px),
+    radial-gradient(circle 18px at 40% 12%, color-mix(in srgb, var(--accent) 22%, transparent) 0 16px, var(--accent) 16px 18px, transparent 19px);
 }
 
-/* --- Brilho: um facho de luz que desce do topo --- */
-:root[data-bg="glow"] body::before,
-.hc-fx[data-fx="glow"]::before {
-  opacity: calc(var(--fx) * 1.6 * var(--k, 1));
-  background: radial-gradient(85% 60% at 50% -12%, var(--accent), transparent 72%);
+:root[data-bg="bolhas"] body::after,
+.hc-fx[data-fx="bolhas"]::after {
+  opacity: calc(var(--fx) * 1.1 * var(--k, 1));
+  background: radial-gradient(circle at 100% 0%, color-mix(in oklab, var(--accent) 60%, #a78bfa) 0%, transparent 50vmax);
 }
 
-/* --- Malha: gradiente em malha, cores vizinhas da cor de destaque (mais "vivo" que a aurora) --- */
-:root[data-bg="malha"] body::before,
-.hc-fx[data-fx="malha"]::before {
-  opacity: calc(var(--fx) * 1.05 * var(--k, 1));
+/* Miniatura das Bolhas: poucas bolhas macias (centro vazado, borda mais clara, sem recorte duro) em escala
+   reduzida, sobre um brilho suave de canto em % da caixa. */
+.hc-fx[data-fx="bolhas"]::before {
+  opacity: 1;
   background:
-    radial-gradient(42% 38% at 12% 12%, var(--accent), transparent 70%),
-    radial-gradient(38% 34% at 78% 8%, color-mix(in oklab, var(--accent) 45%, #6366f1), transparent 70%),
-    radial-gradient(40% 36% at 92% 58%, color-mix(in oklab, var(--accent) 50%, #0ea5e9), transparent 70%),
-    radial-gradient(44% 40% at 22% 88%, color-mix(in oklab, var(--accent) 55%, #f472b6), transparent 72%),
-    radial-gradient(34% 30% at 62% 96%, color-mix(in oklab, var(--accent) 70%, #22d3ee), transparent 70%);
+    radial-gradient(circle 17px at 80% 38%, transparent 0, color-mix(in srgb, var(--accent) 8%, transparent) 60%, color-mix(in srgb, var(--accent) 22%, transparent) 84%, var(--accent) 93%, transparent 100%),
+    radial-gradient(circle 11px at 56% 70%, transparent 0, color-mix(in srgb, var(--accent) 10%, transparent) 60%, color-mix(in srgb, var(--accent) 24%, transparent) 84%, var(--accent) 93%, transparent 100%),
+    radial-gradient(circle 23px at 16% 58%, transparent 0, color-mix(in srgb, var(--accent) 7%, transparent) 60%, color-mix(in srgb, var(--accent) 21%, transparent) 84%, var(--accent) 93%, transparent 100%),
+    radial-gradient(circle 8px at 34% 22%, transparent 0, color-mix(in srgb, var(--accent) 12%, transparent) 60%, color-mix(in srgb, var(--accent) 26%, transparent) 84%, var(--accent) 93%, transparent 100%),
+    radial-gradient(circle 6px at 93% 84%, transparent 0, color-mix(in srgb, var(--accent) 12%, transparent) 60%, color-mix(in srgb, var(--accent) 26%, transparent) 84%, var(--accent) 93%, transparent 100%),
+    radial-gradient(circle 9px at 44% 12%, transparent 0, color-mix(in srgb, var(--accent) 10%, transparent) 60%, color-mix(in srgb, var(--accent) 24%, transparent) 84%, var(--accent) 93%, transparent 100%);
+}
+
+.hc-fx[data-fx="bolhas"]::after {
+  opacity: calc(var(--fx) * 3.4);
+  background: radial-gradient(75% 100% at 100% 0%, color-mix(in oklab, var(--accent) 60%, #a78bfa), transparent 75%);
 }
 
 /* --- Ondas: duas ondas suaves na base da tela, em degradê da cor de destaque --- */
@@ -534,6 +545,22 @@ body::after {
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.55' d='M0 150 C 240 70 480 70 720 140 S 1200 230 1440 120 V320 H0Z'/%3E%3Cpath d='M0 215 C 260 150 520 150 760 205 S 1200 275 1440 190 V320 H0Z'/%3E%3C/svg%3E") bottom / 100% 46% no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.55' d='M0 150 C 240 70 480 70 720 140 S 1200 230 1440 120 V320 H0Z'/%3E%3Cpath d='M0 215 C 260 150 520 150 760 205 S 1200 275 1440 190 V320 H0Z'/%3E%3C/svg%3E") bottom / 100% 46% no-repeat;
 }
+
+/* --- Picos: cordilheira em camadas (silhueta pontuda) na base, com um sol suave ao fundo --- */
+:root[data-bg="picos"] body::before,
+.hc-fx[data-fx="picos"]::before {
+  opacity: calc(var(--fx) * 1.1 * var(--k, 1));
+  background: radial-gradient(40% 35% at 78% 62%, color-mix(in oklab, var(--accent) 55%, #fbbf24), transparent 72%);
+}
+
+:root[data-bg="picos"] body::after,
+.hc-fx[data-fx="picos"]::after {
+  opacity: calc(var(--fx) * 1.5 * var(--k, 1));
+  background: linear-gradient(180deg, transparent 0%, var(--accent) 100%);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 400' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.35' d='M0 170 L170 90 L330 160 L520 60 L720 150 L900 80 L1100 170 L1280 100 L1440 150 V400 H0Z'/%3E%3Cpath fill-opacity='.6' d='M0 250 L210 170 L400 240 L610 150 L820 245 L1040 160 L1240 250 L1440 190 V400 H0Z'/%3E%3Cpath d='M0 330 L260 260 L480 325 L720 255 L960 330 L1200 265 L1440 320 V400 H0Z'/%3E%3C/svg%3E") bottom / 100% 52% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 400' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.35' d='M0 170 L170 90 L330 160 L520 60 L720 150 L900 80 L1100 170 L1280 100 L1440 150 V400 H0Z'/%3E%3Cpath fill-opacity='.6' d='M0 250 L210 170 L400 240 L610 150 L820 245 L1040 160 L1240 250 L1440 190 V400 H0Z'/%3E%3Cpath d='M0 330 L260 260 L480 325 L720 255 L960 330 L1200 265 L1440 320 V400 H0Z'/%3E%3C/svg%3E") bottom / 100% 52% no-repeat;
+}
+
 
 /* --- Granulado: degradê suave com textura fina de grão (visual "papel", discreto) --- */
 :root[data-bg="granulado"] body::before,

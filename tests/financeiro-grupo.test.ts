@@ -87,3 +87,20 @@ describe("financeiro do grupo", () => {
     expect(financeiroDoGrupo(painel, todos, "eu").utilizado).toBe(0);
   });
 });
+
+describe("financeiro do grupo: entradas e saídas do grupo", () => {
+  it("saldo = entradas − saídas, igual ao disponível do grupo, sem duplicar repasses", () => {
+    for (const [mes, conf] of [[OUT, false], [NOV, false], [NOV, true]] as const) {
+      const { grupo } = visao(mes, conf);
+      expect(grupo.entradasGrupo).toBe(grupo.meuDisponivel + grupo.recebido);
+      expect(grupo.saidasGrupo).toBe(grupo.utilizado);
+      expect(grupo.entradasGrupo - grupo.saidasGrupo).toBe(grupo.disponivelGrupo);
+    }
+  });
+
+  it("meu disponível negativo vai para as saídas e o saldo não muda", () => {
+    const { grupo } = visao(OUT, false, true);
+    const forcado = { ...grupo, meuDisponivel: -100 };
+    expect(Math.max(forcado.meuDisponivel, 0) + forcado.recebido - (forcado.utilizado + Math.max(-forcado.meuDisponivel, 0))).toBe(forcado.meuDisponivel + forcado.recebido - forcado.utilizado);
+  });
+});

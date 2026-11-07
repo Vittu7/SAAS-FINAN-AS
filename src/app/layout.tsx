@@ -82,11 +82,11 @@ export default function RootLayout({
                   );
                 }
 
-                const LEGADO = { dots: 'granulado', grid: 'ondas' };
-                const VALIDOS = ['none', 'aurora', 'glow', 'malha', 'ondas', 'granulado'];
-                let bg = localStorage.getItem('homecash-bg') || 'none';
+                const LEGADO = { dots: 'granulado', grid: 'ondas', none: 'ondas', glow: 'bolhas', cidade: 'bolhas', ecos: 'bolhas', prisma: 'picos', aurora: 'ondas', malha: 'ondas' };
+                const VALIDOS = ['picos', 'bolhas', 'ondas', 'granulado'];
+                let bg = localStorage.getItem('homecash-bg') || 'ondas';
                 bg = LEGADO[bg] || bg;
-                root.dataset.bg = VALIDOS.indexOf(bg) >= 0 ? bg : 'none';
+                root.dataset.bg = VALIDOS.indexOf(bg) >= 0 ? bg : 'ondas';
               } catch (e) {}
             `,
           }}

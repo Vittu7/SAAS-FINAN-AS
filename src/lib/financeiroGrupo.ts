@@ -11,6 +11,8 @@
  * - Repasses recebidos = só os CONFIRMADOS por mim (no mês do recebimento). Pendente e "repassado" não contam.
  * - Disponível do grupo = meu disponível + repasses recebidos − utilizado pelos integrantes.
  *   Quando um integrante devolve, o disponível do grupo sobe e o pendente dele cai na mesma quantia (sem duplicar).
+ * - Entradas do grupo = meu dinheiro (se positivo) + repasses recebidos. Saídas do grupo = utilizado pelos integrantes
+ *   (+ meu disponível, se negativo). Saldo = entradas − saídas = Disponível do grupo, sem contar nada duas vezes.
  * - Tudo é acumulado até o mês visto, como o Total disponível. Repasse nunca é entrada nem despesa.
  */
 import { arred } from "./calculos";
@@ -50,6 +52,10 @@ export type FinanceiroGrupo = {
   recebidoNoMes: number;
   /** meuDisponivel + recebido − utilizado */
   disponivelGrupo: number;
+  /** Entradas do grupo: meu dinheiro disponível (parte positiva) + repasses recebidos e confirmados */
+  entradasGrupo: number;
+  /** Saídas do grupo: utilizado pelos integrantes (+ meu disponível, quando negativo) */
+  saidasGrupo: number;
   membros: MembroRepasse[];
 };
 
@@ -92,6 +98,8 @@ export function financeiroDoGrupo(painel: Painel, dados: Dados, meuId: string): 
     utilizadoNoMes: soma((m) => m.utilizadoNoMes),
     recebidoNoMes: soma((m) => m.recebidoNoMes),
     disponivelGrupo: arred(painel.totalDisponivel + recebido - utilizado),
+    entradasGrupo: arred(Math.max(painel.totalDisponivel, 0) + recebido),
+    saidasGrupo: arred(utilizado + Math.max(-painel.totalDisponivel, 0)),
     membros,
   };
 }

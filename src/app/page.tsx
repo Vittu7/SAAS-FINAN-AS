@@ -319,6 +319,22 @@ export default function Home() {
     [estadoFiltrado, estado, mes, saldoInicialContas, userId, escopoPessoas, movsCaixinhaVisao, cartoesCredito, pagamentosFaturaVisao]
   );
 
+  // Financeiro do grupo: movimentações de todos os integrantes (sem filtro de pessoas; cada despesa conta uma vez)
+  const movimentoGrupo = useMemo(() => {
+    const doMes = (lista: any[]) => lista.filter((i) => i?.mes === mes && !i?.repasseSintetico);
+    const dados = { extrato: doMes(estado.extrato), cartao: doMes(estado.cartao), contas: doMes(estado.contas) };
+    return dados;
+  }, [estado, mes]);
+
+  // Detalhe de Entradas/Saídas do Meu financeiro: mesmos itens que alimentam os indicadores (calcularMes em calcularPainel):
+  // só o que tem eu como responsável financeiro (não quem cadastrou). Fora: o que lancei para outros (foraDoMeuSaldo),
+  // linhas sintéticas de repasse e despesa de outro integrante ainda sem repasse confirmado (já removida em estadoFiltrado).
+  const movimentoMeu = useMemo(() => {
+    const meu = (lista: any[]) =>
+      lista.filter((i) => i?.mes === mes && !i?.foraDoMeuSaldo && !i?.repasseSintetico && String(i?.responsavel_id ?? i?.owner_id ?? "") === String(userId ?? ""));
+    return { extrato: meu(estadoFiltrado.extrato), cartao: meu(estadoFiltrado.cartao), contas: meu(estadoFiltrado.contas) };
+  }, [estadoFiltrado, mes, userId]);
+
   // ---- Novo Resumo: gráfico e faturas em aberto (informativo) ----
   const serieResumo = useMemo(() => (mes ? serieEntradasSaidas(estadoFiltrado, mes) : []), [estadoFiltrado, mes]);
   const faturasAbertas = useMemo(
@@ -620,7 +636,14 @@ export default function Home() {
                 <div className="flex justify-center @xl:justify-start"><SeletorVisaoFinanceira visao={visaoFin} onVisao={setVisaoFin} /></div>
               )}
               {dashboard.preferencias.resumo && visaoFin === "grupo" && painel && userId && (
-                <FinanceiroGrupoCard g={financeiroDoGrupo(painel, estado, userId)} onAbrirRepasses={() => abrirGrupo("repasses")} />
+                <FinanceiroGrupoCard
+                  g={financeiroDoGrupo(painel, estado, userId)}
+                  extrato={movimentoGrupo.extrato}
+                  cartao={movimentoGrupo.cartao}
+                  contas={movimentoGrupo.contas}
+                  onVerExtrato={() => irPara("extrato")}
+                  onAbrirRepasses={() => abrirGrupo("repasses")}
+                />
               )}
               {dashboard.preferencias.resumo && visaoFin === "pessoal" && (
                 <PainelResumo
@@ -892,9 +915,9 @@ export default function Home() {
         <ExtratoDetalhe
           tipo={detalheExtrato}
           mes={mes}
-          extrato={extrato}
-          cartao={cartao}
-          contas={contas}
+          extrato={movimentoMeu.extrato}
+          cartao={movimentoMeu.cartao}
+          contas={movimentoMeu.contas}
           painel={painel}
           modo={modoSaldo}
           visualizacao={rotuloVisualizacao}

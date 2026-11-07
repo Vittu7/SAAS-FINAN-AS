@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Wallet } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Wallet } from "lucide-react";
 import { Ico } from "@/components/icons";
 import CartaoSecao from "@/components/dashboard/CartaoSecao";
 import { brl, pct, rotuloMes, useValoresOcultos } from "@/lib/finance";
 import type { Painel } from "@/lib/painel";
 import type { FaturaAberta } from "@/lib/pagamentoFatura";
 import type { TipoResumo } from "@/components/mobile/MobileShell";
-import { comSinal, saldo, tomDoValor } from "./valores";
+import EntrouESaiuCard from "./EntrouESaiuCard";
+import { saldo } from "./valores";
 
 const nomeMes = (m: string) => rotuloMes(m).split(" de ")[0].toLowerCase();
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
@@ -49,14 +50,13 @@ export default function PainelResumo({
 }) {
   const n = nomeMes(p.mes);
   const agora = p.mes === mesCorrente && !somenteConsulta;
-  const rotuloDisp = agora ? "Total disponível" : `Total disponível ao fim de ${n}`;
+  const rotuloDisp = "Meu Saldo disponível";
   const [oculto, setOculto] = useValoresOcultos();
   // Cartão principal na cor de destaque do tema (Configurações › Aparência); saldo negativo fica vermelho
   const negativo = p.totalDisponivel < -0.004;
-  const maior = Math.max(p.entradasRenda, p.saidasRealizadas, 1);
   // Barra do card principal: quanto do que entrou no mês já saiu (só visual; não muda nenhum cálculo)
-  const uso = p.entradasRenda > 0 ? Math.min(100, (p.saidasRealizadas / p.entradasRenda) * 100) : p.saidasRealizadas > 0 ? 100 : 0;
-  const pctSobrou = p.entradasRenda > 0 ? Math.round((p.resultadoRealizado / p.entradasRenda) * 100) : 0;
+  // Saídas = despesas pagas + contas fixas a pagar (p.saidas já soma as duas, sem repetir nenhuma)
+  const uso = p.entradasRenda > 0 ? Math.min(100, (p.saidas / p.entradasRenda) * 100) : p.saidas > 0 ? 100 : 0;
 
   const pendentes = contasDoMes
     .filter((c) => !c.pago && !c.foraDoMeuSaldo && c.mes === p.mes)
@@ -70,31 +70,6 @@ export default function PainelResumo({
   const vouRepassar = r.repassar;
   // Ao tocar em "Ainda vai sair": vai para onde o compromisso se resolve (contas fixas ou faturas)
   const abrirCompromisso = pendentes.length > 0 ? onAbrirContas : faturas.length > 0 ? onAbrirFaturas : onAbrirContas;
-
-  const linhaMes = (tipo: "entradas" | "gastos", rotulo: string, valor: number) => {
-    const entrada = tipo === "entradas";
-    return (
-      <button
-        type="button"
-        onClick={() => onAbrirExtrato?.(tipo)}
-        aria-label={`Ver ${entrada ? "entradas" : "saídas"}: ${brl(valor)}`}
-        className="-mx-2 grid gap-2 rounded-xl p-2 text-left transition hover:bg-background"
-      >
-        <span className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2.5 text-sm font-medium">
-            <span className={`hc-glow-pt grid size-8 place-items-center rounded-full ${entrada ? "bg-pos-bg text-pos [--glow-c:var(--pos)]" : "bg-neg-bg text-neg [--glow-c:var(--neg)]"}`}>
-              <Ico icon={entrada ? ArrowDownLeft : ArrowUpRight} size={16} />
-            </span>
-            {rotulo}
-          </span>
-          <span className={`text-lg font-semibold tabular-nums ${entrada ? "text-pos" : "text-neg"}`}>{brl(valor)}</span>
-        </span>
-        <span className="h-1.5 overflow-hidden rounded-full bg-background" aria-hidden>
-          <span className={`hc-glow-pt block h-full rounded-full ${entrada ? "bg-serie-in [--glow-c:var(--serie-in)]" : "bg-serie-out [--glow-c:var(--serie-out)]"}`} style={{ width: `${(valor / maior) * 100}%` }} />
-        </span>
-      </button>
-    );
-  };
 
   const tile = (rotulo: string, valor: number, tom: string, detalhe: string, onClick?: () => void) => {
     const corpo = (
@@ -149,11 +124,7 @@ export default function PainelResumo({
               <div className="hc-glow-pt h-full rounded-full bg-current/85 transition-all [--glow-c:#fff]" style={{ width: `${uso}%` }} />
             </div>
           </div>
-          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-t border-current/25 pt-4">
-            <div className="grid gap-0.5">
-              <span className="text-xs">Sobra prevista depois de contas, faturas e repasses</span>
-              <span data-sinal className="text-lg font-semibold tabular-nums">{saldo(p.sobraPrevista)}</span>
-            </div>
+          <div className="flex flex-wrap items-end justify-end gap-x-4 gap-y-3 border-t border-current/25 pt-4">
             {onAbrirExtrato && (
               <button
                 type="button"
@@ -166,19 +137,7 @@ export default function PainelResumo({
           </div>
         </div>
 
-        <CartaoSecao titulo={`Entrou e saiu em ${n}`} descricao="Valores realizados no mês">
-          <div className="grid gap-3">
-            {linhaMes("entradas", "Entrou", p.entradasRenda)}
-            {linhaMes("gastos", "Saiu", p.saidasRealizadas)}
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
-            <span className="grid min-w-0">
-              <span className="text-sm font-medium">Resultado do mês</span>
-              <span className="text-xs text-muted">{p.resultadoRealizado > 0 ? `Sobrou ${pctSobrou}% do que entrou` : p.resultadoRealizado < 0 ? "Saiu mais do que entrou" : "Entrou e saiu o mesmo valor"}</span>
-            </span>
-            <span data-sinal className={`shrink-0 text-xl font-semibold tabular-nums ${tomDoValor(p.resultadoRealizado)}`}>{comSinal(p.resultadoRealizado)}</span>
-          </div>
-        </CartaoSecao>
+        <EntrouESaiuCard mes={n} entrou={p.entradasRenda} saiu={p.saidas} saiuPagas={p.saidasRealizadas} saiuAPagar={p.contasPendentes} onAbrirExtrato={onAbrirExtrato} />
       </div>
 
       {/* 3. Compromissos */}

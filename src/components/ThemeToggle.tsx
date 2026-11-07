@@ -10,7 +10,7 @@ import type React from "react";
 import { supabase } from "@/lib/supabase";
 
 type Tema = "light" | "dark" | "system";
-type Fundo = "none" | "aurora" | "glow" | "malha" | "ondas" | "granulado";
+type Fundo = "picos" | "bolhas" | "ondas" | "granulado";
 type Destaque = "teal" | "purple" | "blue" | "pink" | "orange" | "graphite";
 
 const DESTAQUES: { id: Destaque; nome: string; cor: string }[] = [
@@ -43,19 +43,20 @@ function aplicarTema(tema: Tema, destaque: Destaque) {
 }
 
 const FUNDOS: { id: Fundo; nome: string }[] = [
-  { id: "none", nome: "Liso" },
-  { id: "aurora", nome: "Aurora" },
-  { id: "glow", nome: "Brilho" },
-  { id: "malha", nome: "Malha" },
   { id: "ondas", nome: "Ondas" },
+  { id: "picos", nome: "Picos" },
+  { id: "bolhas", nome: "Bolhas" },
   { id: "granulado", nome: "Granulado" },
 ];
 
-/** Fundos antigos (pontos e grade) viram os novos equivalentes, para ninguém perder a escolha. */
-const FUNDO_LEGADO: Record<string, Fundo> = { dots: "granulado", grid: "ondas" };
+/** Fundo padrão do sistema. */
+const FUNDO_PADRAO: Fundo = "ondas";
+
+/** Fundos antigos viram os equivalentes atuais (o antigo "liso" agora é o padrão, Ondas). */
+const FUNDO_LEGADO: Record<string, Fundo> = { dots: "granulado", grid: "ondas", none: "ondas", glow: "bolhas", cidade: "bolhas", ecos: "bolhas", prisma: "picos", aurora: "ondas", malha: "ondas" };
 const normalizarFundo = (valor: unknown): Fundo => {
   const v = FUNDO_LEGADO[String(valor)] ?? String(valor);
-  return FUNDOS.some((f) => f.id === v) ? (v as Fundo) : "none";
+  return FUNDOS.some((f) => f.id === v) ? (v as Fundo) : FUNDO_PADRAO;
 };
 
 function aplicarFundo(fundo: Fundo) {
@@ -64,7 +65,7 @@ function aplicarFundo(fundo: Fundo) {
 }
 
 export function useAparencia() {
-  const [fundo, setFundo] = useState<Fundo>("none");
+  const [fundo, setFundo] = useState<Fundo>(FUNDO_PADRAO);
   const [tema, setTema] = useState<Tema>("system");
   const [destaque, setDestaque] = useState<Destaque>("teal");
 
@@ -105,7 +106,7 @@ export function useAparencia() {
             localStorage.setItem("homecash-accent", destaqueFinal);
             atualizado = true;
           }
-          // Fundo: o escolhido PELO PRÓPRIO usuário (guardado na conta); sem escolha, liso. Assim a escolha
+          // Fundo: o escolhido PELO PRÓPRIO usuário (guardado na conta); sem escolha, Ondas. Assim a escolha
           // acompanha a pessoa em qualquer aparelho e nunca herda o fundo de quem usou o aparelho antes.
           const fundoFinal = normalizarFundo(theme_bg);
           if (fundoFinal !== fundoInicial) {

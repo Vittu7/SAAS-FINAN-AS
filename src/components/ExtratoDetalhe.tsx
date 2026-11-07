@@ -118,7 +118,7 @@ export default function ExtratoDetalhe({
             {rotuloMes(mes)} · {visualizacao}
           </p>
           <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
-            {tipo === "gastos" ? brl(totalMes) : tipo === "entradas" ? brl(entradasTotal) : `${negativo ? "− " : ""}${brl(Math.abs(sobra))}`}
+            {tipo === "gastos" ? brl(totalMes + pendentesMes) : tipo === "entradas" ? brl(entradasTotal) : `${negativo ? "− " : ""}${brl(Math.abs(sobra))}`}
           </p>
           <p className={`mt-1 text-xs ${tipo === "gastos" ? "text-muted" : "opacity-80"}`}>
             {tipo === "gastos"
@@ -130,7 +130,7 @@ export default function ExtratoDetalhe({
               : `Entradas ${brl(entradasTotal)} − saídas ${brl(totalMes)}${pendentesMes > 0 ? ` − a pagar ${brl(pendentesMes)}` : ""}`}
           </p>
           {tipo === "gastos" && pendentesMes > 0 && (
-            <p className="mt-1 text-xs font-medium tabular-nums text-amber-600 dark:text-amber-400">+ {brl(pendentesMes)} em contas a pagar</p>
+            <p className="mt-1 text-xs font-medium tabular-nums text-amber-600 dark:text-amber-400">Pagas {brl(totalMes)} + {brl(pendentesMes)} em contas a pagar</p>
           )}
         </div>
 
